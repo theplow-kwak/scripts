@@ -58,7 +58,7 @@ l
 	waf = nand_written / host_writes
 	wai = nand_erased / host_writes
 	data.loc[len(data)] = [lapstime, start['nand_written'], start['host_writes'], start['nand_erased'], nand_written, host_writes, nand_erased, waf, wai]
-	data.to_csv('waf_info.cvs')
+	data.to_csv('waf_info.csv')
 		
 	print("end: ", end)
 	print("\n\n", "loop ", i)
