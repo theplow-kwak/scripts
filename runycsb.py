@@ -32,7 +32,7 @@ for i in range(1000):
 	for k, v in start.items():
 		start[k] = to_num(v)
 	print("\n start: ", start)
-l
+
 	cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
 	cmd3 = subprocess.Popen(['sudo', '-S'] + cat_trace, stdin=cmd1.stdout, stdout=subprocess.PIPE)
 	nvmeparser = subprocess.Popen('python3 /home/dhkwak/projects/traceparser/nvmeparser.py'.split(), stdin=cmd3.stdout)
