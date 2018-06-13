@@ -21,7 +21,7 @@ cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 ycsb_run = './bin/ycsb run rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 
 
-col_names = ['lapstime', 'nand_written', 'host_writes', 'nand_erased', 'waf', 'wai']
+col_names = ['lapstime', 'cum_nand_written', 'cum_host_writes', 'cum_nand_erased', 'nand_written', 'host_writes', 'nand_erased', 'waf', 'wai']
 data = pd.DataFrame(columns = col_names)
 
 for i in range(1000):
@@ -57,7 +57,7 @@ l
 	nand_erased = (end['nand_erased'] - start['nand_erased'])
 	waf = nand_written / host_writes
 	wai = nand_erased / host_writes
-	data.loc[len(data)] = [lapstime, nand_written, host_writes, nand_erased, waf, wai]
+	data.loc[len(data)] = [lapstime, start['nand_written'], start['host_writes'], start['nand_erased'], nand_written, host_writes, nand_erased, waf, wai]
 	data.to_csv('waf_info.cvs')
 		
 	print("end: ", end)
