@@ -18,8 +18,11 @@ keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>[\w|.]+),?')
 
 wai_info = 'nvme hynix wai-information /dev/nvme0'.split()
 cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
+ycsb_load = './bin/ycsb load rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 ycsb_run = './bin/ycsb run rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 
+ycsb = subprocess.Popen(ycsb_load, stdin=subprocess.PIPE)
+ycsb.wait()
 
 col_names = ['lapstime', 'cum_nand_written', 'cum_host_writes', 'cum_nand_erased', 'nand_written', 'host_writes', 'nand_erased', 'waf', 'wai']
 data = pd.DataFrame(columns = col_names)
