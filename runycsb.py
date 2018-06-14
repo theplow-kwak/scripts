@@ -21,13 +21,13 @@ cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 ycsb_load = './bin/ycsb load rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 ycsb_run = './bin/ycsb run rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 
-ycsb = subprocess.Popen(ycsb_load, stdin=subprocess.PIPE)
-ycsb.wait()
+#ycsb = subprocess.Popen(ycsb_load, stdin=subprocess.PIPE)
+#ycsb.wait()
 
 col_names = ['lapstime', 'cum_nand_written', 'cum_host_writes', 'cum_nand_erased', 'nand_written', 'host_writes', 'nand_erased', 'waf', 'wai']
 data = pd.DataFrame(columns = col_names)
 
-for i in range(1000):
+for i in range(100):
 	cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
 	cmd2 = subprocess.Popen(['sudo', '-S'] + wai_info, stdin=cmd1.stdout, stdout=subprocess.PIPE)
 	starttime = time.time()
@@ -66,6 +66,7 @@ for i in range(1000):
 		
 	print("end: ", end)
 	print("\n\n", "loop ", i)
+	print("written information: ", nand_written, host_writes, nand_erased)
 	print("WAF = ", waf)
 	print("WAI = ", wai)
 	print("\n\n")
