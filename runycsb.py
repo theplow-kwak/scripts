@@ -41,6 +41,7 @@ for i in range(1000):
 	ycsb.wait()
 	time.sleep(10)
 	
+	cmd3.send_signal(signal.SIGINT)
 	nvmeparser.send_signal(signal.SIGINT)
 	nvmeparser.wait()
 		
