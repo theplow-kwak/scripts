@@ -19,10 +19,15 @@ keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>[\w|.]+),?')
 wai_info = 'nvme hynix wai-information /dev/nvme0'.split()
 cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 ycsb_load = './bin/ycsb load rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
-ycsb_run = './bin/ycsb run rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
+ycsb_run = './bin/ycsb run rocksdb -s -P workloads/workloada -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 
-#ycsb = subprocess.Popen(ycsb_load, stdin=subprocess.PIPE)
-#ycsb.wait()
+def get_wai():
+    cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
+    cmd2 = subprocess.Popen(['sudo', '-S'] + wai_info, stdin=cmd1.stdout, stdout=subprocess.PIPE)
+    _data = dict(keyval_exp.findall(str(cmd2.communicate()[0])))
+    for k, v in _data.items():
+        _data[k] = to_num(v)
+    return _data
 
 col_names = ['lapstime', 'cum_nand_written', 'cum_host_writes', 'cum_nand_erased', 'nand_written', 'host_writes', 'nand_erased', 'waf', 'wai']
 data = pd.DataFrame(columns = col_names)
@@ -31,12 +36,8 @@ cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
 cmd3 = subprocess.Popen(['sudo', '-S'] + cat_trace, stdin=cmd1.stdout, stdout=subprocess.PIPE)
 
 for i in range(100):
-    cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
-    cmd2 = subprocess.Popen(['sudo', '-S'] + wai_info, stdin=cmd1.stdout, stdout=subprocess.PIPE)
     starttime = time.time()
-    start = dict(keyval_exp.findall(str(cmd2.communicate()[0])))
-    for k, v in start.items():
-        start[k] = to_num(v)
+    start = get_wai()
     print("\n start: ", start)
 
     nvmeparser = subprocess.Popen('python3 /home/dhkwak/projects/traceparser/nvmeparser.py'.split(), stdin=cmd3.stdout)
@@ -48,12 +49,8 @@ for i in range(100):
     nvmeparser.send_signal(signal.SIGINT)
     nvmeparser.wait()
         
-    cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
-    cmd2 = subprocess.Popen(['sudo', '-S'] + wai_info, stdin=cmd1.stdout, stdout=subprocess.PIPE)
-    end = dict(keyval_exp.findall(str(cmd2.communicate()[0])))
+    end = get_wai()
     endtime = time.time()
-    for k, v in end.items():
-        end[k] = to_num(v)
     
     lapstime = endtime - starttime
     nand_written = (end['nand_written'] - start['nand_written'])

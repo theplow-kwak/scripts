@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #parserpath=/mnt/hgfs/D/Workspace/nvmeparser/
-parserpath=./
+parserpath=../traceparser/
 getlog=0
 
 while getopts ":vlc" opt; do
@@ -18,6 +18,8 @@ shift $(($OPTIND-1))
 
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+sudo sh -c 'echo > /sys/kernel/debug/tracing/trace'
+
 if [ $getlog == 1 ]
 then
     sudo cat /sys/kernel/debug/tracing/trace_pipe | tee nvme_tmp.log
