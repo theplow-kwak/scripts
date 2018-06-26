@@ -13,11 +13,25 @@ def to_num(str_num):
     except:
         return str_num
 
-sudo_passwd = getpass.getpass('password:')
 keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>[\w|.]+),?')
 
-wai_info = 'nvme hynix wai-information /dev/nvme0'.split()
+sudo_passwd = getpass.getpass('password:')
+
+nvme_enable = 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
+trace_on = 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+clear_trace = 'echo 1 > /sys/kernel/debug/tracing/trace'
+stream_on = 'echo 1 > /sys/module/nvme_core/parameters/streams'
+stream_off =  'echo 0 > /sys/module/nvme_core/parameters/streams'
+
 cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
+wai_info = 'nvme hynix wai-information /dev/nvme0'.split()
+
+def sudo_exec(commands):
+    print(commands)
+    echo = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
+    cmd = subprocess.Popen(commands, stdin=echo.stdout, stdout=subprocess.PIPE)
+    return cmd
+
 ycsb_load = './bin/ycsb load rocksdb -s -P workloads/nvme_test -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 ycsb_run = './bin/ycsb run rocksdb -s -P workloads/workloada -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data'.split()
 
@@ -32,15 +46,19 @@ def get_wai():
 col_names = ['lapstime', 'cum_nand_written', 'cum_host_writes', 'cum_nand_erased', 'nand_written', 'host_writes', 'nand_erased', 'waf', 'wai']
 data = pd.DataFrame(columns = col_names)
 
-cmd1 = subprocess.Popen(['echo', sudo_passwd], stdout=subprocess.PIPE)
-cmd3 = subprocess.Popen(['sudo', '-S'] + cat_trace, stdin=cmd1.stdout, stdout=subprocess.PIPE)
+sudo_exec(['sudo', '-S', 'sh', '-c', nvme_enable])
+sudo_exec(['sudo', '-S', 'sh', '-c', stream_on])
+sudo_exec(['sudo', '-S', 'sh', '-c', trace_on])
+sudo_exec(['sudo', '-S', 'sh', '-c', clear_trace])
+
+cattrace = sudo_exec(['sudo', '-S'] + cat_trace)
 
 for i in range(100):
     starttime = time.time()
     start = get_wai()
     print("\n start: ", start)
 
-    nvmeparser = subprocess.Popen('python3 /home/dhkwak/projects/traceparser/nvmeparser.py'.split(), stdin=cmd3.stdout)
+    nvmeparser = subprocess.Popen('python3 /home/dhkwak/projects/traceparser/nvmeparser.py'.split(), stdin=cattrace.stdout)
 
     ycsb = subprocess.Popen(ycsb_run, stdin=subprocess.PIPE)
     ycsb.wait()
