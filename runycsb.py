@@ -103,12 +103,12 @@ trim = 'fstrim -v {}'.format(nvme_path).split()
 cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 
 #ycsb_workload = 'workloads/nvme_test'
-ycsb_workload = 'workloads/workloadx'
+ycsb_workload = 'workloads/workloada'
 
 ycsb_load = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 
-def runtest(loop=1, load=False):
+def runtest(loop=1, load=False, outpath='./'):
 
     sudo_exec = SudoProcess()
     cattrace = sudo_exec.Popen(cat_trace, wait=False)
@@ -118,8 +118,8 @@ def runtest(loop=1, load=False):
         wai_info = WaiInfo()
         start = wai_info.last_data
 
-        outfile = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
-        nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py'.format(os.getenv("HOME")).split(), stdin=cattrace.stdout)
+        outfile = outpath + "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
+        nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py -p {}'.format(os.getenv("HOME"), outpath).split(), stdin=cattrace.stdout)
         if load:
             ycsb = subprocess.Popen(ycsb_load)
         else:
@@ -163,14 +163,16 @@ def main():
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
     sudo_shell.Popen(clear_trace)
-    runtest(load=True)
-    runtest(loop=1)
+    subprocess.Popen('mkdir discard_strm_on', shell=True)
+    runtest(load=True, outpath='discard_strm_on/')
+    runtest(loop=1, outpath='discard_strm_on/')
 
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
     sudo_shell.Popen(clear_trace)
-    runtest(load=True)
-    runtest(loop=1)
+    subprocess.Popen('mkdir discard_strm_off', shell=True)
+    runtest(load=True, outpath='discard_strm_off/')
+    runtest(loop=1, outpath='discard_strm_off/')
 
     umount()
 
@@ -178,14 +180,16 @@ def main():
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
     sudo_shell.Popen(clear_trace)
-    runtest(load=True)
-    runtest(loop=1)
+    subprocess.Popen('mkdir stream_on', shell=True)
+    runtest(load=True, outpath='stream_on/')
+    runtest(loop=1, outpath='stream_on/')
 
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
     sudo_shell.Popen(clear_trace)
-    runtest(load=True)
-    runtest(loop=1)
+    subprocess.Popen('mkdir stream_off', shell=True)
+    runtest(load=True, outpath='stream_off/')
+    runtest(loop=1, outpath='stream_off/')
 
 
 if __name__ == "__main__":
