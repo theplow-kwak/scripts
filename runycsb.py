@@ -168,16 +168,18 @@ def main():
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
     sudo_shell.Popen(clear_trace)
-    subprocess.Popen('mkdir discard_strm_on', shell=True)
-    runtest(load=True, outpath='discard_strm_on/')
-    runtest(loop=1, outpath='discard_strm_on/')
+    outpath = 'stream_on_discard/'
+    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    runtest(load=True, outpath=outpath)
+    runtest(loop=1, outpath=outpath)
 
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
     sudo_shell.Popen(clear_trace)
-    subprocess.Popen('mkdir discard_strm_off', shell=True)
-    runtest(load=True, outpath='discard_strm_off/')
-    runtest(loop=1, outpath='discard_strm_off/')
+    outpath = 'stream_off_discard/'
+    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    runtest(load=True, outpath=outpath)
+    runtest(loop=1, outpath=outpath)
 
     umount()
 
@@ -185,16 +187,18 @@ def main():
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
     sudo_shell.Popen(clear_trace)
-    subprocess.Popen('mkdir stream_on', shell=True)
-    runtest(load=True, outpath='stream_on/')
-    runtest(loop=1, outpath='stream_on/')
+    outpath = 'stream_on/'
+    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    runtest(load=True, outpath=outpath)
+    runtest(loop=1, outpath=outpath)
 
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
     sudo_shell.Popen(clear_trace)
-    subprocess.Popen('mkdir stream_off', shell=True)
-    runtest(load=True, outpath='stream_off/')
-    runtest(loop=1, outpath='stream_off/')
+    outpath = 'stream_off/'
+    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    runtest(load=True, outpath=outpath)
+    runtest(loop=1, outpath=outpath)
 
 
 if __name__ == "__main__":
