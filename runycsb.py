@@ -119,11 +119,12 @@ def runtest(loop=1, load=False, outpath='./'):
         start = wai_info.last_data
 
         outfile = outpath + "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
-        nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py -p {}'.format(os.getenv("HOME"), outpath).split(), stdin=cattrace.stdout)
+        outlog = outpath + "ycsblog" + time.strftime("-%m%d-%H%M") + ".log"
+        nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py -p {}'.format(os.getenv("HOME"), outpath).split(), stdin=cattrace.stdout, stdout=subprocess.PIPE)
         if load:
-            ycsb = subprocess.Popen(ycsb_load)
+            ycsb = subprocess.Popen(ycsb_load, stdout=subprocess.PIPE, universal_newlines=True)
         else:
-            ycsb = subprocess.Popen(ycsb_run)
+            ycsb = subprocess.Popen(ycsb_run, stdout=subprocess.PIPE, universal_newlines=True)
 
         ticks = 0
         while ycsb.poll() is None:
@@ -135,6 +136,10 @@ def runtest(loop=1, load=False, outpath='./'):
                 ticks = 0
 
         ycsb.wait()
+        file = open(outlog, "w")
+        logout = ycsb.communicate()[0]
+        print(logout)
+        file.write(logout)
         time.sleep(10)
 
         nvmeparser.send_signal(signal.SIGINT)
