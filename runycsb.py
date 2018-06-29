@@ -9,15 +9,6 @@ import getpass
 import pandas as pd
 
 
-nvme_enable = ['echo 1 > /sys/kernel/debug/tracing/events/nvme/enable']
-trace_on = ['echo 1 > /sys/kernel/debug/tracing/tracing_on']
-clear_trace = ['echo 1 > /sys/kernel/debug/tracing/trace']
-stream_on = ['echo 1 > /sys/module/nvme_core/parameters/streams']
-stream_off = ['echo 0 > /sys/module/nvme_core/parameters/streams']
-
-trim = 'fstrim -v /media/unicorn/MultiStream'.split()
-cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
-
 class SudoProcess:
     sudo_passwd = None
 
@@ -97,32 +88,39 @@ class WaiInfo:
             self.index += 1
             return self.__current
 
+
+nvme_path = '/media/dhkwak/nvme'
+nvme_dev = 'nvme0'
+discard = ',discard'
+
+nvme_enable = ['echo 1 > /sys/kernel/debug/tracing/events/nvme/enable']
+trace_on = ['echo 1 > /sys/kernel/debug/tracing/tracing_on']
+clear_trace = ['echo 1 > /sys/kernel/debug/tracing/trace']
+stream_on = ['echo 1 > /sys/module/nvme_core/parameters/streams']
+stream_off = ['echo 0 > /sys/module/nvme_core/parameters/streams']
+
+trim = 'fstrim -v {}'.format(nvme_path).split()
+cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
+
 #ycsb_workload = 'workloads/nvme_test'
 ycsb_workload = 'workloads/workloadx'
-nvme_path = '/media/dhkwak/nvme'
 
 ycsb_load = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 
-if __name__ == "__main__":
-
-    sudo_shell = SudoProcess(True)
-    sudo_shell.Popen(nvme_enable)
-    sudo_shell.Popen(stream_on)
-    sudo_shell.Popen(trace_on)
-    sudo_shell.Popen(clear_trace)
+def runtest(loop=1, load=False):
 
     sudo_exec = SudoProcess()
     cattrace = sudo_exec.Popen(cat_trace, wait=False)
 
-    for i in range(3):
+    for i in range(loop):
         starttime = time.time()
         wai_info = WaiInfo()
         start = wai_info.last_data
 
         outfile = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
         nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py'.format(os.getenv("HOME")).split(), stdin=cattrace.stdout)
-        if i == 0:
+        if load:
             ycsb = subprocess.Popen(ycsb_load)
         else:
             ycsb = subprocess.Popen(ycsb_run)
@@ -147,3 +145,49 @@ if __name__ == "__main__":
         wai_info.datas.to_csv(outfile, index=False)
         print('lapstime: {}'.format(endtime-starttime), wai_info.calc(end, start))
 
+def mount(nvme_dev=nvme_dev, nvme_path=nvme_path, discard=discard):
+    sudo_exec = SudoProcess()
+    sudo_exec.Popen('mount -o rw,nosuid,nodev{2} /dev/{0}n1p1 {1}'.format(nvme_dev, nvme_path, discard).split())
+
+def umount(nvme_path=nvme_path):
+    sudo_exec = SudoProcess()
+    sudo_exec.Popen('umount {}'.format(nvme_path).split())
+
+def main():
+    sudo_shell = SudoProcess(True)
+    sudo_shell.Popen(nvme_enable)
+    sudo_shell.Popen(trace_on)
+    sudo_exec = SudoProcess()
+
+    mount()
+    sudo_exec.Popen(trim)
+    sudo_shell.Popen(stream_on)
+    sudo_shell.Popen(clear_trace)
+    runtest(load=True)
+    runtest(loop=1)
+
+    sudo_exec.Popen(trim)
+    sudo_shell.Popen(stream_off)
+    sudo_shell.Popen(clear_trace)
+    runtest(load=True)
+    runtest(loop=1)
+
+    umount()
+
+    mount(discard='')
+    sudo_exec.Popen(trim)
+    sudo_shell.Popen(stream_on)
+    sudo_shell.Popen(clear_trace)
+    runtest(load=True)
+    runtest(loop=1)
+
+    sudo_exec.Popen(trim)
+    sudo_shell.Popen(stream_off)
+    sudo_shell.Popen(clear_trace)
+    runtest(load=True)
+    runtest(loop=1)
+
+
+if __name__ == "__main__":
+
+    main()
