@@ -105,7 +105,7 @@ cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 #ycsb_workload = 'workloads/nvme_test'
 ycsb_workload = 'workloads/workloada'
 
-ycsb_load = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
+ycsb_load = './bin/ycsb load rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 
 def runtest(loop=1, load=False, outpath='./'):
