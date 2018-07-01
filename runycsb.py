@@ -70,9 +70,12 @@ class WaiInfo:
         nand_written = (end['nand_written'] - start['nand_written'])
         host_writes = (end['host_writes'] - start['host_writes'])
         nand_erased = (end['nand_erased'] - start['nand_erased'])
-        waf = nand_written / host_writes
-        wai = nand_erased / host_writes
-        return nand_written, host_writes, nand_erased, waf, wai
+        if host_writes:
+            waf = nand_written / host_writes
+            wai = nand_erased / host_writes
+            return nand_written, host_writes, nand_erased, waf, wai
+        else:
+            return nand_written, host_writes, nand_erased, 0, 0
 
     def update(self):
         self.__current = self.get_data()
@@ -103,7 +106,7 @@ trim = 'fstrim -v {}'.format(nvme_path).split()
 cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 
 #ycsb_workload = 'workloads/nvme_test'
-ycsb_workload = 'workloads/workloada'
+ycsb_workload = 'workloads/workloadx'
 
 ycsb_load = './bin/ycsb load rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
@@ -122,9 +125,9 @@ def runtest(loop=1, load=False, outpath='./'):
         outlog = outpath + "ycsblog" + time.strftime("-%m%d-%H%M") + ".log"
         nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py -p {}'.format(os.getenv("HOME"), outpath).split(), stdin=cattrace.stdout, stdout=subprocess.PIPE)
         if load:
-            ycsb = subprocess.Popen(ycsb_load, stdout=subprocess.PIPE, universal_newlines=True)
+            ycsb = subprocess.Popen(ycsb_load, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         else:
-            ycsb = subprocess.Popen(ycsb_run, stdout=subprocess.PIPE, universal_newlines=True)
+            ycsb = subprocess.Popen(ycsb_run, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
         ticks = 0
         while ycsb.poll() is None:
@@ -135,11 +138,11 @@ def runtest(loop=1, load=False, outpath='./'):
                 wai_info.datas.to_csv(outfile, index=False)
                 ticks = 0
 
-        ycsb.wait()
+        #ycsb.wait()
+        logdata, logerr = ycsb.communicate()
         file = open(outlog, "w")
-        logout = ycsb.communicate()[0]
-        print(logout)
-        file.write(logout)
+        print(logerr, logdata)
+        file.write(logerr + logdata)
         time.sleep(10)
 
         nvmeparser.send_signal(signal.SIGINT)
@@ -149,6 +152,7 @@ def runtest(loop=1, load=False, outpath='./'):
         endtime = time.time()
         wai_info.datas.to_csv(outfile, index=False)
         print('lapstime: {}'.format(endtime-starttime), wai_info.calc(end, start))
+
 
 def mount(nvme_dev=nvme_dev, nvme_path=nvme_path, discard=discard):
     sudo_exec = SudoProcess()
@@ -164,6 +168,7 @@ def main():
     sudo_shell.Popen(trace_on)
     sudo_exec = SudoProcess()
 
+    testloop = 6
     mount()
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
@@ -171,7 +176,7 @@ def main():
     outpath = 'stream_on_discard/'
     subprocess.Popen('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
-    runtest(loop=1, outpath=outpath)
+    runtest(loop=testloop, outpath=outpath)
 
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
@@ -179,7 +184,7 @@ def main():
     outpath = 'stream_off_discard/'
     subprocess.Popen('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
-    runtest(loop=1, outpath=outpath)
+    runtest(loop=testloop, outpath=outpath)
 
     umount()
 
@@ -190,7 +195,7 @@ def main():
     outpath = 'stream_on/'
     subprocess.Popen('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
-    runtest(loop=1, outpath=outpath)
+    runtest(loop=testloop, outpath=outpath)
 
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
@@ -198,7 +203,7 @@ def main():
     outpath = 'stream_off/'
     subprocess.Popen('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
-    runtest(loop=1, outpath=outpath)
+    runtest(loop=testloop, outpath=outpath)
 
 
 if __name__ == "__main__":
