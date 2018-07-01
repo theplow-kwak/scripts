@@ -170,38 +170,42 @@ def main():
 
     testloop = 6
     mount()
+    subprocess.call('rm -rdf {}/*'.format(nvme_path), shell=True)
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
     sudo_shell.Popen(clear_trace)
     outpath = 'stream_on_discard/'
-    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    subprocess.call('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
     runtest(loop=testloop, outpath=outpath)
 
+    subprocess.call('rm -rdf {}/*'.format(nvme_path), shell=True)
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
     sudo_shell.Popen(clear_trace)
     outpath = 'stream_off_discard/'
-    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    subprocess.call('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
     runtest(loop=testloop, outpath=outpath)
 
     umount()
 
     mount(discard='')
+    subprocess.call('rm -rdf {}/*'.format(nvme_path), shell=True)
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_on)
     sudo_shell.Popen(clear_trace)
     outpath = 'stream_on/'
-    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    subprocess.call('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
     runtest(loop=testloop, outpath=outpath)
 
+    subprocess.call('rm -rdf {}/*'.format(nvme_path), shell=True)
     sudo_exec.Popen(trim)
     sudo_shell.Popen(stream_off)
     sudo_shell.Popen(clear_trace)
     outpath = 'stream_off/'
-    subprocess.Popen('mkdir {}'.format(outpath), shell=True)
+    subprocess.call('mkdir {}'.format(outpath), shell=True)
     runtest(load=True, outpath=outpath)
     runtest(loop=testloop, outpath=outpath)
 
