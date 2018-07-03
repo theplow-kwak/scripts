@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 import sys
 import os
@@ -196,7 +196,10 @@ if __name__ == "__main__":
             trace_datas = trace_datas.append(pd.read_csv(_file), ignore_index=True, sort=False)
     else:
         infile = sys.stdin
-        outfile = args.outpath + "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
+        if args.outpath:
+            outfile = args.outpath
+        else:
+            outfile = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
         if args.rawfile:
             infile = open(args.rawfile, 'r', encoding='UTF8')
             outfile = args.rawfile + ".csv"

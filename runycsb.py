@@ -140,7 +140,7 @@ def runtest(loop=1, load=False, outpath='./'):
         outlog = outpath + "ycsblog_{}".format(i) + time.strftime("-%m%d-%H%M") + ".log"
         outnvme = outpath + "nvme_{}".format(i) + time.strftime("-%m%d-%H%M") + ".csv"
         file = open(outlog, "w")
-        nvmeparser = subprocess.Popen('python3 {}/projects/traceparser/nvmeparser.py -p {}'.format(os.getenv("HOME"), outnvme).split(), stdin=cattrace.stdout, stdout=subprocess.PIPE)
+        nvmeparser = subprocess.Popen('python3 {}/projects/scripts/nvmeparser.py -p {}'.format(os.getenv("HOME"), outnvme).split(), stdin=cattrace.stdout, stdout=subprocess.PIPE)
         if load:
             ycsb = subprocess.Popen(ycsb_load, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
         else:
