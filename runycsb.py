@@ -106,8 +106,8 @@ stream_off = ['echo 0 > /sys/module/nvme_core/parameters/streams']
 trim = 'fstrim -v {}'.format(nvme_path).split()
 cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 
-ycsb_workload = 'workloads/nvme_test'
-#ycsb_workload = 'workloads/workloadf'
+#ycsb_workload = 'workloads/nvme_test'
+ycsb_workload = 'workloads/workloadf'
 
 ycsb_load = './bin/ycsb load rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
 ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path).split()
@@ -120,6 +120,7 @@ def capture_wai(wai_info, outfile, stop):
             wai_info.datas.to_csv(outfile, index=False)
             tag = time.time()
         if stop():
+            print('stop capture_wai')
             break
     wai_info.update()
     wai_info.datas.to_csv(outfile, index=False)
