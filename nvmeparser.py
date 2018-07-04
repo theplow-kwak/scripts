@@ -69,7 +69,7 @@ class RequestComplition:
 
 def to_num(str_num):
     try:
-        return int(str_num, 0)
+        return float(str_num) if '.' in str_num else int(str_num, 0)
     except:
         return str_num
 
@@ -135,7 +135,7 @@ class TraceLog:
                 tresult = parser.parse(line.strip())
 
                 if tresult:
-                    tresult['timestamp'] = int(tresult['timestamp'].replace('.', ''))
+                    #tresult['timestamp'] = int(tresult['timestamp'].replace('.', ''))
 
                     if (tresult['event'] == "nvme_setup_admin_cmd") or (tresult['event'] == "nvme_setup_nvm_cmd"):
                         request.start(count, tresult['cmdid'])
@@ -163,7 +163,7 @@ class TraceLog:
                     elif tresult['event'] == "nvme_complete_rq":
                         index = request.completion(tresult['cmdid'])
                         if index != -1:
-                            traceLogs[index]['latency'] = tresult['timestamp'] - traceLogs[index]['timestamp']
+                            traceLogs[index]['latency'] = to_num(tresult['timestamp']) - traceLogs[index]['timestamp']
 
         except KeyboardInterrupt:
             sys.stdout.flush()

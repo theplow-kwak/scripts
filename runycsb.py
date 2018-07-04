@@ -2,6 +2,7 @@
 
 import re
 import os
+import argparse
 import subprocess
 import threading
 import signal
@@ -122,6 +123,7 @@ def capture_wai(wai_info, outfile, stop):
         if stop():
             print('stop capture_wai')
             break
+        time.sleep(0.1)
     wai_info.update()
     wai_info.datas.to_csv(outfile, index=False)
 
@@ -172,7 +174,7 @@ def umount(nvme_path=nvme_path):
     sudo_exec = SudoProcess()
     sudo_exec.Popen('umount {}'.format(nvme_path).split())
 
-def main():
+def main(workload, ycsbpath):
     sudo_shell = SudoProcess(True)
     sudo_shell.Popen(nvme_enable)
     sudo_shell.Popen(trace_on)
@@ -222,4 +224,10 @@ def main():
 
 if __name__ == "__main__":
 
-    main()
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('-w', '--workload', help='YCSB workload')
+    argparser.add_argument('-p', '--ycsbpath', help='YCSB working path')
+
+    args = argparser.parse_args()
+
+    main(args.workload, args.ycsbpath)
