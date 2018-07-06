@@ -17,31 +17,25 @@ class TraceParser:
         # ------------------------------------------------------------------------
         # Define Grammars
         # ------------------------------------------------------------------------
-        self._trace_exp = re.compile(r"""
-            \s*
-            (?P<taskid>.+)-(?:\d+)              # task id, drop pid (?P<pid>\d+)
-            \s+
-            (?:\[\d+\])                         # drop cpuid (?P<cpuid>\[\d+\])
-            (?:\s.{4})
-            \s+
-            (?P<timestamp>\d+.\d+):
-            \s+
-            (?P<event>\w+):
-            \s+
-            """, re.VERBOSE)
-        self._keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>\w+),?')
-        self._cmd_exp = re.compile(r'cmd=\((?P<opcode>\w+)')
+        taskid = '\s*(?P<taskid>.+)-(?:\d+)'
+        cpuid = '\s+(?:\[\d+\])(?:\s.{4})'
+        timestamp = '\s+(?P<timestamp>\d+.\d+):'
+        event = '\s+(?P<event>\w+):'
+        self.__trace_exp = re.compile(taskid + cpuid + timestamp + event)
+        self.__keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>\w+),?')
+        self.__cmd_exp = re.compile(r'cmd=\(nvme_cmd_(?P<opcode>\w+)')
+        self.__admin_exp = re.compile(r'cmd=\(nvme_admin_(?P<opcode>\w+)')
 
     def parse(self, line):
         try:
-            _tresult = self._trace_exp.search(line).groupdict()
-            _opcode = self._cmd_exp.search(line)
-            if _opcode:
-                _tresult.update(_opcode.groupdict())
-            _params = self._keyval_exp.findall(line)
-            if _params:
-                _tresult.update(dict(_params))
-            return _tresult
+            __tresult = self.__trace_exp.search(line).groupdict()
+            __opcode = self.__cmd_exp.search(line)
+            if __opcode:
+                __tresult.update(__opcode.groupdict())
+            __params = self.__keyval_exp.findall(line)
+            if __params:
+                __tresult.update(dict(__params))
+            return __tresult
         except Exception as e:
             print(e)
             print(line, "\n")
@@ -127,7 +121,7 @@ class TraceLog:
         traceLogs = {}
         parser = TraceParser()
         request = RequestComplition()
-        count = 0
+        last = 0
         tag = time.time()
 
         try:
@@ -137,8 +131,8 @@ class TraceLog:
                 if tresult:
                     #tresult['timestamp'] = int(tresult['timestamp'].replace('.', ''))
 
-                    if (tresult['event'] == "nvme_setup_admin_cmd") or (tresult['event'] == "nvme_setup_nvm_cmd"):
-                        request.start(count, tresult['cmdid'])
+                    if tresult['event'] in ["nvme_setup_nvm_cmd"]:
+                        request.start(last, tresult['cmdid'])
 
                         for k, v in tresult.items():
                             tresult[k] = to_num(v)
@@ -148,22 +142,22 @@ class TraceLog:
                             tresult['stream'] = 0
 
                         if (time.time() - tag) > 1:
-                            print("%5d: %16s \tcmdid: %s \ttimestamp: %s \ttaskid: %15s \tstream: %d" % (
-                                count, tresult['opcode'], tresult['cmdid'], tresult['timestamp'], tresult['taskid'], tresult['stream']))
+                            print("%5d: %s \tcmdid: %s \ttimestamp: %s \ttaskid: %12s \tstream: %d" % (
+                                last, tresult['opcode'], tresult['cmdid'], tresult['timestamp'], tresult['taskid'], tresult['stream']))
                             tag = time.time()
 
                         tresult['event'] = nvme_event[tresult['event']]
-                        if tresult['opcode'] in nvme_opcode:
-                            tresult['opcode'] = nvme_opcode[tresult['opcode']]
+                        #if tresult['opcode'] in nvme_opcode:
+                        #    tresult['opcode'] = nvme_opcode[tresult['opcode']]
 
-                        traceLogs[count] = {}
-                        traceLogs[count].update(tresult)
-                        count += 1
+                        traceLogs[last] = {}
+                        traceLogs[last].update(tresult)
+                        last += 1
 
                     elif tresult['event'] == "nvme_complete_rq":
                         index = request.completion(tresult['cmdid'])
                         if index != -1:
-                            traceLogs[index]['latency'] = to_num(tresult['timestamp']) - traceLogs[index]['timestamp']
+                            traceLogs[index]['latency'] = round(to_num(tresult['timestamp']) - traceLogs[index]['timestamp'], 6)
 
         except KeyboardInterrupt:
             sys.stdout.flush()
@@ -210,6 +204,8 @@ if __name__ == "__main__":
         print("labs time: ", end - start, "\n")
 
         trace_datas.to_csv(outfile, index=False)
+
+        print(trace_datas.memory_usage())
 
     if args.visualize:
         print("\n\n Operation counts and data size: \n", trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'], fill_value=0))
