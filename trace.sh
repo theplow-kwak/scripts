@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #parserpath=/mnt/hgfs/D/Workspace/nvmeparser/
-parserpath=../traceparser/
+parserpath=./
 getlog=0
 outfile="nvme_tmp.log"
 
@@ -20,7 +20,7 @@ shift $(($OPTIND-1))
 
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
-sudo sh -c 'echo > /sys/kernel/debug/tracing/trace'
+sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
 
 if [ $getlog == 1 ]
 then

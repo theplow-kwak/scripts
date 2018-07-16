@@ -181,6 +181,7 @@ if __name__ == "__main__":
     argparser.add_argument('-f', '--filename', nargs='+', help='trace data file (csv)')
     argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
     argparser.add_argument('-p', '--outpath', help='output path')
+    argparser.add_argument('-o', '--opcode', nargs='+', help='set opcode filter')
 
     args = argparser.parse_args()
 
@@ -216,7 +217,10 @@ if __name__ == "__main__":
         nStreams = trace_datas['stream'].max() + 1
         fig = plt.figure(figsize=(15, 9))
 
-        filtered = trace_datas[trace_datas.name == 'nvme0n1']
+        filtered = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.taskid == 'mysqld')]
+        if args.opcode :
+            filtered = filtered[filtered.opcode.isin(args.opcode)]
+
         key = 'slba'
         plt.subplot(211)
         for n in range(nStreams):
@@ -229,17 +233,18 @@ if __name__ == "__main__":
             plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
         plt.ylabel(key)
 
-        filtered = trace_datas[trace_datas.name != 'nvme0n1']
-        plt.subplot(211)
-        plt.plot(filtered['slba'], '.', label="!nvme0n1", color='b')
-        plt.subplot(212)
-        plt.plot(filtered['latency'], '.', label="!nvme0n1", color='b')
-
         plt.legend()
         fig.tight_layout()
         plt.show()
 
 """
+        filtered = trace_datas[trace_datas.nvme != 'nvme0n1']
+        plt.subplot(211)
+        plt.plot(filtered['slba'], '.', label="!nvme0n1", color='b')
+        plt.subplot(212)
+        plt.plot(filtered['latency'], '.', label="!nvme0n1", color='b')
+
+
     key = 'len'
     plt.subplot(312)
     for n in range(nStreams):
