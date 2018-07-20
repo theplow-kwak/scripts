@@ -75,42 +75,42 @@ nvme_event = {
 }
 
 nvme_admin_opcode = {
-    'nvme_admin_delete_sq': 0x100,
-    'nvme_admin_create_sq': 0x101,
-    'nvme_admin_get_log_page': 0x102,
-    'nvme_admin_delete_cq': 0x104,
-    'nvme_admin_create_cq': 0x105,
-    'nvme_admin_identify': 0x106,
-    'nvme_admin_abort_cmd': 0x108,
-    'nvme_admin_set_features': 0x109,
-    'nvme_admin_get_features': 0x10a,
-    'nvme_admin_async_event': 0x10c,
-    'nvme_admin_ns_mgmt': 0x10d,
-    'nvme_admin_activate_fw': 0x110,
-    'nvme_admin_download_fw': 0x111,
-    'nvme_admin_ns_attach': 0x115,
-    'nvme_admin_keep_alive': 0x118,
+    'nvme_admin_delete_sq':     0x100,
+    'nvme_admin_create_sq':     0x101,
+    'nvme_admin_get_log_page':  0x102,
+    'nvme_admin_delete_cq':     0x104,
+    'nvme_admin_create_cq':     0x105,
+    'nvme_admin_identify':      0x106,
+    'nvme_admin_abort_cmd':     0x108,
+    'nvme_admin_set_features':  0x109,
+    'nvme_admin_get_features':  0x10a,
+    'nvme_admin_async_event':   0x10c,
+    'nvme_admin_ns_mgmt':       0x10d,
+    'nvme_admin_activate_fw':   0x110,
+    'nvme_admin_download_fw':   0x111,
+    'nvme_admin_ns_attach':     0x115,
+    'nvme_admin_keep_alive':    0x118,
     'nvme_admin_directive_send': 0x119,
     'nvme_admin_directive_recv': 0x11a,
-    'nvme_admin_dbbuf': 0x17C,
-    'nvme_admin_format_nvm': 0x180,
+    'nvme_admin_dbbuf':         0x17C,
+    'nvme_admin_format_nvm':    0x180,
     'nvme_admin_security_send': 0x181,
     'nvme_admin_security_recv': 0x182,
-    'nvme_admin_sanitize_nvm': 0x184,
+    'nvme_admin_sanitize_nvm':  0x184,
 }
 
 nvme_cmd_opcode = {
-    'nvme_cmd_flush': 'f',
-    'nvme_cmd_write': 'w',
-    'nvme_cmd_read': 'r',
-    'nvme_cmd_write_uncor': 'u',
-    'nvme_cmd_compare	': 'c',
-    'nvme_cmd_write_zeroes': 'z',
-    'nvme_cmd_dsm': 'd',
-    'nvme_cmd_resv_register': 0x0d,
-    'nvme_cmd_resv_report': 0x0e,
-    'nvme_cmd_resv_acquire': 0x11,
-    'nvme_cmd_resv_release': 0x15,
+    'nvme_cmd_flush':           0x00,
+    'nvme_cmd_write':           0x01,
+    'nvme_cmd_read':            0x02,
+    'nvme_cmd_write_uncor':     0x04,
+    'nvme_cmd_compare':         0x05,
+    'nvme_cmd_write_zeroes':    0x08,
+    'nvme_cmd_dsm':             0x09,
+    'nvme_cmd_resv_register':   0x0d,
+    'nvme_cmd_resv_report':     0x0e,
+    'nvme_cmd_resv_acquire':    0x11,
+    'nvme_cmd_resv_release':    0x15,
 }
 
 nvme_opcode = {**nvme_cmd_opcode, **nvme_admin_opcode}
@@ -147,8 +147,6 @@ class TraceLog:
                             tag = time.time()
 
                         tresult['event'] = nvme_event[tresult['event']]
-                        #if tresult['opcode'] in nvme_opcode:
-                        #    tresult['opcode'] = nvme_opcode[tresult['opcode']]
 
                         traceLogs[last] = {}
                         traceLogs[last].update(tresult)
