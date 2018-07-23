@@ -24,7 +24,7 @@ sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
 
 if [ $getlog == 1 ]
 then
-    sudo cat /sys/kernel/debug/tracing/trace_pipe | tee ${outfile}
+    sudo cat /sys/kernel/debug/tracing/trace_pipe > ${outfile}
 else
     sudo cat /sys/kernel/debug/tracing/trace_pipe | python3 ${parserpath}nvmeparser.py $@
 fi

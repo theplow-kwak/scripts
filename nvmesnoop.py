@@ -19,6 +19,9 @@ import ctypes as ct
 import time
 import argparse
 import pandas as pd
+import matplotlib.pyplot as plt
+import csv
+
 
 # load BPF program
 prog = """
@@ -105,14 +108,16 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
         data.opcode = (((struct nvme_request*)(req+1))->cmd)->common.opcode | 0x100;
     } else {
         data.opcode = req->cmd_flags & REQ_OP_MASK;
-        data.len = (req->__data_len >> 9) - 1;
-        data.slba = req->__sector;
+        if(data.opcode == 0 || data.opcode == 1 || data.opcode == 3 || data.opcode == 9 ) {
+            data.len = (req->__data_len >> 9) - 1;
+            data.slba = req->__sector;
+            data.stream = req->write_hint;
+        }
         struct gendisk *rq_disk = req->rq_disk;
         bpf_probe_read(&data.disk_name, sizeof(data.disk_name),
                        rq_disk->disk_name);
     
         data.ncmd = (((struct nvme_request*)(req+1))->cmd)->common.opcode;
-        data.stream = req->write_hint;
     }
     
     events.perf_submit(ctx, &data, sizeof(data));
@@ -196,11 +201,13 @@ def print_event(cpu, data, size):
     global tag
     global count
     global traceLogs
+    global outfile
 
     result = [float(event.ts) / 1000000000, event.taskid, event.disk_name, nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
               event.stream, int(event.slba), int(event.len), float(event.latency) / 1000000000]
     traceLogs[count] = result
     count += 1
+    outfile.writerow(result)
 
     if (time.time() - tag) > 1:
 #        print("%5d: %-16.9f %-16s %-10s %-16s %-6s %-14s %-7s %10.3f" % (
@@ -212,7 +219,7 @@ def print_event(cpu, data, size):
 
 
 # loop with callback to print_event
-b["events"].open_perf_buffer(print_event, page_cnt=64)
+b["events"].open_perf_buffer(print_event, page_cnt=1024*8)
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
@@ -220,9 +227,13 @@ argparser.add_argument('-o', '--outfile', help='output file')
 args = argparser.parse_args()
 
 if args.outfile:
-    outfile = args.outfile
+    outfilename = args.outfile
 else:
-    outfile = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
+    outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
+
+    fout = open(outfilename, 'w')
+    outfile = csv.writer(fout)
+    outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
 
 try:
     while 1:
@@ -232,5 +243,36 @@ try:
 except KeyboardInterrupt:
     pass
 
-trace_datas = pd.DataFrame.from_dict(traceLogs, orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
-trace_datas.to_csv(outfile, index=False)
+fout.close()
+
+if args.visualize:
+    trace_datas = pd.DataFrame([])
+    trace_datas = trace_datas.append(pd.read_csv(outfilename), ignore_index=True, sort=False)
+
+    print("\n\n Operation counts and data size: \n",
+          trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'],
+                                  fill_value=0))
+    print("\n\n LBA describes per each stream: \n", trace_datas.groupby('stream')['slba'].describe())
+    print("\n\n length describes per each stream: \n", trace_datas.groupby('stream')['len'].describe())
+    print("\n\n latency describes per each stream: \n", trace_datas.groupby('stream')['latency'].describe())
+
+    nStreams = trace_datas['stream'].max() + 1
+    fig = plt.figure(figsize=(15, 9))
+
+    filtered = trace_datas[(trace_datas.nvme == 'nvme0n1')]
+
+    key = 'slba'
+    plt.subplot(211)
+    for n in range(nStreams):
+        plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
+    plt.ylabel(key)
+
+    key = 'latency'
+    plt.subplot(212)
+    for n in range(nStreams):
+        plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
+    plt.ylabel(key)
+
+    plt.legend()
+    fig.tight_layout()
+    plt.show()

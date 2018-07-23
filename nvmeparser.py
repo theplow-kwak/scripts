@@ -137,6 +137,9 @@ class TraceLog:
                         last += 1
 
                     if tresult['event'] == "nvme_setup_nvm_cmd":
+                        if tresult['nvme'] != 'nvme0n1':
+                            continue
+
                         request.start(last, tresult['cmdid'])
 
                         try:
@@ -227,14 +230,12 @@ if __name__ == "__main__":
         key = 'slba'
         plt.subplot(211)
         for n in range(nStreams):
-            print(filtered[filtered.stream == n][key])
             plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
         plt.ylabel(key)
 
         key = 'latency'
         plt.subplot(212)
         for n in range(nStreams):
-            print(filtered[filtered.stream == n][key])
             plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
         plt.ylabel(key)
 
