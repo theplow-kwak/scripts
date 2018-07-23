@@ -23,8 +23,7 @@ class TraceParser:
         event = '\s+(?P<event>\w+):'
         self.__trace_exp = re.compile(taskid + cpuid + timestamp + event)
         self.__keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>\w+),?')
-        self.__cmd_exp = re.compile(r'cmd=\(nvme_cmd_(?P<opcode>\w+)')
-        self.__admin_exp = re.compile(r'cmd=\(nvme_admin_(?P<opcode>\w+)')
+        self.__cmd_exp = re.compile(r'cmd=\((?P<opcode>\w+)')
 
     def parse(self, line):
         try:
@@ -129,33 +128,37 @@ class TraceLog:
                 tresult = parser.parse(line.strip())
 
                 if tresult:
-                    #tresult['timestamp'] = int(tresult['timestamp'].replace('.', ''))
 
-                    if tresult['event'] in ["nvme_setup_nvm_cmd"]:
+                    if tresult['event'] == "nvme_setup_admin_cmd":
                         request.start(last, tresult['cmdid'])
 
-                        for k, v in tresult.items():
-                            tresult[k] = to_num(v)
+                        result = [to_num(tresult['timestamp']), tresult['taskid'], '', tresult['opcode'].replace('nvme_admin_',''), 0, 0, 0, 0]
+                        traceLogs[last] = result
+                        last += 1
+
+                    if tresult['event'] == "nvme_setup_nvm_cmd":
+                        request.start(last, tresult['cmdid'])
+
                         try:
-                            tresult['stream'] = tresult['dsmgmt'] >> 16
+                            tresult['stream'] = to_num(tresult['dsmgmt']) >> 16
                         except:
                             tresult['stream'] = 0
 
-                        if (time.time() - tag) > 1:
-                            print("%5d: %s \tcmdid: %s \ttimestamp: %s \ttaskid: %12s \tstream: %d" % (
-                                last, tresult['opcode'], tresult['cmdid'], tresult['timestamp'], tresult['taskid'], tresult['stream']))
-                            tag = time.time()
-
-                        tresult['event'] = nvme_event[tresult['event']]
-
-                        traceLogs[last] = {}
-                        traceLogs[last].update(tresult)
+                        result = [to_num(tresult['timestamp']), tresult['taskid'], tresult.get('nvme','nvme0n1'), tresult['opcode'].replace('nvme_cmd_',''), tresult['stream'],
+                                  to_num(tresult.get('slba',0)), to_num(tresult.get('len',0)), 0]
+                        traceLogs[last] = result
                         last += 1
 
                     elif tresult['event'] == "nvme_complete_rq":
                         index = request.completion(tresult['cmdid'])
                         if index != -1:
-                            traceLogs[index]['latency'] = round(to_num(tresult['timestamp']) - traceLogs[index]['timestamp'], 6)
+                            traceLogs[index][7] = round(to_num(tresult['timestamp']) - traceLogs[index][0], 6)
+                            if (time.time() - tag) > 1:
+                                #for key, val in traceLogs.items():
+                                print(index, traceLogs[index])
+                                #print()
+                                tag = time.time()
+
 
         except KeyboardInterrupt:
             sys.stdout.flush()
@@ -198,13 +201,15 @@ if __name__ == "__main__":
             outfile = args.rawfile + ".csv"
 
         start = time.time()
-        trace_datas = pd.DataFrame.from_dict(TraceLog.read_logs(infile), orient='index')
+        trace_datas = pd.DataFrame.from_dict(TraceLog.read_logs(infile), orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+#        TraceLog.read_logs(infile)
         end = time.time()
         print("labs time: ", end - start, "\n")
 
         trace_datas.to_csv(outfile, index=False)
 
-        print(trace_datas.memory_usage())
+    print(trace_datas.memory_usage())
+    print(trace_datas)
 
     if args.visualize:
         print("\n\n Operation counts and data size: \n", trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'], fill_value=0))
@@ -215,19 +220,21 @@ if __name__ == "__main__":
         nStreams = trace_datas['stream'].max() + 1
         fig = plt.figure(figsize=(15, 9))
 
-        filtered = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.taskid == 'mysqld')]
+        filtered = trace_datas[(trace_datas.nvme == 'nvme0n1')]
         if args.opcode :
             filtered = filtered[filtered.opcode.isin(args.opcode)]
 
         key = 'slba'
         plt.subplot(211)
         for n in range(nStreams):
+            print(filtered[filtered.stream == n][key])
             plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
         plt.ylabel(key)
 
         key = 'latency'
         plt.subplot(212)
         for n in range(nStreams):
+            print(filtered[filtered.stream == n][key])
             plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
         plt.ylabel(key)
 

@@ -17,7 +17,8 @@ from __future__ import print_function
 from bcc import BPF
 import ctypes as ct
 import time
-import re
+import argparse
+import pandas as pd
 
 # load BPF program
 prog = """
@@ -33,13 +34,13 @@ struct val_t {
 };
 
 struct data_t {
-    u64 opcode;
-    u64 ncmd;
+    u16 opcode;
+    u16 ncmd;
     u64 latency;
     u64 slba;
     u64 len;
     u64 ts;
-    u64 stream;
+    u8 stream;
     char disk_name[DISK_NAME_LEN];
     char taskid[TASK_COMM_LEN];
 };
@@ -103,13 +104,13 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
     if (valp->admin) {
         data.opcode = (((struct nvme_request*)(req+1))->cmd)->common.opcode | 0x100;
     } else {
+        data.opcode = req->cmd_flags & REQ_OP_MASK;
         data.len = (req->__data_len >> 9) - 1;
         data.slba = req->__sector;
         struct gendisk *rq_disk = req->rq_disk;
         bpf_probe_read(&data.disk_name, sizeof(data.disk_name),
                        rq_disk->disk_name);
     
-        data.opcode = req->cmd_flags & REQ_OP_MASK;
         data.ncmd = (((struct nvme_request*)(req+1))->cmd)->common.opcode;
         data.stream = req->write_hint;
     }
@@ -127,21 +128,6 @@ b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
 
 TASK_COMM_LEN = 16  # linux/sched.h
 DISK_NAME_LEN = 32  # linux/genhd.h
-
-
-class Data(ct.Structure):
-    _fields_ = [
-        ("opcode", ct.c_ulonglong),
-        ("ncmd", ct.c_ulonglong),
-        ("latency", ct.c_ulonglong),
-        ("slba", ct.c_ulonglong),
-        ("len", ct.c_ulonglong),
-        ("ts", ct.c_ulonglong),
-        ("stream", ct.c_ulonglong),
-        ("disk_name", ct.c_char * DISK_NAME_LEN),
-        ("taskid", ct.c_char * TASK_COMM_LEN)
-    ]
-
 
 nvme_cmd_opcode = {
     0 : 'read',
@@ -181,11 +167,26 @@ nvme_cmd_opcode = {
     0x184: 'sanitize_nvm',
 }
 
+class Data(ct.Structure):
+    _fields_ = [
+        ("opcode", ct.c_int16),
+        ("ncmd", ct.c_int16),
+        ("latency", ct.c_ulonglong),
+        ("slba", ct.c_ulonglong),
+        ("len", ct.c_ulonglong),
+        ("ts", ct.c_ulonglong),
+        ("stream", ct.c_byte),
+        ("disk_name", ct.c_char * DISK_NAME_LEN),
+        ("taskid", ct.c_char * TASK_COMM_LEN)
+    ]
+
 # header
 print("%5s  %-16s %-16s %-10s %-16s %-6s %-14s %-7s %10s" % (
     "count", "TIME(s)", "TASK", "NVME", "OPCODE", "STREAM", "SLBA", "LEN", "LAT(us)"))
 
 tag = time.time()
+
+traceLogs = {}
 count = 0
 
 # process event
@@ -194,18 +195,42 @@ def print_event(cpu, data, size):
 
     global tag
     global count
+    global traceLogs
 
+    result = [float(event.ts) / 1000000000, event.taskid, event.disk_name, nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
+              event.stream, int(event.slba), int(event.len), float(event.latency) / 1000000000]
+    traceLogs[count] = result
     count += 1
 
     if (time.time() - tag) > 1:
-        print("%5d: %-16.9f %-16s %-10s %-16s %-6s %-14s %-7s %10.3f" % (
-            count, float(event.ts) / 1000000000, event.taskid.decode(), event.disk_name.decode(), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
-            event.stream, event.slba, event.len, float(event.latency) / 1000))
+#        print("%5d: %-16.9f %-16s %-10s %-16s %-6s %-14s %-7s %10.3f" % (
+#            count, float(event.ts) / 1000000000, event.taskid.decode(), event.disk_name.decode(), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
+#            event.stream, event.slba, event.len, float(event.latency) / 1000))
+#        for key, val in traceLogs.items():
+        print(count, result)
         tag = time.time()
 
 
 # loop with callback to print_event
 b["events"].open_perf_buffer(print_event, page_cnt=64)
-while 1:
-    #    print(b.trace_fields())
-    b.perf_buffer_poll()
+
+argparser = argparse.ArgumentParser()
+argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
+argparser.add_argument('-o', '--outfile', help='output file')
+args = argparser.parse_args()
+
+if args.outfile:
+    outfile = args.outfile
+else:
+    outfile = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
+
+try:
+    while 1:
+        #    print(b.trace_fields())
+        b.perf_buffer_poll()
+
+except KeyboardInterrupt:
+    pass
+
+trace_datas = pd.DataFrame.from_dict(traceLogs, orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+trace_datas.to_csv(outfile, index=False)
