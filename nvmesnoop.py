@@ -176,11 +176,6 @@ class Data(ct.Structure):
     ]
 
 
-tag = time.time()
-
-count = 0
-display = 0
-
 # process event
 def print_event(cpu, data, size):
     event = ct.cast(data, ct.POINTER(Data)).contents
@@ -198,6 +193,51 @@ def print_event(cpu, data, size):
     if display & ((time.time() - tag) > 1):
         print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(count, *result))
         tag = time.time()
+
+
+def CaptureLog(filename, verbose):
+
+    global tag
+    global count
+    global outfile
+    global display
+
+    tag = time.time()
+    count = 0
+    display = 0
+
+    b = BPF(text=prog)
+    b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
+    b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
+
+    fout = open(filename, 'w')
+    outfile = csv.writer(fout)
+    outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+
+    if verbose:
+        global display
+        display = 1
+        # header
+        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
+            'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
+
+    # loop with callback to print_event
+    b["events"].open_perf_buffer(print_event, page_cnt=1024 * 8)
+
+    try:
+        while 1:
+            b.perf_buffer_poll()
+
+    except KeyboardInterrupt:
+        pass
+
+    fout.close()
+
+    import os
+    uid = os.environ.get('SUDO_UID')
+    gid = os.environ.get('SUDO_GID')
+    if uid is not None:
+        os.chown(filename, int(uid), int(gid))
 
 
 def ViewResult(filename):
@@ -236,42 +276,6 @@ def ViewResult(filename):
     fig.tight_layout()
     plt.show()
 
-
-def CaptureLog(filename, verbose):
-
-    b = BPF(text=prog)
-    b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
-    b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
-
-    global outfile
-    fout = open(filename, 'w')
-    outfile = csv.writer(fout)
-    outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
-
-    if verbose:
-        global display
-        display = 1
-        # header
-        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
-            'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
-
-    # loop with callback to print_event
-    b["events"].open_perf_buffer(print_event, page_cnt=1024 * 8)
-
-    try:
-        while 1:
-            b.perf_buffer_poll()
-
-    except KeyboardInterrupt:
-        pass
-
-    fout.close()
-
-    import os
-    uid = os.environ.get('SUDO_UID')
-    gid = os.environ.get('SUDO_GID')
-    if uid is not None:
-        os.chown(filename, int(uid), int(gid))
 
 
 def main():

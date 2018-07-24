@@ -123,6 +123,9 @@ class TraceLog:
         last = 0
         tag = time.time()
 
+        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
+            'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
+
         try:
             for line in file:
                 tresult = parser.parse(line.strip())
@@ -137,7 +140,7 @@ class TraceLog:
                         last += 1
 
                     if tresult['event'] == "nvme_setup_nvm_cmd":
-                        if tresult['nvme'] != 'nvme0n1':
+                        if tresult.get('nvme','nvme0n1') != 'nvme0n1':
                             continue
 
                         request.start(last, tresult['cmdid'])
@@ -157,9 +160,7 @@ class TraceLog:
                         if index != -1:
                             traceLogs[index][7] = round(to_num(tresult['timestamp']) - traceLogs[index][0], 6)
                             if (time.time() - tag) > 1:
-                                #for key, val in traceLogs.items():
-                                print(index, traceLogs[index])
-                                #print()
+                                print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(index, *traceLogs[index]))
                                 tag = time.time()
 
 
@@ -212,7 +213,6 @@ if __name__ == "__main__":
         trace_datas.to_csv(outfile, index=False)
 
     print(trace_datas.memory_usage())
-    print(trace_datas)
 
     if args.visualize:
         print("\n\n Operation counts and data size: \n", trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'], fill_value=0))
@@ -243,20 +243,6 @@ if __name__ == "__main__":
         fig.tight_layout()
         plt.show()
 
-"""
-        filtered = trace_datas[trace_datas.nvme != 'nvme0n1']
-        plt.subplot(211)
-        plt.plot(filtered['slba'], '.', label="!nvme0n1", color='b')
-        plt.subplot(212)
-        plt.plot(filtered['latency'], '.', label="!nvme0n1", color='b')
-
-
-    key = 'len'
-    plt.subplot(312)
-    for n in range(nStreams):
-        plt.plot(trace_datas[trace_datas.stream == n][key], '.', label="stream=%d " % (n))
-    plt.ylabel(key)
-"""
 #    main("nvme.log")
 #    app = wx.App()
 #    frm = NVMeParser(None)
