@@ -18,8 +18,6 @@ from bcc import BPF
 import ctypes as ct
 import time
 import argparse
-import pandas as pd
-import matplotlib.pyplot as plt
 import csv
 
 
@@ -38,7 +36,6 @@ struct val_t {
 
 struct data_t {
     u16 opcode;
-    u16 ncmd;
     u64 latency;
     u64 slba;
     u64 len;
@@ -114,10 +111,7 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
             data.stream = req->write_hint;
         }
         struct gendisk *rq_disk = req->rq_disk;
-        bpf_probe_read(&data.disk_name, sizeof(data.disk_name),
-                       rq_disk->disk_name);
-    
-        data.ncmd = (((struct nvme_request*)(req+1))->cmd)->common.opcode;
+        bpf_probe_read(&data.disk_name, sizeof(data.disk_name), rq_disk->disk_name);
     }
     
     events.perf_submit(ctx, &data, sizeof(data));
@@ -175,7 +169,6 @@ nvme_cmd_opcode = {
 class Data(ct.Structure):
     _fields_ = [
         ("opcode", ct.c_int16),
-        ("ncmd", ct.c_int16),
         ("latency", ct.c_ulonglong),
         ("slba", ct.c_ulonglong),
         ("len", ct.c_ulonglong),
@@ -186,12 +179,11 @@ class Data(ct.Structure):
     ]
 
 # header
-print("%5s  %-16s %-16s %-10s %-16s %-6s %-14s %-7s %10s" % (
-    "count", "TIME(s)", "TASK", "NVME", "OPCODE", "STREAM", "SLBA", "LEN", "LAT(us)"))
+print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
+    'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
 
 tag = time.time()
 
-traceLogs = {}
 count = 0
 
 # process event
@@ -200,21 +192,15 @@ def print_event(cpu, data, size):
 
     global tag
     global count
-    global traceLogs
     global outfile
 
     result = [float(event.ts) / 1000000000, event.taskid, event.disk_name, nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
               event.stream, int(event.slba), int(event.len), float(event.latency) / 1000000000]
-    traceLogs[count] = result
     count += 1
     outfile.writerow(result)
 
     if (time.time() - tag) > 1:
-#        print("%5d: %-16.9f %-16s %-10s %-16s %-6s %-14s %-7s %10.3f" % (
-#            count, float(event.ts) / 1000000000, event.taskid.decode(), event.disk_name.decode(), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
-#            event.stream, event.slba, event.len, float(event.latency) / 1000))
-#        for key, val in traceLogs.items():
-        print(count, result)
+        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(count, *result))
         tag = time.time()
 
 
@@ -245,7 +231,18 @@ except KeyboardInterrupt:
 
 fout.close()
 
+import os
+
+uid = os.environ.get('SUDO_UID')
+gid = os.environ.get('SUDO_GID')
+if uid is not None:
+    os.chown(outfilename, int(uid), int(gid))
+
+
 if args.visualize:
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
     trace_datas = pd.DataFrame([])
     trace_datas = trace_datas.append(pd.read_csv(outfilename), ignore_index=True, sort=False)
 
