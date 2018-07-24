@@ -178,13 +178,11 @@ class Data(ct.Structure):
         ("taskid", ct.c_char * TASK_COMM_LEN)
     ]
 
-# header
-print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
-    'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
 
 tag = time.time()
 
 count = 0
+display = 0
 
 # process event
 def print_event(cpu, data, size):
@@ -193,13 +191,14 @@ def print_event(cpu, data, size):
     global tag
     global count
     global outfile
+    global display
 
     result = [float(event.ts) / 1000000000, event.taskid, event.disk_name, nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
               event.stream, int(event.slba), int(event.len), float(event.latency) / 1000000000]
     count += 1
     outfile.writerow(result)
 
-    if (time.time() - tag) > 1:
+    if display & ((time.time() - tag) > 1):
         print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(count, *result))
         tag = time.time()
 
@@ -210,6 +209,7 @@ b["events"].open_perf_buffer(print_event, page_cnt=1024*8)
 argparser = argparse.ArgumentParser()
 argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
 argparser.add_argument('-o', '--outfile', help='output file')
+argparser.add_argument('-d', '--display', action='store_true', help='verbose display')
 args = argparser.parse_args()
 
 if args.outfile:
@@ -220,6 +220,12 @@ else:
     fout = open(outfilename, 'w')
     outfile = csv.writer(fout)
     outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+
+if args.display:
+    display = 1
+    # header
+    print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
+        'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
 
 try:
     while 1:
