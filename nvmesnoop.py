@@ -108,7 +108,7 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
         if(data.opcode == 0 || data.opcode == 1 || data.opcode == 3 || data.opcode == 9 ) {
             data.len = (req->__data_len >> 9) - 1;
             data.slba = req->__sector;
-            data.stream = req->write_hint;
+            data.stream = (req->write_hint) ? (req->write_hint-1) : 0;
         }
         struct gendisk *rq_disk = req->rq_disk;
         bpf_probe_read(&data.disk_name, sizeof(data.disk_name), rq_disk->disk_name);
@@ -121,9 +121,6 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
 }
 """
 
-b = BPF(text=prog)
-b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
-b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
 
 TASK_COMM_LEN = 16  # linux/sched.h
 DISK_NAME_LEN = 32  # linux/genhd.h
@@ -203,54 +200,13 @@ def print_event(cpu, data, size):
         tag = time.time()
 
 
-# loop with callback to print_event
-b["events"].open_perf_buffer(print_event, page_cnt=1024*8)
-
-argparser = argparse.ArgumentParser()
-argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
-argparser.add_argument('-o', '--outfile', help='output file')
-argparser.add_argument('-d', '--display', action='store_true', help='verbose display')
-args = argparser.parse_args()
-
-if args.outfile:
-    outfilename = args.outfile
-else:
-    outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
-
-    fout = open(outfilename, 'w')
-    outfile = csv.writer(fout)
-    outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
-
-if args.display:
-    display = 1
-    # header
-    print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
-        'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
-
-try:
-    while 1:
-        #    print(b.trace_fields())
-        b.perf_buffer_poll()
-
-except KeyboardInterrupt:
-    pass
-
-fout.close()
-
-import os
-
-uid = os.environ.get('SUDO_UID')
-gid = os.environ.get('SUDO_GID')
-if uid is not None:
-    os.chown(outfilename, int(uid), int(gid))
-
-
-if args.visualize:
+def ViewResult(filename):
     import pandas as pd
     import matplotlib.pyplot as plt
 
     trace_datas = pd.DataFrame([])
-    trace_datas = trace_datas.append(pd.read_csv(outfilename), ignore_index=True, sort=False)
+    for _file in filename:
+        trace_datas = trace_datas.append(pd.read_csv(_file), ignore_index=True, sort=False)
 
     print("\n\n Operation counts and data size: \n",
           trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'],
@@ -279,3 +235,65 @@ if args.visualize:
     plt.legend()
     fig.tight_layout()
     plt.show()
+
+
+def CaptureLog(filename, verbose):
+
+    b = BPF(text=prog)
+    b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
+    b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
+
+    global outfile
+    fout = open(filename, 'w')
+    outfile = csv.writer(fout)
+    outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+
+    if verbose:
+        global display
+        display = 1
+        # header
+        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
+            'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
+
+    # loop with callback to print_event
+    b["events"].open_perf_buffer(print_event, page_cnt=1024 * 8)
+
+    try:
+        while 1:
+            b.perf_buffer_poll()
+
+    except KeyboardInterrupt:
+        pass
+
+    fout.close()
+
+    import os
+    uid = os.environ.get('SUDO_UID')
+    gid = os.environ.get('SUDO_GID')
+    if uid is not None:
+        os.chown(filename, int(uid), int(gid))
+
+
+def main():
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
+    argparser.add_argument('-o', '--outfile', help='output file')
+    argparser.add_argument('-f', '--filename', nargs='+', help='trace data file (csv)')
+    argparser.add_argument('-d', '--display', action='store_true', help='verbose display')
+    args = argparser.parse_args()
+
+    outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
+
+    if args.outfile:
+        outfilename = args.outfile
+
+    if args.filename:
+        ViewResult(args.filename)
+    else:
+        CaptureLog(outfilename, args.display)
+        if args.visualize:
+            ViewResult([outfilename])
+
+
+if __name__ == "__main__":
+    main()
