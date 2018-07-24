@@ -105,7 +105,6 @@ stream_on = ['echo 1 > /sys/module/nvme_core/parameters/streams']
 stream_off = ['echo 0 > /sys/module/nvme_core/parameters/streams']
 
 trim = 'fstrim -v {}'.format(nvme_path).split()
-cat_trace = 'cat /sys/kernel/debug/tracing/trace_pipe'.split()
 
 #ycsb_workload = 'workloads/nvme_test'
 ycsb_workload = 'workloads/workloadf'
@@ -130,9 +129,6 @@ def capture_wai(wai_info, outfile, stop):
 
 def runtest(loop=1, load=False, outpath='./'):
 
-    sudo_exec = SudoProcess()
-    cattrace = sudo_exec.Popen(cat_trace, wait=False)
-
     for i in range(loop):
         starttime = time.time()
         wai_info = WaiInfo()
@@ -142,7 +138,7 @@ def runtest(loop=1, load=False, outpath='./'):
         outlog = outpath + "ycsblog_{}".format(i) + time.strftime("-%m%d-%H%M") + ".log"
         outnvme = outpath + "nvme_{}".format(i) + time.strftime("-%m%d-%H%M") + ".csv"
         file = open(outlog, "w")
-        nvmeparser = subprocess.Popen('python3 {}/projects/scripts/nvmeparser.py -p {}'.format(os.getenv("HOME"), outnvme).split(), stdin=cattrace.stdout, stdout=subprocess.PIPE)
+        nvmeparser = subprocess.Popen('{}/projects/scripts/nvmesnoop.py -o {}'.format(os.getenv("HOME"), outnvme).split())
         if load:
             ycsb = subprocess.Popen(ycsb_load, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
         else:
@@ -162,8 +158,6 @@ def runtest(loop=1, load=False, outpath='./'):
         time.sleep(10)
 
         nvmeparser.send_signal(signal.SIGINT)
-        nvmeparser.wait()
-
 
 
 def mount(nvme_dev=nvme_dev, nvme_path=nvme_path, discard=discard):

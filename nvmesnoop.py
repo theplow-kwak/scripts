@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # @lint-avoid-python-3-compatibility-imports
 #
 # biosnoop  Trace block device I/O and print details including issuing PID.
@@ -206,7 +206,7 @@ def CaptureLog(filename, verbose):
     count = 0
     display = 0
 
-    b = BPF(text=prog)
+    b = BPF(text=prog, cflags=['-w'])
     b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
     b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
 
@@ -215,7 +215,6 @@ def CaptureLog(filename, verbose):
     outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
 
     if verbose:
-        global display
         display = 1
         # header
         print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
