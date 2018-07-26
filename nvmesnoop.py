@@ -18,7 +18,6 @@ from bcc import BPF
 import ctypes as ct
 import time
 import argparse
-import csv
 
 
 # load BPF program
@@ -106,7 +105,7 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
     } else {
         data.opcode = req->cmd_flags & REQ_OP_MASK;
         if(data.opcode == 0 || data.opcode == 1 || data.opcode == 3 || data.opcode == 9 ) {
-            data.len = (req->__data_len >> 9) - 1;
+            data.len = req->__data_len >> 9;
             data.slba = req->__sector;
             data.stream = (req->write_hint) ? (req->write_hint-1) : 0;
         }
@@ -185,7 +184,7 @@ def print_event(cpu, data, size):
     global outfile
     global display
 
-    result = [float(event.ts) / 1000000000, event.taskid, event.disk_name, nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
+    result = [float(event.ts) / 1000000000, event.taskid.decode('UTF-8'), event.disk_name.decode('UTF-8'), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
               event.stream, int(event.slba), int(event.len), float(event.latency) / 1000000000]
     count += 1
     outfile.writerow(result)
@@ -196,6 +195,7 @@ def print_event(cpu, data, size):
 
 
 def CaptureLog(filename, verbose):
+    import csv
 
     global tag
     global count
@@ -256,25 +256,33 @@ def ViewResult(filename):
 
     nStreams = trace_datas['stream'].max() + 1
     fig = plt.figure(figsize=(15, 9))
+    axslba = plt.subplot(211)
+    axlatency = plt.subplot(212)
+    fig.tight_layout()
+    #plt.ion()
+    #plt.show()
 
-    filtered = trace_datas[(trace_datas.nvme == 'nvme0n1')]
+    filtered = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.opcode == 'write')]
 
     key = 'slba'
-    plt.subplot(211)
+    not_write = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.opcode != 'write')]
+    axslba.plot(not_write['timestamp'], not_write[key], '.', color='silver', label="not_write")
     for n in range(nStreams):
-        plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
-    plt.ylabel(key)
+        axslba.plot(filtered[filtered.stream == n]['timestamp'], filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
+        axslba.set_ylabel(key)
+    plt.draw()
+    plt.pause(1e-17)
 
     key = 'latency'
-    plt.subplot(212)
+    not_write = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.opcode != 'write')]
+    axlatency.plot(not_write['timestamp'], not_write[key], '.', color='silver', label="not_write")
     for n in range(nStreams):
-        plt.plot(filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
-    plt.ylabel(key)
-
+        axlatency.plot(filtered[filtered.stream == n]['timestamp'], filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
+    axlatency.set_ylabel(key)
     plt.legend()
-    fig.tight_layout()
+    plt.draw()
+    plt.pause(1e-17)
     plt.show()
-
 
 
 def main():
