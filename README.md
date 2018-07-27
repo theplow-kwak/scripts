@@ -5,21 +5,26 @@
 
 ### Install build dependencies
 ```bash
-sudo apt install cmake clang libedit-dev llvm libclang-dev luajit libfl-dev
+sudo apt install cmake clang libedit-dev llvm libclang-dev luajit libfl-dev libelf-dev
 sudo apt install luajit luajit-5.1-dev
-sudo apt install netperf iperf 
+sudo apt install netperf iperf bison
+sudo apt install python python3 python-pip python3-pip python-tk bison
 ```
 
 ### Install and compile BCC
 ```bash
 git clone https://github.com/iovisor/bcc.git
 mkdir bcc/build; cd bcc/build
-cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DPYTHON_CMD=python3
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr
 make
 sudo make install
 ```
 
-
+## install python modules
+```
+pip install pandas -U
+pip install matplotlib -U
+```
 ## How to use
 ```
 usage: nvmesnoop.py [-h] [-v] [-o OUTFILE] [-f FILENAME [FILENAME ...]] [-d]
