@@ -63,7 +63,6 @@ int trace_req_start(struct pt_regs *ctx, struct nvme_ns *ns, struct request *req
 {
     u64 ts;
     struct val_t val = {};
-//    struct data_t data = {};
 
     val.ts = bpf_ktime_get_ns();
     bpf_get_current_comm(&val.taskid, sizeof(val.taskid));
@@ -74,11 +73,6 @@ int trace_req_start(struct pt_regs *ctx, struct nvme_ns *ns, struct request *req
     
     start.update(&req, &val);
 
-//    data.ts = val.ts;
-//    data.opcode = req->cmd_flags & REQ_OP_MASK;
-//    data.ncmd = (((struct nvme_request*)(req+1))->cmd)->common.opcode;
-//    events.perf_submit(ctx, &data, sizeof(data));
-    
     return 0;
 }
 

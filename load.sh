@@ -9,7 +9,7 @@ while getopts ":u" opt; do
 	esac
 done 
 
-pushd ~/linux-4.15.0/drivers/nvme
+pushd ../linux-4.15.0/drivers/nvme
 sudo rmmod nvme
 sudo rmmod nvme-core
 if [ $unload != 1 ]

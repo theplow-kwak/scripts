@@ -21,7 +21,7 @@ then
     cmd=$opt
 fi
 
-echo ./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data 
-./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=/media/dhkwak/nvme/ycsb-rocksdb-data 
+echo ./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=/mnt/nvme/ycsb-rocksdb-data 
+./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=/mnt/nvme/ycsb-rocksdb-data 
 
 popd
