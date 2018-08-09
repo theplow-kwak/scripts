@@ -277,6 +277,7 @@ def ViewResult(filename):
     plt.draw()
     plt.pause(1e-17)
     plt.show()
+    return trace_datas
 
 
 def main():
