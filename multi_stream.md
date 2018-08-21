@@ -35,6 +35,14 @@ make clean
 make all
 ```
 
+env/io_posix.cc
+```
+#ifdef OS_LINUX
+// Suppress Valgrind "Unimplemented functionality" error.
+#ifndef ROCKSDB_VALGRIND_RUN
+  fprintf(stdout, "  SetWriteLifeTimeHint: %s   Write hint: %d \n", filename_.c_str(), hint);
+```
+
 ## static build 
 ```bash
 make jclean
@@ -302,6 +310,8 @@ sudo make install
 
 # MySQL Build 
 ## Installing MySQL from Source with the MySQL APT Repository
+> https://dev.mysql.com/doc/mysql-apt-repo-quick-guide/en/#repo-qp-apt-install-from-source
+
 You can download the source code for MySQL and build it using the MySQL APT Repository:
 ```bash
 sudo apt-get update
@@ -358,6 +368,71 @@ sudo dpkg -i mysql-source-5.7_5.7.23-0ubuntu0.18.04.1_amd64.deb
 cmake . -DBUILD_CONFIG=mysql_release -DMYSQL_DATADIR=/mnt/nvme/mysql/ -DIGNORE_AIO_CHECK=1
 cmake . -DBUILD_CONFIG=mysql_release -DMYSQL_DATADIR=/mnt/nvme/mysql/ -DCMAKE_INSTALL_PREFIX=/usr/bin/
 
+## custom build from generic source
+### Preconfiguration setup
+```bash
+sudo groupadd mysql
+sudo useradd -r -g mysql -s /bin/false mysql
+```
+
+### Beginning of source-build specific instructions
+```
+( test -d builddir || mkdir builddir ) && cd builddir && \
+sh -c  'PATH=${MYSQL_BUILD_PATH:-"/bin:/usr/bin"} \
+	CC=${MYSQL_BUILD_CC:-gcc} \
+	CXX=${MYSQL_BUILD_CXX:-g++} \
+	cmake -DCMAKE_INSTALL_PREFIX=/usr \
+	-DCMAKE_VERBOSE_MAKEFILE=ON \
+	-DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
+	-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	-DBUILD_CONFIG=mysql_release \
+	-DWITH_LIBWRAP=ON \
+	-DWITH_ZLIB=system \
+	-DWITH_LZ4=system \
+	-DWITH_EDITLINE=system \
+	-DWITH_LIBEVENT=system \
+	-DWITH_SSL=bundled \
+	-DWITH_BOOST=../boost \
+	-DCOMPILATION_COMMENT="(Ubuntu)" \
+	-DMYSQL_SERVER_SUFFIX="-nvme" \
+	-DINSTALL_LAYOUT=DEB \
+	-DINSTALL_DOCDIR=share/mysql/docs \
+	-DINSTALL_DOCREADMEDIR=share/mysql \
+	-DINSTALL_INCLUDEDIR=include/mysql \
+	-DINSTALL_INFODIR=share/mysql/docs \
+	-DINSTALL_LIBDIR=lib/x86_64-linux-gnu \
+	-DINSTALL_MANDIR=share/man \
+	-DINSTALL_MYSQLSHAREDIR=share/mysql \
+	-DINSTALL_MYSQLTESTDIR=lib/mysql-test \
+	-DINSTALL_PLUGINDIR=lib/mysql/plugin \
+	-DINSTALL_SBINDIR=sbin \
+	-DINSTALL_SCRIPTDIR=bin \
+	-DINSTALL_SUPPORTFILESDIR=share/mysql \
+	-DSYSCONFDIR=/etc/mysql \
+	-DWITH_EMBEDDED_SERVER=ON \
+	-DWITH_ARCHIVE_STORAGE_ENGINE=ON \
+	-DWITH_BLACKHOLE_STORAGE_ENGINE=ON \
+	-DWITH_FEDERATED_STORAGE_ENGINE=ON \
+	-DWITH_INNODB_MEMCACHED=1 \
+	-DINSTALL_MYSQLDATADIR="/mnt/nvme/mysql" \
+	-DWITH_EXTRA_CHARSETS=all ..'
+```
+
+```
+make -j8
+sudo make install
+```
+
+### Postinstallation setup
+```
+sudo mkdir /var/lib/mysql-files
+sudo chown mysql:mysql /var/lib/mysql-files
+sudo chmod 750 /var/lib/mysql-files
+mysqld --initialize --user=mysql 
+mysql_ssl_rsa_setup
+mysqld_safe --user=mysql &
+
+```
 
 # MySQL datadir change 
 > http://ourcstory.tistory.com/134
@@ -488,3 +563,19 @@ fio --randrepeat=1 --ioengine=libaio --direct=1 --gtod_reduce=1 --name=test --fi
 ConvertTo-MvmcVirtualHardDisk -SourceLiteralPath "D:\VMPC\Ubuntu 1804 64-bit\Ubuntu 1804 64-bit.vmdk" -DestinationLiteralPath u1804 -VhdType DynamicHarddisk -VhdFormat vhdx
 ```
 
+# How to do Screen Sharing on Ubuntu 18.04
+
+Now you need to install dconf-editor with this command:
+
+sudo apt-get install dconf-editor
+
+Now open a terminal and type
+
+dconf-editor
+
+Now navigate to:
+
+ORG > GNOME > DESKTOP > REMOTE ACCESS
+
+Then find the “Require Encryption” setting and toggle it off
+Now you can open your favorite VNC client and view your remote screen!
