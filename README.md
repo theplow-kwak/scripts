@@ -8,7 +8,7 @@
 sudo apt install cmake clang libedit-dev llvm libclang-dev luajit libfl-dev libelf-dev
 sudo apt install luajit luajit-5.1-dev
 sudo apt install netperf iperf bison
-sudo apt install python python3 python-pip python3-pip python-tk bison
+sudo apt install python python3 python-pip python3-pip python-tk python3-tk bison
 ```
 
 ### Install and compile BCC

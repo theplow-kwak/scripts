@@ -415,6 +415,7 @@ sh -c  'PATH=${MYSQL_BUILD_PATH:-"/bin:/usr/bin"} \
 	-DWITH_FEDERATED_STORAGE_ENGINE=ON \
 	-DWITH_INNODB_MEMCACHED=1 \
 	-DINSTALL_MYSQLDATADIR="/mnt/nvme/mysql" \
+	-DWITH_SYSTEMD=1 \
 	-DWITH_EXTRA_CHARSETS=all ..'
 ```
 
@@ -430,8 +431,6 @@ sudo chown mysql:mysql /var/lib/mysql-files
 sudo chmod 750 /var/lib/mysql-files
 mysqld --initialize --user=mysql 
 mysql_ssl_rsa_setup
-mysqld_safe --user=mysql &
-
 ```
 
 # MySQL datadir change 
@@ -508,6 +507,7 @@ sudo /usr/bin/mysql_secure_installation
 # DBT2 MySQL benchmarke
 ## Download source
 > https://dev.mysql.com/downloads/benchmarks.html
+https://downloads.mysql.com/source/dbt2-0.37.50.15.tar.gz
 
 ## build dbt2
 ```bash

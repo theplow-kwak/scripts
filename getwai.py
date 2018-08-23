@@ -42,8 +42,8 @@ class SudoProcess:
 
 
 class WaiInfo:
-    col_names = ['lapstime', 'cum_nand_written', 'cum_host_writes', 'cum_nand_erased', 'nand_written', 'host_writes',
-                 'nand_erased', 'waf', 'wai']
+    col_names = ['lapstime', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
+                 'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai']
     keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>[\w|.]+),?')
 
     def __init__(self, dev='/dev/nvme0'):
@@ -94,28 +94,37 @@ class WaiInfo:
 
             nand_written, host_writes, nand_erased, waf, wai = self.calc(self.__current)
             if host_writes:
-                self.datas.loc[self.index] = [lapstime, self.last_data['nand_written'], self.last_data['host_writes'], self.last_data['nand_erased'], nand_written, host_writes, nand_erased, waf, wai]
+                self.datas.loc[self.index] = [__time, self.last_data['host_writes'], self.last_data['nand_written'], self.last_data['nand_erased'],
+                                              host_writes, nand_written, nand_erased, waf, wai]
                 if printout is True:
-                    print(self.datas.loc[self.index])
+                    print('{5:<20} {0:>12} {1:>12} {2:>12} {3:>20} {4:>20}'.format(
+                        host_writes, nand_written, nand_erased, waf, wai, __time))
+                    # print(self.datas.loc[self.index])
                 self.last_data = self.__current
                 self.last_time = __time
                 self.index += 1
             return self.__current
 
 
-def capture_wai(wai_info, outfile):
+def capture_wai(wai_info, outfile, verbose):
     tag = time.time()
+
+    if verbose:
+        # header
+        print('{5:^20} {0:^12} {1:^12} {2:^12} {3:^20} {4:^20}'.format(
+            'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai', 'timestamp'))
+
     try:
         while 1:
             if (time.time() - tag) > 60:
-                wai_info.update()
+                wai_info.update(verbose)
                 wai_info.datas.to_csv(outfile, index=False)
                 tag = time.time()
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass
 
-    wai_info.update()
+    wai_info.update(verbose)
     wai_info.datas.to_csv(outfile, index=False)
 
 
@@ -137,10 +146,10 @@ def main(outpath='./'):
     start = wai_info.last_data
 
 
-    capture_wai(wai_info, outfilename)
+    capture_wai(wai_info, outfilename, args.display)
 
     print()
-    print('nand_written: {0[0]}, host_writes: {0[1]}, nand_erased: {0[2]}, waf: {0[3]}, wai: {0[4]}'.format(wai_info.calc(wai_info.last_data, start)))
+    print('host_writes: {0[1]}, nand_written: {0[0]}, nand_erased: {0[2]}, waf: {0[3]}, wai: {0[4]}'.format(wai_info.calc(wai_info.last_data, start)))
 
 
 if __name__ == "__main__":
