@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 import re
 import os
 import argparse
@@ -97,7 +100,7 @@ class WaiInfo:
                 self.datas.loc[self.index] = [__time, self.last_data['host_writes'], self.last_data['nand_written'], self.last_data['nand_erased'],
                                               host_writes, nand_written, nand_erased, waf, wai]
                 if printout is True:
-                    print('{5:<20} {0:>12} {1:>12} {2:>12} {3:>20} {4:>20}'.format(
+                    print('{5:<20} {0:>12} {1:>12} {2:>12} {3:>5.3} {4:>5.3}'.format(
                         host_writes, nand_written, nand_erased, waf, wai, __time))
                     # print(self.datas.loc[self.index])
                 self.last_data = self.__current
@@ -111,7 +114,7 @@ def capture_wai(wai_info, outfile, verbose):
 
     if verbose:
         # header
-        print('{5:^20} {0:^12} {1:^12} {2:^12} {3:^20} {4:^20}'.format(
+        print('{5:^20} {0:>12} {1:>12} {2:>12} {3:>5} {4:>5}'.format(
             'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai', 'timestamp'))
 
     try:

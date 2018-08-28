@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # @lint-avoid-python-3-compatibility-imports
 #
 # biosnoop  Trace block device I/O and print details including issuing PID.
@@ -13,7 +13,9 @@
 # 16-Sep-2015   Brendan Gregg   Created this.
 # 11-Feb-2016   Allan McAleavy  updated for BPF_PERF_OUTPUT
 
+from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 from bcc import BPF
 import ctypes as ct
 import time
