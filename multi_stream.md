@@ -24,6 +24,15 @@ sudo apt install vagrant
 
 
 # RocksDB 
+- Dependencies
+```
+sudo apt-get install libgflags-dev
+sudo apt-get install libsnappy-dev
+sudo apt-get install zlib1g-dev
+sudo apt-get install libbz2-dev
+sudo apt-get install liblz4-dev
+sudo apt-get install libzstd-dev
+```
 - clone RocksDB  
 ```bash
 git clone https://github.com/facebook/rocksdb
@@ -35,7 +44,7 @@ make clean
 make all
 ```
 
-env/io_posix.cc
+## Add debug information for stream allocation to env/io_posix.cc
 ```
 #ifdef OS_LINUX
 // Suppress Valgrind "Unimplemented functionality" error.
@@ -320,15 +329,14 @@ sudo apt-get install mysql-common
 apt-get source mysql-server
 ```
 
-## modify cmake/install_layout.cmake
+## modify debian/rules
 ```
-   :
-#
-# DEB layout
-#
-   :
-#
-SET(INSTALL_MYSQLDATADIR_DEB            "/mnt/nvme/mysql")
+    :
+		-DCOMPILATION_COMMENT="($(DISTRIBUTION))" \
+		-DMYSQL_SERVER_SUFFIX="-nvme" \
+		-DINSTALL_MYSQLDATADIR="/mnt/nvme/mysql" \
+		-DINSTALL_LAYOUT=DEB \
+    :
 ```
 
 ## build mysql-server
@@ -367,6 +375,13 @@ sudo dpkg -i mysql-source-5.7_5.7.23-0ubuntu0.18.04.1_amd64.deb
 
 cmake . -DBUILD_CONFIG=mysql_release -DMYSQL_DATADIR=/mnt/nvme/mysql/ -DIGNORE_AIO_CHECK=1
 cmake . -DBUILD_CONFIG=mysql_release -DMYSQL_DATADIR=/mnt/nvme/mysql/ -DCMAKE_INSTALL_PREFIX=/usr/bin/
+
+## debian build
+```bash
+fakeroot debian/rules clean
+debian/rules build
+DEB_BUILD_OPTIONS=parallel=12 AUTOBUILD=1 fakeroot debian/rules binary
+```
 
 ## custom build from generic source
 ### Preconfiguration setup
@@ -458,8 +473,11 @@ systemctl stop apparmor
 ```
 2. Move data to a new location
 ```bash
-sudo rsync -rv /var/lib/mysql /mnt/nvme/mysql
+sudo cp -rv /var/lib/mysql /mnt/nvme/mysql
 sudo chown -R mysql:mysql /mnt/nvme/mysql
+sudo mv /var/lib/mysql /var/lib/mysql.old
+sudo ln -s /mnt/nvme/mysql /var/lib/mysql 
+sudo chown -R mysql:mysql /var/lib/mysql
 ```
 3. Modify the configuration file.
 ```bash
@@ -579,3 +597,12 @@ ORG > GNOME > DESKTOP > REMOTE ACCESS
 
 Then find the “Require Encryption” setting and toggle it off
 Now you can open your favorite VNC client and view your remote screen!
+
+
+# wine 설치
+```
+sudo apt install wine-stable ttf-mscorefonts-installer --install-recommends
+sudo apt install fonts-nanum fonts-nanum-extra fonts-nanum-coding
+sudo apt install wine64
+
+```
