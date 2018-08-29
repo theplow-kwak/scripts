@@ -14,7 +14,7 @@ dnvme.ko build시에 gcc version이 맞지 않으면 insmod에서 error 발생 (
 ```bash
 sudo apt install make 
 sudo apt install make-guile gcc g++ curl git dpkg-dev 
-sudo apt install python python3 python-pip python3-pip python-tk bison
+sudo apt install python python3 python-pip python3-pip python-tk python3-tk bison
 sudo apt install libgflags-dev
 
 sudo apt install openjdk-8-jdk
