@@ -25,7 +25,8 @@ sudo apt install vagrant
 
 # RocksDB 
 - Dependencies
-```
+
+```bash
 sudo apt-get install libgflags-dev
 sudo apt-get install libsnappy-dev
 sudo apt-get install zlib1g-dev
@@ -33,7 +34,8 @@ sudo apt-get install libbz2-dev
 sudo apt-get install liblz4-dev
 sudo apt-get install libzstd-dev
 ```
-- clone RocksDB  
+- clone RocksDB
+
 ```bash
 git clone https://github.com/facebook/rocksdb
 git checkout v5.14.2
@@ -117,6 +119,7 @@ ycsb를 사용하여 MySQL test를 진행 할 수 있도록 환경 구축
 
 ### jdbc compile
 - add dependency information into the pom file (ycsb/jdbc/pom.xml)
+
 ```
 <dependency>
     <groupId>mysql</groupId>
@@ -125,12 +128,13 @@ ycsb를 사용하여 MySQL test를 진행 할 수 있도록 환경 구축
 </dependency>
 ```
 - maven compile
-```
+```bash
 mvn -pl com.yahoo.ycsb:jdbc-binding -am clean package
 ```
 
 ### Configure database and table
 - Create a new database, for example ycsb
+
 ```
 $ mysql -u root -h 127.0.0.1
 
@@ -183,9 +187,11 @@ CREATE TABLE usertable(YCSB_KEY VARCHAR (255) PRIMARY KEY,
   FIELD6 TEXT, FIELD7 TEXT,
   FIELD8 TEXT, FIELD9 TEXT);
 ```
-```
+
+```bash
 $ mysql -u root -h 127.0.0.1 -D ycsb < mysql/create_table.mysql
 ```
+
 - confirm database and usertable
 
 ```

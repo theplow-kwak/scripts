@@ -45,7 +45,7 @@ class SudoProcess:
 
 
 class WaiInfo:
-    col_names = ['lapstime', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
+    col_names = ['timestamp', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
                  'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai']
     keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>[\w|.]+),?')
 
