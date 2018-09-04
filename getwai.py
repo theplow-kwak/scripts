@@ -109,7 +109,7 @@ class WaiInfo:
             return self.__current
 
 
-def capture_wai(wai_info, outfile, verbose):
+def capture_wai(wai_info, outfile, verbose=False, stop=False):
     tag = time.time()
 
     if verbose:
@@ -123,6 +123,8 @@ def capture_wai(wai_info, outfile, verbose):
                 wai_info.update(verbose)
                 wai_info.datas.to_csv(outfile, index=False)
                 tag = time.time()
+            if stop():
+                break
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass

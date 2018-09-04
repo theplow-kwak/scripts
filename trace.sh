@@ -26,6 +26,6 @@ if [ $getlog == 1 ]
 then
     sudo cat /sys/kernel/debug/tracing/trace_pipe > ${outfile}
 else
-    sudo cat /sys/kernel/debug/tracing/trace_pipe | python3 ${parserpath}nvmeparser.py $@
+    sudo cat /sys/kernel/debug/tracing/trace_pipe | python3 ${parserpath}traceparser.py -v $@
 fi
 

@@ -21,6 +21,10 @@ import ctypes as ct
 import time
 import argparse
 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
 
 # load BPF program
 prog = """
@@ -172,7 +176,7 @@ class Data(ct.Structure):
 
 
 # process event
-def print_event(cpu, data, size):
+def get_event(cpu, data, size):
     event = ct.cast(data, ct.POINTER(Data)).contents
 
     global tag
@@ -210,6 +214,12 @@ def CaptureLog(filename, verbose):
     outfile = csv.writer(fout)
     outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
 
+    import os
+    uid = os.environ.get('SUDO_UID')
+    gid = os.environ.get('SUDO_GID')
+    if uid is not None:
+        os.chown(filename, int(uid), int(gid))
+
     if verbose:
         display = 1
         # header
@@ -217,7 +227,7 @@ def CaptureLog(filename, verbose):
             'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
 
     # loop with callback to print_event
-    b["events"].open_perf_buffer(print_event, page_cnt=1024 * 8)
+    b["events"].open_perf_buffer(get_event, page_cnt=1024 * 8)
 
     try:
         while 1:
@@ -228,21 +238,8 @@ def CaptureLog(filename, verbose):
 
     fout.close()
 
-    import os
-    uid = os.environ.get('SUDO_UID')
-    gid = os.environ.get('SUDO_GID')
-    if uid is not None:
-        os.chown(filename, int(uid), int(gid))
 
-
-def ViewResult(filename):
-    import pandas as pd
-    import matplotlib.pyplot as plt
-
-    trace_datas = pd.DataFrame([])
-    for _file in filename:
-        trace_datas = trace_datas.append(pd.read_csv(_file), ignore_index=True, sort=False)
-
+def Statistics():
     print("\n\n Operation counts and data size: \n",
           trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'],
                                   fill_value=0))
@@ -250,35 +247,43 @@ def ViewResult(filename):
     print("\n\n length describes per each stream: \n", trace_datas.groupby('stream')['len'].describe())
     print("\n\n latency describes per each stream: \n", trace_datas.groupby('stream')['latency'].describe())
 
-    nStreams = trace_datas['stream'].max() + 1
-    fig = plt.figure(figsize=(15, 9))
-    axslba = plt.subplot(211)
-    axlatency = plt.subplot(212)
-    fig.tight_layout()
-    #plt.ion()
-    #plt.show()
 
-    filtered = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.opcode == 'write')]
+def ViewResult(filename):
+
+    skiprows = 0
+    nrows = 1000000
+
+    trace_datas = pd.read_csv(filename, skiprows= skiprows, nrows=nrows)
+
+    # Statistics()
+
+    nStreams = trace_datas['stream'].max() + 1
+
+    datas = trace_datas[['slba', 'latency']].set_index(trace_datas['timestamp'])
+    streams = np.array(trace_datas['stream'])
+    opcodes = trace_datas['opcode']
+
+    fig = plt.figure(figsize=(15, 9))
+    ax_slba = plt.subplot(211)
+    ax_latency = plt.subplot(212)
+    fig.tight_layout()
 
     key = 'slba'
-    not_write = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.opcode != 'write')]
-    axslba.plot(not_write['timestamp'], not_write[key], '.', color='silver', label="not_write")
+    ax_slba.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
     for n in range(nStreams):
-        axslba.plot(filtered[filtered.stream == n]['timestamp'], filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
-        axslba.set_ylabel(key)
-    plt.draw()
-    plt.pause(1e-17)
+        ax_slba.plot(datas[list(opcodes == 'write') & (streams == n)][key], '.', label="stream=%d " % (n))
+        ax_slba.set_ylabel(key)
 
     key = 'latency'
-    not_write = trace_datas[(trace_datas.nvme == 'nvme0n1') & (trace_datas.opcode != 'write')]
-    axlatency.plot(not_write['timestamp'], not_write[key], '.', color='silver', label="not_write")
+    ax_latency.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
     for n in range(nStreams):
-        axlatency.plot(filtered[filtered.stream == n]['timestamp'], filtered[filtered.stream == n][key], '.', label="stream=%d " % (n))
-    axlatency.set_ylabel(key)
+        ax_latency.plot(datas[list(opcodes == 'write') & (streams == n)][key], '.', label="stream=%d " % (n))
+        ax_latency.set_ylabel(key)
+
+    plt.xlabel('time')
     plt.legend()
     plt.draw()
-    plt.pause(1e-17)
-    plt.show()
+#    plt.show()
     return trace_datas
 
 
@@ -286,7 +291,7 @@ def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
     argparser.add_argument('-o', '--outfile', help='output file')
-    argparser.add_argument('-f', '--filename', nargs='+', help='trace data file (csv)')
+    argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
     argparser.add_argument('-d', '--display', action='store_true', help='verbose display')
     args = argparser.parse_args()
 
