@@ -82,8 +82,8 @@ class WaiInfo:
         host_writes = (end['host_writes'] - start['host_writes'])
         nand_erased = (end['nand_erased'] - start['nand_erased'])
         if host_writes:
-            waf = nand_written / host_writes
-            wai = nand_erased / host_writes
+            waf = round(nand_written / host_writes, 2)
+            wai = round(nand_erased / host_writes, 2)
             return nand_written, host_writes, nand_erased, waf, wai
         else:
             return nand_written, host_writes, nand_erased, 0, 0
@@ -92,8 +92,8 @@ class WaiInfo:
         self.__current = self.get_data()
 
         if self.__current is not None:
-            __time = time.time()
-            lapstime = __time - self.last_time
+            __time = round(time.time(), 6)
+            # elapstime = __time - self.last_time
 
             nand_written, host_writes, nand_erased, waf, wai = self.calc(self.__current)
             if host_writes:

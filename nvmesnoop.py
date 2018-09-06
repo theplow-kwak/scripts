@@ -184,8 +184,8 @@ def get_event(cpu, data, size):
     global outfile
     global display
 
-    result = [float(event.ts) / 1000000000, event.taskid.decode('UTF-8'), event.disk_name.decode('UTF-8'), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
-              event.stream, int(event.slba), int(event.len), float(event.latency) / 1000000000]
+    result = [round(float(event.ts) / 1000000000, 6), event.taskid.decode('UTF-8'), event.disk_name.decode('UTF-8'), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
+              event.stream, int(event.slba), int(event.len), round(float(event.latency) / 1000000000, 6)]
     count += 1
     outfile.writerow(result)
 
@@ -239,7 +239,7 @@ def CaptureLog(filename, verbose):
     fout.close()
 
 
-def Statistics():
+def Statistics(trace_datas):
     print("\n\n Operation counts and data size: \n",
           trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'],
                                   fill_value=0))
@@ -248,25 +248,14 @@ def Statistics():
     print("\n\n latency describes per each stream: \n", trace_datas.groupby('stream')['latency'].describe())
 
 
-def ViewResult(filename):
+def graph(chunk, ax_slba, ax_latency):
 
-    skiprows = 0
-    nrows = 1000000
+    nStreams = chunk['stream'].max() + 1
 
-    trace_datas = pd.read_csv(filename, skiprows= skiprows, nrows=nrows)
+    datas = chunk[['slba', 'latency']] # .set_index(p_trace['timestamp'])
+    streams = np.array(chunk['stream'])
+    opcodes = chunk['opcode']
 
-    # Statistics()
-
-    nStreams = trace_datas['stream'].max() + 1
-
-    datas = trace_datas[['slba', 'latency']].set_index(trace_datas['timestamp'])
-    streams = np.array(trace_datas['stream'])
-    opcodes = trace_datas['opcode']
-
-    fig = plt.figure(figsize=(15, 9))
-    ax_slba = plt.subplot(211)
-    ax_latency = plt.subplot(212)
-    fig.tight_layout()
 
     key = 'slba'
     ax_slba.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
@@ -283,7 +272,38 @@ def ViewResult(filename):
     plt.xlabel('time')
     plt.legend()
     plt.draw()
-#    plt.show()
+    plt.pause(1e-17)
+
+
+def ViewResult(filename):
+
+    skiprows = 0
+    nrows = 100000
+
+    dtype = {'timestamp': 'float64', 'taskid': 'category', 'nvme': 'category', 'opcode': 'category', 'stream': 'uint8',
+             'slba': 'uint32', 'len': 'uint16', 'latency': 'float16'}
+    start = time.time()
+    # trace_datas = pd.DataFrame()
+    # trace_datas = pd.read_csv(filename, header=0, dtype=dtype)
+    chunks = pd.read_csv(filename, index_col=0, header=0, dtype=dtype, chunksize=1000000)
+    #, skiprows= skiprows, nrows=nrows)
+    print('elaps {} seconds'.format(time.time()-start))
+
+    # Statistics(trace_datas)
+
+    fig = plt.figure(figsize=(15, 9))
+    ax_slba = plt.subplot(211)
+    ax_latency = plt.subplot(212)
+    fig.tight_layout()
+
+    for chunk in chunks:
+        print(chunk.head())
+        # graph(chunk, ax_slba, ax_latency)
+    trace_datas = pd.concat([chunk])
+
+    print(trace_datas)
+
+    plt.show()
     return trace_datas
 
 
