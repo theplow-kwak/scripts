@@ -298,7 +298,7 @@ def ViewResult(filename):
 
     for chunk in chunks:
         print(chunk.head())
-        # graph(chunk, ax_slba, ax_latency)
+        graph(chunk, ax_slba, ax_latency)
     trace_datas = pd.concat([chunk])
 
     print(trace_datas)
@@ -309,10 +309,10 @@ def ViewResult(filename):
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('-v', '--visualize', action='store_true', help='display the reports')
+    argparser.add_argument('-d', '--display', action='store_true', help='display the reports')
     argparser.add_argument('-o', '--outfile', help='output file')
     argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
-    argparser.add_argument('-d', '--display', action='store_true', help='verbose display')
+    argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')
     args = argparser.parse_args()
 
     outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -323,8 +323,8 @@ def main():
     if args.filename:
         ViewResult(args.filename)
     else:
-        CaptureLog(outfilename, args.display)
-        if args.visualize:
+        CaptureLog(outfilename, args.verbose)
+        if args.display:
             ViewResult([outfilename])
 
 
