@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from getwai import *
+from nvmesnoop import *
 import os, pwd
 import argparse
 import subprocess
@@ -8,27 +9,6 @@ import threading
 from multiprocessing import Process
 import signal
 import time
-
-
-script = ''
-nvme_path = '/mnt/gemini'
-ycsb_workload = 'workloads/nvme_test'
-ycsb_load = './bin/ycsb load rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, nvme_path)
-ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(ycsb_workload, nvme_path)
-
-stream_on = ['sudo', 'sh', '-c', 'echo 1 > /sys/module/nvme_core/parameters/streams']
-stream_off = ['sudo', 'sh', '-c', 'echo 0 > /sys/module/nvme_core/parameters/streams']
-
-
-def ycsbload(name, script):
-    drop_privileges()
-    ycsb = subprocess.Popen(ycsb_load.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, cwd='../ycsb')
-
-    while ycsb.poll() is None:
-        logdata = ycsb.stdout.readline()
-        print(logdata.strip())
-
-    ycsb.wait()
 
 
 def drop_privileges():
@@ -50,64 +30,86 @@ def drop_privileges():
     #Ensure a reasonable umask
     #old_umask = os.umask(0o22)
 
-def info(title):
-    print(title)
-    print('module name:', __name__)
-    print('parent process:', os.getppid())
-    print('process id:', os.getpid())
-    print(os.getresuid())
-    print()
 
-def start(name, script):
+def run_script(name, script):
     drop_privileges()
 
     # start ycsb script
     file = open(name + '.log', "w")
-    ycsb = subprocess.Popen(script.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
+    pycsb = subprocess.Popen(script.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
                             cwd='../ycsb')
-    info('ycsb:')
 
-    while ycsb.poll() is None:
-        logdata = ycsb.stdout.readline()
+    while pycsb.poll() is None:
+        logdata = pycsb.stdout.readline()
         print(logdata.strip())
         file.write(logdata)
 
-    ycsb.wait()
+    pycsb.wait()
 
 
-def run_script(name, script):
+def bm_test(name, script, nvme='/dev/nvme0'):
     # start nvmesnoop
-    # sudo_exec = SudoProcess()
-    nvme = subprocess.Popen('./nvmesnoop.py -o {}.nvme.csv'.format(name).split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE)  # , preexec_fn=os.setpgrp
-    info('nvmesnoop:')
-    print(nvme.pid, os.getpgid(nvme.pid))
+    nvmesnoop = CaptureLog(name+'.nvme.csv', False)
+    nvmesnoop.start()
 
     # start getwai
-    wai_info = WaiInfo()
-    stop_threads = False
-    tmp = threading.Thread(target=capture_wai, args=(wai_info, name+'.wai.csv', False, lambda: stop_threads))
-    tmp.start()
+    wai_info = CaptureWai(nvme, name+'.wai.csv', False)
+    wai_info.start()
 
-#    subprocess.Popen(stream_on, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    p = Process(target=start, args=(name, script))
+    p = Process(target=run_script, args=(name, script))
     p.start()
     p.join()
 
-    stop_threads = True
-    info('end of script:')
-    time.sleep(10)
-    nvme.send_signal(signal.SIGINT)
+    wai_info.shutdown()
+    wai_info.join()
+    time.sleep(5)
+    nvmesnoop.shutdown()
+    nvmesnoop.join()
+
+
+#script = ''
+#ycsb_workload = 'workloads/nvme_test'
+#ycsb_load = './bin/ycsb load rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data'.format(ycsb_workload, target_path)
+#ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(ycsb_workload, target_path)
+
+stream_on = ['sudo', 'sh', '-c', 'echo 1 > /sys/module/nvme_core/parameters/streams']
+stream_off = ['sudo', 'sh', '-c', 'echo 0 > /sys/module/nvme_core/parameters/streams']
 
 
 def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('-n', '--nvme', help='nvme device name')
     argparser.add_argument('-t', '--title', help='Title - output file name')
+    argparser.add_argument('-p', '--path', help='target path')
     argparser.add_argument('-s', '--script', help='test script')
     argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')
     args = argparser.parse_args()
 
-    run_script(args.title, args.script)
+    #    subprocess.Popen(stream_on, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+    target_path = '/mnt/gemini'
+    if args.path:
+        target_path = args.path
+
+    nvme_dev = '/dev/nvme0'
+    out = subprocess.Popen('df {}'.format(target_path).split(), stdout=subprocess.PIPE).communicate()
+    m = re.search(r'(/[^\s]+)\s', str(out))
+    if m:
+        nvme_dev = m.group(1)
+
+    if args.title:
+        title = args.title
+    else:
+        title = 'workloadf'
+
+    if args.script:
+        ycsb_run = args.script
+    else:
+        ycsb_run = './bin/ycsb run rocksdb -s -P workloads/{0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(title, target_path)
+
+    bm_test(title, ycsb_run, nvme_dev)
+
+
 
 if __name__ == "__main__":
 
@@ -122,8 +124,6 @@ if __name__ == "__main__":
 #run_script('load', ycsb_load)
 
 #subprocess.Popen(stream_on, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-#ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format('workloads/workloadx', nvme_path)
-#run_script('workloadx_on', ycsb_run)
 
 #subprocess.Popen(stream_off, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 #ycsb_run = './bin/ycsb run rocksdb -s -P {0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format('workloads/workloadx', nvme_path)

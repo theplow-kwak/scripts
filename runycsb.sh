@@ -2,10 +2,12 @@
 
 workload="nvme_test"
 cmd="run"
+nvmepath="/mnt/nvme"
 
-while getopts ":w:" opt; do
+while getopts ":w:p:" opt; do
 	case $opt in
 		w)	workload=$OPTARG;;
+		p)	nvmepath=$OPTARG;;
 		:)	echo "Option -$OPTARG requires an argument.";;			
 	esac
 done 
@@ -21,7 +23,7 @@ then
     cmd=$opt
 fi
 
-echo ./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=/mnt/nvme/ycsb-rocksdb-data 
-./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=/mnt/nvme/ycsb-rocksdb-data 
+echo ./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=$nvmepath/ycsb-rocksdb-data 
+./bin/ycsb $cmd rocksdb -s -P workloads/$workload -p rocksdb.dir=$nvmepath/ycsb-rocksdb-data 
 
 popd

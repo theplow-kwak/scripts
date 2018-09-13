@@ -24,6 +24,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import multiprocessing
 
 
 # load BPF program
@@ -194,49 +195,64 @@ def get_event(cpu, data, size):
         tag = time.time()
 
 
-def CaptureLog(filename, verbose):
-    import csv
+class CaptureLog(multiprocessing.Process):
 
-    global tag
-    global count
-    global outfile
-    global display
+    def __init__(self, filename=None, verbose=False):
+        super(CaptureLog, self).__init__()
+        self.exit = multiprocessing.Event()
+        self.verbose = verbose
+        self.filename = filename
+        self.columns = ['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
 
-    tag = time.time()
-    count = 0
-    display = 0
 
-    b = BPF(text=prog, cflags=['-w'])
-    b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
-    b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
+    def run(self):
+        import csv
+        import os
 
-    fout = open(filename, 'w')
-    outfile = csv.writer(fout)
-    outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+        global tag
+        global count
+        global outfile
+        global display
 
-    import os
-    uid = os.environ.get('SUDO_UID')
-    gid = os.environ.get('SUDO_GID')
-    if uid is not None:
-        os.chown(filename, int(uid), int(gid))
+        tag = time.time()
+        count = 0
+        display = 0
 
-    if verbose:
-        display = 1
-        # header
-        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
-            'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
+        b = BPF(text=prog, cflags=['-w'])
+        b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
+        b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
 
-    # loop with callback to print_event
-    b["events"].open_perf_buffer(get_event, page_cnt=1024 * 8)
+        if self.verbose:
+            display = 1
+            # header
+            print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format('index', *self.columns))
 
-    try:
-        while 1:
-            b.perf_buffer_poll()
+        if self.filename is None:
+            self.filename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
 
-    except KeyboardInterrupt:
-        pass
+        fout = open(self.filename, 'w')
+        outfile = csv.writer(fout)
+        outfile.writerow(self.columns)
 
-    fout.close()
+        uid = os.environ.get('SUDO_UID')
+        gid = os.environ.get('SUDO_GID')
+        if uid is not None:
+            os.chown(self.filename, int(uid), int(gid))
+
+        # loop with callback to print_event
+        b["events"].open_perf_buffer(get_event, page_cnt=1024 * 8)
+
+        try:
+            while not self.exit.is_set():
+                b.perf_buffer_poll()
+
+        except KeyboardInterrupt:
+            pass
+
+        fout.close()
+
+    def shutdown(self):
+        self.exit.set()
 
 
 def Statistics(trace_datas):
@@ -323,7 +339,17 @@ def main():
     if args.filename:
         ViewResult(args.filename)
     else:
-        CaptureLog(outfilename, args.verbose)
+        process = CaptureLog(outfilename, args.verbose)
+        process.start()
+
+        try:
+            while 1:
+                pass
+        except KeyboardInterrupt:
+            pass
+
+        process.shutdown()
+        process.join()
         if args.display:
             ViewResult([outfilename])
 
