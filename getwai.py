@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import os, re
 import argparse
 import subprocess
-import multiprocessing
+import threading
 import time
 import getpass
 import pandas as pd
@@ -106,46 +106,62 @@ class WaiInfo:
         if host_writes:
             waf = round(nand_written / host_writes, 2)
             wai = round(nand_erased / host_writes, 2)
-            return [start['host_writes'], start['nand_written'], start['nand_erased'], host_writes, nand_written, nand_erased, waf, wai]
+        else:
+            waf = 0.0
+            wai = 0.0
+        return [start['host_writes'], start['nand_written'], start['nand_erased'], host_writes, nand_written, nand_erased, waf, wai]
 
     def update(self):
         self.__current = self.get_data()
 
         if self.__current is not None:
             datas = self.get_diff(self.__current)
-            if datas:
-                __time = round(time.time(), 6)
-                __result = [__time] + datas
-                self.last_data = self.__current
-                self.last_time = __time
-                self.index += 1
-                return __result
+            __time = round(time.time(), 6)
+            __result = [__time] + datas
+            self.last_data = self.__current
+            self.last_time = __time
+            self.index += 1
+            return __result
 
 
-class CaptureWai(multiprocessing.Process):
+class CaptureWai(threading.Thread):
 
-    def __init__(self, nvme='dev/nvme0', filename=None, verbose=False):
+    def __init__(self, nvme='dev/nvme0', filename=None, verbose=False, testmode=False):
         super(CaptureWai, self).__init__()
-        self.exit = multiprocessing.Event()
+        self.exit = threading.Event()
         self.verbose = verbose
         self.filename = filename
         self.wai_info = WaiInfo(nvme)
+        self.interval = 60
         self.columns = ['timestamp', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
                           'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai']
+
+        self.testmode = testmode
+        if testmode:
+            self.verbose = True
+            self.interval = 1
+
+    def update(self, forceupdate=False):
+        result = self.wai_info.update()
+        if (result[4] > 0) or forceupdate:
+            if not self.testmode:
+                self.outfile.writerow(result)
+            if self.verbose:
+                print('{0:<20} {1:>12} {2:>12} {3:>12} {4:>12} {5:>12} {6:>12} {7:>5.3} {8:>5.3}'.format(*result))
 
     def run(self):
         import csv
 
         if self.verbose:
             # header
-            print('{0:^20} {4:>12} {5:>12} {6:>12} {7:>5} {8:>5}'.format(*self.columns))
+            print('{0:^20} {1:>12} {2:>12} {3:>12} {4:>12} {5:>12} {6:>12} {7:>5} {8:>5}'.format(*self.columns))
 
         if self.filename is None:
             self.filename = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
 
         fout = open(self.filename, 'w')
-        outfile = csv.writer(fout)
-        outfile.writerow(self.columns)
+        self.outfile = csv.writer(fout)
+        self.outfile.writerow(self.columns)
 
         uid = os.environ.get('SUDO_UID')
         gid = os.environ.get('SUDO_GID')
@@ -155,22 +171,14 @@ class CaptureWai(multiprocessing.Process):
         try:
             tag = time.time()
             while not self.exit.is_set():
-                if (time.time() - tag) > 60:
-                    result = self.wai_info.update()
-                    if result:
-                        outfile.writerow(result)
-                        if self.verbose is True:
-                            print('{0:<20} {4:>12} {5:>12} {6:>12} {7:>5.3} {8:>5.3}'.format(*result))
+                if (time.time() - tag) > self.interval:
+                    self.update()
                     tag = time.time()
                 time.sleep(0.1)
         except KeyboardInterrupt:
             pass
 
-        result = self.wai_info.update()
-        if result:
-            outfile.writerow(result)
-            if self.verbose is True:
-                print('{0:<20} {4:>12} {5:>12} {6:>12} {7:>5.3} {8:>5.3}'.format(*result))
+        self.update(True)
         fout.close()
 
     def shutdown(self):
@@ -187,8 +195,10 @@ def main():
     argparser.add_argument('-d', '--display', action='store_true', help='display the reports')
     argparser.add_argument('-o', '--outfile', help='output file')
     argparser.add_argument('-p', '--path', help='target path')
+    argparser.add_argument('-n', '--nvme', help='nvme device name')
     argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
     argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')
+    argparser.add_argument('-t', '--testmode', action='store_true', help='test mode: do not save data')
     args = argparser.parse_args()
 
     outfilename = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -202,7 +212,10 @@ def main():
         if m:
             nvme_dev = m.group(1)
 
-    process = CaptureWai(nvme_dev, outfilename, args.verbose)
+    if args.nvme:
+        nvme_dev = args.nvme
+
+    process = CaptureWai(nvme_dev, outfilename, args.verbose, args.testmode)
     process.start()
 
     try:

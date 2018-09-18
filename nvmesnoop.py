@@ -24,7 +24,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import multiprocessing
+import threading
 
 
 # load BPF program
@@ -195,11 +195,11 @@ def get_event(cpu, data, size):
         tag = time.time()
 
 
-class CaptureLog(multiprocessing.Process):
+class CaptureLog(threading.Thread):
 
     def __init__(self, filename=None, verbose=False):
         super(CaptureLog, self).__init__()
-        self.exit = multiprocessing.Event()
+        self.exit = threading.Event()
         self.verbose = verbose
         self.filename = filename
         self.columns = ['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']

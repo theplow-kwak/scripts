@@ -5,9 +5,7 @@ from nvmesnoop import *
 import os, pwd
 import argparse
 import subprocess
-import threading
 from multiprocessing import Process
-import signal
 import time
 
 
@@ -36,24 +34,24 @@ def run_script(name, script):
 
     # start ycsb script
     file = open(name + '.log', "w")
-    pycsb = subprocess.Popen(script.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
+    p_ycsb = subprocess.Popen(script.split(), stdout=subprocess.PIPE, universal_newlines=True,
                             cwd='../ycsb')
 
-    while pycsb.poll() is None:
-        logdata = pycsb.stdout.readline()
+    while p_ycsb.poll() is None:
+        logdata = p_ycsb.stdout.readline()
         print(logdata.strip())
         file.write(logdata)
 
-    pycsb.wait()
+    p_ycsb.wait()
 
 
 def bm_test(name, script, nvme='/dev/nvme0'):
     # start nvmesnoop
-    nvmesnoop = CaptureLog(name+'.nvme.csv', False)
+    nvmesnoop = CaptureLog(name+'.nvme.csv')
     nvmesnoop.start()
 
     # start getwai
-    wai_info = CaptureWai(nvme, name+'.wai.csv', False)
+    wai_info = CaptureWai(nvme, name+'.wai.csv')
     wai_info.start()
 
     p = Process(target=run_script, args=(name, script))
@@ -74,6 +72,7 @@ def bm_test(name, script, nvme='/dev/nvme0'):
 
 stream_on = ['sudo', 'sh', '-c', 'echo 1 > /sys/module/nvme_core/parameters/streams']
 stream_off = ['sudo', 'sh', '-c', 'echo 0 > /sys/module/nvme_core/parameters/streams']
+trim = 'fstrim -v {}'.format(nvme_path).split()
 
 
 def main():
@@ -103,11 +102,11 @@ def main():
         title = 'workloadf'
 
     if args.script:
-        ycsb_run = args.script
+        script = args.script
     else:
-        ycsb_run = './bin/ycsb run rocksdb -s -P workloads/{0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(title, target_path)
+        script = './bin/ycsb run rocksdb -s -P workloads/{0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(title, target_path)
 
-    bm_test(title, ycsb_run, nvme_dev)
+    bm_test(title, script, nvme_dev)
 
 
 
