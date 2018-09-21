@@ -101,6 +101,17 @@ mysql> exit;
 Bye
 ```
 
+apparmor (and selinux) provide additional access controls beyond permissions that can cause these permission denied (13) errors. This occurs generally on systems where data or log files differ from the default.
+
+With apparmor you would add to the bottom of /etc/apparmor.d/local/usr.sbin.mysqld:
+/mnt/gemini/mysql/ r,
+/mnt/gemini/mysql/** rwk, 
+
+And then reload the apparmor service:
+```
+service apparmor reload 
+```
+
 - and create the "usertable" table with the sql script 
 
 mysql/create_table.mysql:
@@ -114,7 +125,7 @@ CREATE TABLE usertable(YCSB_KEY VARCHAR (255) PRIMARY KEY,
   FIELD2 TEXT, FIELD3 TEXT,
   FIELD4 TEXT, FIELD5 TEXT,
   FIELD6 TEXT, FIELD7 TEXT,
-  FIELD8 TEXT, FIELD9 TEXT);
+  FIELD8 TEXT, FIELD9 TEXT) DATA DIRECTORY = '/mnt/gemeni/mysql/ycsb';
 ```
 
 ```bash
@@ -149,6 +160,8 @@ mysql> show tables;
 | usertable      |
 +----------------+
 1 row in set (0.00 sec)
+
+mysql> SHOW VARIABLES LIKE 'innodb_file_per_table';
 
 mysql> exit;
 Bye
