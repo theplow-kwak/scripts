@@ -198,7 +198,7 @@ def get_event(cpu, data, size):
 class CaptureLog(threading.Thread):
 
     def __init__(self, filename=None, verbose=False):
-        super(CaptureLog, self).__init__()
+        super().__init__()
         self.exit = threading.Event()
         self.verbose = verbose
         self.filename = filename
@@ -242,12 +242,8 @@ class CaptureLog(threading.Thread):
         # loop with callback to print_event
         b["events"].open_perf_buffer(get_event, page_cnt=1024 * 8)
 
-        try:
-            while not self.exit.is_set():
-                b.perf_buffer_poll()
-
-        except KeyboardInterrupt:
-            pass
+        while not self.exit.is_set():
+            b.perf_buffer_poll()
 
         fout.close()
 
@@ -272,15 +268,16 @@ def graph(chunk, ax_slba, ax_latency):
     streams = np.array(chunk['stream'])
     opcodes = chunk['opcode']
 
-
+    ax_slba.clear()
     key = 'slba'
-    ax_slba.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
+    #ax_slba.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
     for n in range(nStreams):
         ax_slba.plot(datas[list(opcodes == 'write') & (streams == n)][key], '.', label="stream=%d " % (n))
         ax_slba.set_ylabel(key)
 
+    ax_latency.clear()
     key = 'latency'
-    ax_latency.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
+    #ax_latency.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
     for n in range(nStreams):
         ax_latency.plot(datas[list(opcodes == 'write') & (streams == n)][key], '.', label="stream=%d " % (n))
         ax_latency.set_ylabel(key)
@@ -315,7 +312,7 @@ def ViewResult(filename):
     for chunk in chunks:
         print(chunk.head())
         graph(chunk, ax_slba, ax_latency)
-    trace_datas = pd.concat([chunk])
+        trace_datas = pd.concat([chunk])
 
     print(trace_datas)
 
