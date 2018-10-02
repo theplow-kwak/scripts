@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# sudo umount /media/unicorn/Gemini960 
-# sudo mount -o defaults,rw,nosuid,nodev,discard /dev/nvme0n1 /media/unicorn/Gemini960
-# sudo chmod 777 /media/unicorn/Gemini960
+# sudo umount /media/unicorn/Gemini1T9G 
+# sudo mount -o defaults,rw,nosuid,nodev,discard /dev/nvme0n1 /media/unicorn/Gemini1T9G
+# sudo chmod 777 /media/unicorn/Gemini1T9G
 
 # iostat -t 60 -md /dev/nvme0n1 > disk.log
 # watch -n 60 "df /dev/nvme0n1 >> df.log"
@@ -24,11 +24,12 @@ Display_TIME_WAI_CAPACITY(){
 	sudo nvme hynix wai-information /dev/nvme0n1
 }
 
-RUN_NVMESNOOP(){
+# loging NVMe Driver workload
+Start_NVMESNOOP(){
 		sudo ~/env/scripts/nvmesnoop.py -o $1 &
 }
 
-KILL_NVMESNOOP(){
+Stop_NVMESNOOP(){
 		sleep 3
 		TEST_PID=$(ps aux | grep 'nvmesnoop'| grep -v 'grep' | awk '{print $2}')
 		echo $TEST_PID
@@ -36,15 +37,41 @@ KILL_NVMESNOOP(){
 		sleep 3
 }
 
+# loging Device Space Usage
+Start_MonitorDiskSpace(){
+		watch -n1 'df /dev/nvme0n1 | tail -n +2 | tee -a '$1'' &
+}
+
+Stop_MonitorDiskSpace(){
+		TEST_PID=$(ps aux | grep 'watch -n'| grep -v 'grep' | awk '{print $2}')
+		echo $TEST_PID
+		sudo kill -SIGKILL $TEST_PID 2>/dev/null
+		sleep 1
+}
+
+# loging IoStat
+Start_IoStat(){
+		iostat -t 60 -md /dev/nvme0n1 > $1 &
+}
+
+Stop_IoStat(){
+		TEST_PID=$(ps aux | grep 'iostat -t'| grep -v 'grep' | awk '{print $2}')
+		echo $TEST_PID
+		
+		sudo kill -SIGKILL $TEST_PID 2>/dev/null
+		sleep 1
+}
+
+
 Run_YCSB(){
 	echo "=========================================================================================="	
 	echo "                             Test Start                                                   "
 	echo "=========================================================================================="
-	echo "RUN count : $1,  Log_Pos : $2, Thread_Count : $3, Stream_ONOFF : $4"
+	echo "RUN count : $1,  Log_Pos : $2, Thread_Count : $3, Stream_ONOFF : $4, TestDestination : $5 "
 	echo "=========================================================================================="
 
-	rm -rf /media/unicorn/Gemini960/*
-#	sudo fstrim -v /media/unicorn/Gemini960
+	rm -rf /media/unicorn/$5/*
+#	sudo fstrim -v /media/unicorn/$5
 
 	case $4 in
 		0)
@@ -68,23 +95,37 @@ Run_YCSB(){
 			echo "=============================================="
 			echo "Load YCSB Data  ***************************"
 			echo "=============================================="		
-#			RUN_NVMESNOOP $2/Load.klog
+#			Start_NVMESNOOP $2/Load.klog
+#			Start_MonitorDiskSpace $2/Load.dlog
+#			Start_IoStat $2/Load.iolog
+#			echo "check1  ***************************"
 
-			`./bin/ycsb load rocksdb -s -P workloads/workloadx -p rocksdb.dir=/media/unicorn/Gemini960/ycsb-rocksdb-data > $2/Load.log 2>&1`
+			`./bin/ycsb load rocksdb -s -P workloads/workloadx -p rocksdb.dir=/media/unicorn/$5/ycsb-rocksdb-data > $2/Load.log 2>&1`
 
-#			KILL_NVMESNOOP
+
+#			Stop_IoStat
+#			Stop_MonitorDiskSpace
+#			Stop_NVMESNOOP
+#			echo "check2  ***************************"
 			
 			Display_TIME_WAI_CAPACITY
 			;;
+
 			*)
 			echo "==============================================" 
 			echo "RUN YCSB Data $i ***************************"
 			echo "=============================================="		
-#			RUN_NVMESNOOP $2/Run$i.klog
+#			Start_NVMESNOOP $2/Run$i.klog
+#			Start_MonitorDiskSpace $2/Run$i.dlog
+#			Start_IoStat $2/Run$i.iolog
+#			echo "check1  ***************************"
 
-			`./bin/ycsb run rocksdb -s -P workloads/workloadx -threads $3 -p rocksdb.dir=/media/unicorn/Gemini960/ycsb-rocksdb-data > $2/Run$i.log 2>&1`
+			`./bin/ycsb run rocksdb -s -P workloads/workloadx -threads $3 -p rocksdb.dir=/media/unicorn/$5/ycsb-rocksdb-data > $2/Run$i.log 2>&1`
 
-#			KILL_NVMESNOOP			
+#			Stop_IoStat
+#			Stop_MonitorDiskSpace
+#			Stop_NVMESNOOP			
+#			echo "check2  ***************************"
 
 			Display_TIME_WAI_CAPACITY
 			
@@ -99,8 +140,8 @@ Run_YCSB(){
 # reset directory
 Init_LOGDirectory
 
-# 12 Testcount Thread 32, stream off
-Run_YCSB 18 ./LOG/32stream_off 32 0
+# 12 Step Testcount Thread 32, stream off
+Run_YCSB 3 ./LOG/32stream_off 32 0 Gemini1T9G
 
-# 12 Testcount Thread 32, stream on
-Run_YCSB 18 ./LOG/32stream_on 32 1
+# 12 Step Testcount Thread 32, stream on
+Run_YCSB 3 ./LOG/32stream_on 32 1 Gemini1T9G
