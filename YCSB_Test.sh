@@ -9,12 +9,19 @@
 
 NVME_DEVICE="/dev/nvme0n1"
 DISK_ID=0
+
 # Clean DB Output & Init
 Clean_Device(){
 	echo Clean Device $1 | tee -a $2
 	
-	rm $1/*
+	rm $1/* 2> /dev/null
 #	sudo fstrim -v $1
+}
+
+Copy_RocksdbLOG(){
+	cp $1/LOG*.* $2/ 
+	cp $1/OPTIONS* $2/
+	cp $1/MANIFEST* $2/
 }
 
 # Set Stream on/off
@@ -34,7 +41,7 @@ Set_Stream(){
 
 # output usage of disk, WAI
 Display_TIME_WAI_CAPACITY(){
-	date '+%Y-%m-%d %H:%M:%S' 					| tee -a $1
+	date '+%Y-%m-%d %H:%M:%S %Z' 					| tee -a $1
 
 	df -a | grep Filesystem 					| tee -a $1
 	df -a | grep $NVME_DEVICE 					| tee -a $1
@@ -44,9 +51,11 @@ Display_TIME_WAI_CAPACITY(){
 
 Run_DiskSpaceMonitoring(){
 
+	TIMEINDEX=$(date '+%Y-%m-%d-%H:%M:%S')
+
 	while true
-	do
-		df $NVME_DEVICE | tail -n +2 >> $1
+	do 
+		df $NVME_DEVICE | tail -n +2 | awk '{print "'$TIMEINDEX' : ",$0}' >> $1
 		sleep $2
 	done
 }
@@ -58,24 +67,26 @@ Start_BackgroungMonitoring(){
 	iostat -t 60 -md $NVME_DEVICE > $2 &
 
 	Run_DiskSpaceMonitoring $3 1 &
-
 	DISK_ID=$!
 }
 
 Stop_BackgroungMinitoring(){
 	NVMESNOOP_PID=$(ps aux | grep 'nvmesnoop'| grep -v 'grep' | awk '{print $2}')
 	sudo kill -SIGABRT $NVMESNOOP_PID
-	sleep 1
+	wait $NVMESNOOP_PID 2> /dev/null # remove core-dump message
 		
 	IOSTAT_PID=$(ps aux | grep 'iostat -t'| grep -v 'grep' | awk '{print $2}')
 	sudo kill -SIGABRT $IOSTAT_PID
-	sleep 1
+	wait $IOSTAT_PID 2> /dev/null # remove core-dump message
 
-#	WORK_PID=`jobs -l | awk '{print $2}'`
-#	echo "JOBS = $WORK_PID"
+	if [ $DISK_ID -ne 0 ] 
+	then
+		sudo kill -SIGABRT $DISK_ID
+		wait $DISK_ID 2> /dev/null # remove core-dump message
+		DISK_ID=0
+	fi
 
-	sudo kill -SIGABRT $DISK_ID
-	sleep 1
+	sleep 2
 }
 
 # Parameter
@@ -85,29 +96,39 @@ Stop_BackgroungMinitoring(){
 Run_YCSB(){
 
 # Init Variable
-	LOG_DIR=$(date '+%Y%m%d-%H%M%S')
+	STARTTIME=$(date '+%Y%m%d-%H%M%S')
+	LOG_ROOT=./LOG
+	
 	STREAM=$1
 	RUNCNT=$2
-	THREADCNT=$3
+	THREADCNT=$3	
+	LOG_DIR=$LOG_ROOT/$STARTTIME-$STREAM-$RUNCNT
 	ROCKSDB_DIR=/media/unicorn/$4/YCSBRocksDB
-	ROCKSDB_LOG_DIR=./$LOG_DIR/$STREAM-Detail
+	DETAIL_LOG_DIR=$LOG_DIR/Detail-$STREAM-$RUNCNT
+	ROCKSDB_LOG_DIR=$LOG_DIR/ROCKSDB_LOG
 	RECCNT=$5
 	OPCNT=$6
-	MAIN_LOG=./$LOG_DIR/$LOG_DIR-$STREAM-$RUNCNT.log
+	MAIN_LOG=$LOG_DIR/$STARTTIME-$STREAM-$RUNCNT.log
+	
 
 # Make LOG
-	mkdir $LOG_DIR	
+
+	mkdir $LOG_ROOT 2> /dev/null # remove error message although already made LOG ROOT
+	
+	mkdir $LOG_DIR
+
+	mkdir $DETAIL_LOG_DIR
 
 	mkdir $ROCKSDB_LOG_DIR
 
 # Test Start
-	echo "=========================================================================================="	| tee -a $MAIN_LOG
-	echo "                             Test Start                                                   "	| tee -a $MAIN_LOG
-	echo "=========================================================================================="	| tee -a $MAIN_LOG
-	echo "Environment 1: Stream_ONOFF : $STREAM, RUN count : $RUNCNT,  Thread_Count : $THREADCNT  "		| tee -a $MAIN_LOG
-	echo "Environment 2: TestDestination : $ROCKSDB_DIR, Log_Pos : $ROCKSDB_LOG_DIR "			| tee -a $MAIN_LOG
-	echo "Environment 3: Record Count= $RECCNT,  Operation Count=$OPCNT "					| tee -a $MAIN_LOG
-	echo "=========================================================================================="	| tee -a $MAIN_LOG
+	echo "=========================================================================================="				| tee -a $MAIN_LOG
+	echo "                             Test Start                                                   "				| tee -a $MAIN_LOG
+	echo "=========================================================================================="				| tee -a $MAIN_LOG
+	echo "Stream ONOFF : $STREAM, RUN count : $RUNCNT, Thread Count : $THREADCNT, Record Count : $RECCNT, Operation Count : $OPCNT"	| tee -a $MAIN_LOG
+	echo "DB Data Position : $ROCKSDB_DIR"												| tee -a $MAIN_LOG
+        echo "Log Data Pos Position : $LOG_DIR "											| tee -a $MAIN_LOG
+	echo "=========================================================================================="				| tee -a $MAIN_LOG
 
 	Clean_Device $ROCKSDB_DIR $MAIN_LOG
 
@@ -124,9 +145,9 @@ Run_YCSB(){
 			echo "=============================================="					| tee -a $MAIN_LOG
 			echo "Load YCSB Data  ***************************"					| tee -a $MAIN_LOG
 			echo "=============================================="					| tee -a $MAIN_LOG
-			Start_BackgroungMonitoring $ROCKSDB_LOG_DIR/Load.klog $ROCKSDB_LOG_DIR/Load.slog $ROCKSDB_LOG_DIR/Load.dlog
+			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Load.klog $DETAIL_LOG_DIR/Load.slog $DETAIL_LOG_DIR/Load.dlog
 
-			`./bin/ycsb load rocksdb -s -P workloads/workloadx -p recordcount=$RECCNT -p rocksdb.dir=$ROCKSDB_DIR > $ROCKSDB_LOG_DIR/Load.log 2>&1`
+			`./bin/ycsb load rocksdb -s -P workloads/workloadx -p recordcount=$RECCNT -p rocksdb.dir=$ROCKSDB_DIR > $DETAIL_LOG_DIR/Load.log 2>&1`
 
 			Stop_BackgroungMinitoring
 			
@@ -135,29 +156,31 @@ Run_YCSB(){
 
 			*)
 			echo "==============================================" 					| tee -a $MAIN_LOG
-			echo "RUN YCSB Data $i ***************************"					| tee -a $MAIN_LOG
+			echo "RUN YCSB Data : $i ***************************"					| tee -a $MAIN_LOG
 			echo "=============================================="					| tee -a $MAIN_LOG
-			Start_BackgroungMonitoring $ROCKSDB_LOG_DIR/Run$i.klog $ROCKSDB_LOG_DIR/Run$i.slog $ROCKSDB_LOG_DIR/Run$i.dlog
+			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Run$i.klog $DETAIL_LOG_DIR/Run$i.slog $DETAIL_LOG_DIR/Run$i.dlog
 
-			`./bin/ycsb run rocksdb -s -P workloads/workloadx -threads $THREADCNT -p recordcount=$RECCNT -p operationcount=$OPCNT -p rocksdb.dir=$ROCKSDB_DIR > $ROCKSDB_LOG_DIR/Run$i.log 2>&1`
+			`./bin/ycsb run rocksdb -s -P workloads/workloadx -threads $THREADCNT -p recordcount=$RECCNT -p operationcount=$OPCNT -p rocksdb.dir=$ROCKSDB_DIR > $DETAIL_LOG_DIR/Run$i.log 2>&1`
 
 			Stop_BackgroungMinitoring
 
 			Display_TIME_WAI_CAPACITY $MAIN_LOG
 			
-			grep OVERALL $ROCKSDB_LOG_DIR/Run$i.log							| tee -a $MAIN_LOG
+			grep OVERALL $DETAIL_LOG_DIR/Run$i.log							| tee -a $MAIN_LOG
 			;;
 	   	esac
 
 	echo "=============================================="							| tee -a $MAIN_LOG
 	done
+
+	Copy_RocksdbLOG $ROCKSDB_DIR $ROCKSDB_LOG_DIR
 }
 
 # Parameter
 #     $1	   $2	       $3		$4		$5		$6
 # Stream offon | RUN Count |Thread count | RockDB Directory | RecordCount | Operation Count
-Run_YCSB 0 1 32 Gemini1T9G 300000 200000
+Run_YCSB 0 6 32 Gemini1T9G 300000 100000
 
-Run_YCSB 1 1 32 Gemini1T9G 300000 200000
+Run_YCSB 1 6 32 Gemini1T9G 300000 100000
 
 
