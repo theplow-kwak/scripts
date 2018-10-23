@@ -15,23 +15,30 @@
 int main(int argc, char *argv[])
 {
 	uint64_t hint,StreamIdx;
-	int fd[MAX_STREAM * 2], ret, writen, itrycount, istream;
-	char szFilePath[CHUNKSIZE],writeData[CHUNKSIZE];
+	int fd[MAX_STREAM * 2], ret, writen, itrycount, istream, istreamcnt;
+	char szFilePath[100],szPathPara[100], writeData[CHUNKSIZE];
 	uint64_t iSize = 0;
 	
 	if (argc >= 3 )
 	{
-		istream = atoi(argv[1]);
-		itrycount = atoi(argv[2]);
-		printf("Test Stream on/off : %d, tricount : %d \n", istream, itrycount);
+		strcpy(szPathPara,argv[1]);
+		istream = atoi(argv[2]);
+		itrycount = atoi(argv[3]);
+
+		if (argc >= 4) 
+			istreamcnt = atoi(argv[4]);
+		else 
+			istreamcnt = MAX_STREAM;
+
+		printf("Test Path : %s, Stream on/off : %d, tricount : %d, StreamCount : %d \n", szPathPara, istream, itrycount, istreamcnt);
 	}
 	
 	memset(writeData,'0',CHUNKSIZE);
 
-	for( StreamIdx = 2 ; StreamIdx <= MAX_STREAM + 1; StreamIdx++ )
+	for( StreamIdx = 2 ; StreamIdx <= istreamcnt + 1; StreamIdx++ )
 	{
 
-		sprintf(szFilePath, "/media/unicorn/Gemini960G/TestStream_%d_%ld.txt",istream,StreamIdx);
+		sprintf(szFilePath, "%s/TestStream_%d_%ld.txt",szPathPara,istream,StreamIdx);
 	
 		fd[StreamIdx] = open(szFilePath, O_RDWR|O_CREAT); 
 
@@ -48,7 +55,7 @@ int main(int argc, char *argv[])
 
 	for ( int i = 0; i < itrycount; i++ )
 	{			
-		StreamIdx = i % MAX_STREAM + 2;
+		StreamIdx = i % istreamcnt + 2;
 
 		writen = write(fd[StreamIdx], writeData, strlen(writeData));
 
@@ -59,7 +66,7 @@ int main(int argc, char *argv[])
 		//printf("File Write success : %s, with hint : %ld\n", szFilePath, hint);
 	}
 
-	for( StreamIdx = 2 ; StreamIdx <= MAX_STREAM + 1; StreamIdx++ )
+	for( StreamIdx = 2 ; StreamIdx <= istreamcnt + 1; StreamIdx++ )
 	{
 		close(fd[StreamIdx]);
 	}

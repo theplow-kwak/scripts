@@ -63,13 +63,14 @@ Display_WaiInfo
 
 #Start_BackgroungMonitoring ~/BM/TestStream.klog
 
-~/BM/TestStream 1 100000
+~/env/scripts/TestStream "/media/unicorn/Gemini1T9G" 1 100000 4
 
 #Stop_BackgroungMinitoring
+sleep 2
 
 Display_WaiInfo
 
-Date 
+date
 echo "##################################################"
 ######################################################
 echo "##################Stream Off Test ##################"
@@ -81,11 +82,13 @@ Display_WaiInfo
 
 #Start_BackgroungMonitoring ~/BM/TestStream.klog
 
-~/BM/TestStream 0 100000
+~/env/scripts/TestStream "/media/unicorn/Gemini1T9G" 0 100000 4
 
 #Stop_BackgroungMinitoring
 
+sleep 2
+
 Display_WaiInfo
 
-Date 
+date 
 echo "##################################################"
