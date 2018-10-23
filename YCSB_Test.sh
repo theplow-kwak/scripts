@@ -3,12 +3,15 @@
 # sudo umount /media/unicorn/Gemini1T9G 
 # sudo mount -o defaults,rw,nosuid,nodev,discard /dev/nvme0n1 /media/unicorn/Gemini1T9G
 # sudo chmod 777 /media/unicorn/Gemini1T9G
-
+# GET PROCESS ID and trim : $(ps aux | grep 'nvmesnoop'| grep -v 'grep' | awk '{print $2}'| awk '{$1=$1;print}')
+# GET GRUP ID : ID=$(ps -o pgid= $NVMESNOOP_ID | grep -o '[0-9]*')
 # iostat -t 60 -md /dev/nvme0n1 > disk.log
 # watch -n 60 "df /dev/nvme0n1 >> df.log"
 
 NVME_DEVICE="/dev/nvme0n1"
-DISK_ID=0
+YCSB_NVMESNOOP_ID=0
+YCSB_IOSTAT_ID=0
+YCSB_DISK_ID=0
 
 # Clean DB Output & Init
 Clean_Device(){
@@ -19,7 +22,7 @@ Clean_Device(){
 }
 
 Copy_RocksdbLOG(){
-	cp $1/LOG*.* $2/ 
+	cp $1/LOG* $2/ 
 	cp $1/OPTIONS* $2/
 	cp $1/MANIFEST* $2/
 }
@@ -62,32 +65,63 @@ Run_DiskSpaceMonitoring(){
 
 Start_BackgroungMonitoring(){
 
-	sudo ~/env/scripts/nvmesnoop.py -o $1 &
+#	kerenl I/O Log
+	if [ $4 -eq 1 ]
+	then
+		sudo ~/env/scripts/nvmesnoop.py -o $1 &
+		YCSB_NVMESNOOP_ID=$!
+	fi
 
+#	Performance Log
 	iostat -t 60 -md $NVME_DEVICE > $2 &
+	YCSB_IOSTAT_ID=$!
 
+#	Disk Capacity Log
 	Run_DiskSpaceMonitoring $3 1 &
-	DISK_ID=$!
+	YCSB_DISK_ID=$!
 }
 
 Stop_BackgroungMinitoring(){
-	NVMESNOOP_PID=$(ps aux | grep 'nvmesnoop'| grep -v 'grep' | awk '{print $2}')
-	sudo kill -SIGABRT $NVMESNOOP_PID
-	wait $NVMESNOOP_PID 2> /dev/null # remove core-dump message
-		
-	IOSTAT_PID=$(ps aux | grep 'iostat -t'| grep -v 'grep' | awk '{print $2}')
-	sudo kill -SIGABRT $IOSTAT_PID
-	wait $IOSTAT_PID 2> /dev/null # remove core-dump message
 
-	if [ $DISK_ID -ne 0 ] 
-	then
-		sudo kill -SIGABRT $DISK_ID
-		wait $DISK_ID 2> /dev/null # remove core-dump message
-		DISK_ID=0
+	sleep 1
+
+#	echo "NVMESNOOP : $YCSB_NVMESNOOP_ID"
+	if [ $YCSB_NVMESNOOP_ID -ne 0 ] 
+	then		
+#		echo "KILL NVMESNOOP $YCSB_NVMESNOOP_ID"
+		sudo kill -SIGABRT $(ps -o pid --no-headers --ppid $YCSB_NVMESNOOP_ID)
+		sudo kill -SIGABRT $YCSB_NVMESNOOP_ID
+		wait $YCSB_NVMESNOOP_ID 2> /dev/null # remove core-dump message
+		YCSB_NVMESNOOP_ID=0
 	fi
 
-	sleep 2
+#	echo "IOSTAT : $YCSB_IOSTAT_ID"
+	if [ $YCSB_IOSTAT_ID -ne 0 ] 
+	then	
+#		echo "KILL $YCSB_IOSTAT_ID"
+		sudo kill -SIGABRT $YCSB_IOSTAT_ID
+		wait $YCSB_IOSTAT_ID 2> /dev/null # remove core-dump message
+		YCSB_IOSTAT_ID=0
+	fi
+
+#	echo "Disk ID = $YCSB_DISK_ID"
+	if [ $YCSB_DISK_ID -ne 0 ] 
+	then
+#		echo "KILL $YCSB_DISK_ID"
+		sudo kill -SIGABRT $YCSB_DISK_ID
+		wait $YCSB_DISK_ID 2> /dev/null # remove core-dump message
+		YCSB_DISK_ID=0
+	fi
+
+	sleep 1
 }
+
+ctrl_c(){
+	Stop_BackgroungMinitoring
+
+	exit 2
+}
+
 
 # Parameter
 #     $1	   $2	       $3		$4		$5		$6
@@ -145,12 +179,12 @@ Run_YCSB(){
 			echo "=============================================="					| tee -a $MAIN_LOG
 			echo "Load YCSB Data  ***************************"					| tee -a $MAIN_LOG
 			echo "=============================================="					| tee -a $MAIN_LOG
-			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Load.klog $DETAIL_LOG_DIR/Load.slog $DETAIL_LOG_DIR/Load.dlog
+			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Load.klog $DETAIL_LOG_DIR/Load.slog $DETAIL_LOG_DIR/Load.dlog $i
 
 			`./bin/ycsb load rocksdb -s -P workloads/workloadx -p recordcount=$RECCNT -p rocksdb.dir=$ROCKSDB_DIR > $DETAIL_LOG_DIR/Load.log 2>&1`
-
-			Stop_BackgroungMinitoring
 			
+			Stop_BackgroungMinitoring
+
 			Display_TIME_WAI_CAPACITY $MAIN_LOG
 			;;
 
@@ -158,7 +192,7 @@ Run_YCSB(){
 			echo "==============================================" 					| tee -a $MAIN_LOG
 			echo "RUN YCSB Data : $i ***************************"					| tee -a $MAIN_LOG
 			echo "=============================================="					| tee -a $MAIN_LOG
-			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Run$i.klog $DETAIL_LOG_DIR/Run$i.slog $DETAIL_LOG_DIR/Run$i.dlog
+			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Run$i.klog $DETAIL_LOG_DIR/Run$i.slog $DETAIL_LOG_DIR/Run$i.dlog $i
 
 			`./bin/ycsb run rocksdb -s -P workloads/workloadx -threads $THREADCNT -p recordcount=$RECCNT -p operationcount=$OPCNT -p rocksdb.dir=$ROCKSDB_DIR > $DETAIL_LOG_DIR/Run$i.log 2>&1`
 
@@ -176,11 +210,17 @@ Run_YCSB(){
 	Copy_RocksdbLOG $ROCKSDB_DIR $ROCKSDB_LOG_DIR
 }
 
+trap ctrl_c INT
+
 # Parameter
 #     $1	   $2	       $3		$4		$5		$6
 # Stream offon | RUN Count |Thread count | RockDB Directory | RecordCount | Operation Count
-Run_YCSB 0 6 32 Gemini1T9G 300000 100000
+##### for RUN ############################
+Run_YCSB 0 12 32 Gemini960G 500000000 150000000
 
-Run_YCSB 1 6 32 Gemini1T9G 300000 100000
+Run_YCSB 1 12 32 Gemini960G 500000000 150000000
 
+##### for Test ############################
+#Run_YCSB 0 12 32 Gemini960G 100000 10000
 
+#Run_YCSB 1 1 32 Gemini960G 100000000 150000000
