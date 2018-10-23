@@ -126,12 +126,13 @@ class WaiInfo:
 
 class CaptureWai(threading.Thread):
 
-    def __init__(self, nvme='dev/nvme0', filename=None, verbose=False, testmode=False):
+    def __init__(self, nvme='/dev/nvme0', filename=None, verbose=False, testmode=False):
         super().__init__()
         self.exit = threading.Event()
         self.verbose = verbose
         self.filename = filename
         self.wai_info = WaiInfo(nvme)
+        self.wai_start = self.wai_info.get_data()
         self.interval = 60
         self.columns = ['timestamp', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
                           'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai']
@@ -176,6 +177,7 @@ class CaptureWai(threading.Thread):
             time.sleep(0.1)
 
         self.update(True)
+        self.wai_end = self.wai_info.get_data()
         fout.close()
 
     def shutdown(self):
@@ -223,6 +225,13 @@ def main():
 
     process.shutdown()
     process.join()
+
+    print()
+    print('start', process.wai_start)
+    print('end  ', process.wai_end)
+    print('  Host writes : ', process.wai_end['host_writes'] - process.wai_start['host_writes'])
+    print('  NAND written: ', process.wai_end['nand_written'] - process.wai_start['nand_written'])
+    print('  NAND erased : ', process.wai_end['nand_erased'] - process.wai_start['nand_erased'])
 
 
 

@@ -240,7 +240,7 @@ class CaptureLog(threading.Thread):
             os.chown(self.filename, int(uid), int(gid))
 
         # loop with callback to print_event
-        b["events"].open_perf_buffer(get_event, page_cnt=1024 * 8)
+        b["events"].open_perf_buffer(get_event, page_cnt=1024 * 64 )
 
         while not self.exit.is_set():
             b.perf_buffer_poll()
@@ -302,7 +302,6 @@ def ViewResult(filename):
     #, skiprows= skiprows, nrows=nrows)
     print('elaps {} seconds'.format(time.time()-start))
 
-    # Statistics(trace_datas)
 
     fig = plt.figure(figsize=(15, 9))
     ax_slba = plt.subplot(211)
@@ -310,11 +309,12 @@ def ViewResult(filename):
     fig.tight_layout()
 
     for chunk in chunks:
-        print(chunk.head())
+        # print(chunk.head())
         graph(chunk, ax_slba, ax_latency)
         trace_datas = pd.concat([chunk])
 
     print(trace_datas)
+    Statistics(trace_datas)
 
     plt.show()
     return trace_datas
