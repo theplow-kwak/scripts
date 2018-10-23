@@ -217,7 +217,7 @@ def main():
 
     try:
         while 1:
-            pass
+            time.sleep(0.1)
     except KeyboardInterrupt:
         pass
 
