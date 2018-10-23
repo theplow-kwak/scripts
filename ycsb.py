@@ -1,49 +1,73 @@
 #!/usr/bin/python3
 
-from getwai import *
-from nvmesnoop import *
 import os, pwd
 import argparse
 import subprocess
-from multiprocessing import Process
+import multiprocessing
+import resource
 import time
 
+from getwai import *
+from nvmesnoop import *
 
-def drop_privileges():
-    if os.getuid() != 0:
-        # We're not root so, like, whatever dude
-        return
+class ycsbWorker(multiprocessing.Process):
 
-    # Get the uid/gid from the name
-    user_name = os.getenv("SUDO_USER")
-    pwnam = pwd.getpwnam(user_name)
+    def __init__(self, name, script):
+        super().__init__()
+        self.script = script.split()
+        self.filename = name + '.log'
 
-    # Remove group privileges
-    #os.setgroups([])
+    def drop_privileges(self):
+        if os.getuid() != 0:
+            # We're not root so, like, whatever dude
+            return
 
-    # Try setting the new uid/gid
-    os.setgid(pwnam.pw_gid)
-    os.setuid(pwnam.pw_uid)
+        # Get the uid/gid from the name
+        user_name = os.getenv("SUDO_USER")
+        pwnam = pwd.getpwnam(user_name)
 
-    #Ensure a reasonable umask
-    #old_umask = os.umask(0o22)
+        # Try setting the new uid/gid
+        os.setgid(pwnam.pw_gid)
+        os.setuid(pwnam.pw_uid)
 
+    def run(self):
+        self.drop_privileges()
 
-def run_script(name, script):
-    drop_privileges()
+        # start ycsb script
+        file = open(self.filename, "w")
+        p_ycsb = subprocess.Popen(self.script, stdout=subprocess.PIPE, universal_newlines=True,
+                                cwd='../ycsb')
 
-    # start ycsb script
-    file = open(name + '.log', "w")
-    p_ycsb = subprocess.Popen(script.split(), stdout=subprocess.PIPE, universal_newlines=True,
-                            cwd='../ycsb')
+        try:
+            while p_ycsb.poll() is None:
+                logdata = p_ycsb.stdout.readline()
+                print(logdata.strip())
+                file.write(logdata)
+        except KeyboardInterrupt:
+            p_ycsb.terminate()
+            pass
 
-    while p_ycsb.poll() is None:
-        logdata = p_ycsb.stdout.readline()
-        print(logdata.strip())
-        file.write(logdata)
+        p_ycsb.wait()
 
-    p_ycsb.wait()
+def set_open_file_limit_up_to(limit=65536):
 
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    #limit = max(soft, limit)
+    #limit = max(limit, hard)
+    print(limit, soft)
+    while limit > soft:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (limit, limit))
+            break
+        except ValueError:
+            limit -= 256
+            print('value error. reset limit to {}'.format(limit))
+        except:
+            print('unexpected exception')
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    print('open file limit set to %d:%d'% (soft, hard))
+    return (soft, hard)
 
 def bm_test(name, script, nvme='/dev/nvme0'):
     # start nvmesnoop
@@ -54,14 +78,19 @@ def bm_test(name, script, nvme='/dev/nvme0'):
     wai_info = CaptureWai(nvme, name+'.wai.csv')
     wai_info.start()
 
-    p = Process(target=run_script, args=(name, script))
-    p.start()
-    p.join()
+    set_open_file_limit_up_to()
 
+    try:
+        p = ycsbWorker(name, script)
+        p.start()
+        p.join()
+    except KeyboardInterrupt:
+        pass
+
+    time.sleep(3)
     wai_info.shutdown()
-    wai_info.join()
-    time.sleep(5)
     nvmesnoop.shutdown()
+    wai_info.join()
     nvmesnoop.join()
 
 
@@ -79,6 +108,7 @@ def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('-n', '--nvme', help='nvme device name')
     argparser.add_argument('-t', '--title', help='Title - output file name')
+    argparser.add_argument('-w', '--workload', help='ycsb workload')
     argparser.add_argument('-p', '--path', help='target path')
     argparser.add_argument('-s', '--script', help='test script')
     argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')

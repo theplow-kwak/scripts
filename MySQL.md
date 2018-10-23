@@ -152,27 +152,38 @@ mysql> show variables like 'datadir';
 systemctl stop mysql
 systemctl stop apparmor
 ```
+
 2. Move data to a new location
 ```bash
-sudo cp -rv /var/lib/mysql /mnt/nvme/mysql
-sudo chown -R mysql:mysql /mnt/nvme/mysql
-sudo mv /var/lib/mysql /var/lib/mysql.old
-sudo ln -s /mnt/nvme/mysql /var/lib/mysql 
-sudo chown -R mysql:mysql /var/lib/mysql
+export SOURCEDIR="/var/lib/mysql"
+export TARGETDIR="/mnt/gemini/mysql"
+
+sudo cp -rv $SOURCEDIR $TARGETDIR
+sudo chown -R mysql:mysql $TARGETDIR
+sudo mv $SOURCEDIR $SOURCEDIR.old
+sudo ln -s $TARGETDIR $SOURCEDIR 
+sudo chown -R mysql:mysql $SOURCEDIR
 ```
+
 3. Modify the configuration file.
 ```bash
 sudo cp /etc/mysql/mysql.conf.d/mysqld.cnf /etc/mysql/mysql.conf.d/mysqld.cnf.old
 sudo cp /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/usr.sbin.mysqld.old
-sudo sed -i -e 's/\/var\/lib\/mysql/\/mnt\/nvme\/mysql/' /etc/mysql/mysql.conf.d/mysqld.cnf
-sudo sed -i -e 's/\/var\/lib\/mysql\//\/mnt\/nvme\/mysql\//' /etc/apparmor.d/usr.sbin.mysqld
-sudo sh -c 'echo "alias /var/lib/mysql/ -> /mnt/nvme/mysql/," >> /etc/apparmor.d/tunables/alias'
-sudo mkdir /var/lib/mysql/mysql -p
+sudo sed -i -e "s|$SOURCEDIR|$TARGETDIR|" /etc/mysql/mysql.conf.d/mysqld.cnf
+sudo sed -i -e "s|$SOURCEDIR|$TARGETDIR|" /etc/apparmor.d/usr.sbin.mysqld
+sudo sh -c 'echo "alias $SOURCEDIR/ -> $TARGETDIR/," >> /etc/apparmor.d/tunables/alias'
+sudo mkdir $SOURCEDIR/mysql -p
 ```
+
 4. restart the server
 ```bash
 systemctl start apparmor
 systemctl start mysql
+```
+status check
+```
+journalctl -xe -u mysql
+journalctl -xe -u apparmor
 ```
 
 ```
@@ -187,6 +198,7 @@ SUDO_EDITOR=kate sudoedit /etc/mysql/mysql.conf.d/mysqld.cnf  :
 ```
 
 > https://www.digitalocean.com/community/tutorials/how-to-move-a-mysql-data-directory-to-a-new-location-on-ubuntu-16-04
+
 
 # How to reinstall MySQL
 ## First remove MySQL

@@ -78,7 +78,7 @@ class WaiInfo:
         self.index = 0
         self.last_time = time.time()
         self.sudo_exec = SudoProcess()
-        self.last_data = self.get_data()
+        self.first_data = self.last_data = self.get_data()
 
     def __to_num(self, str_num):
         try:
@@ -127,7 +127,7 @@ class WaiInfo:
 class CaptureWai(threading.Thread):
 
     def __init__(self, nvme='dev/nvme0', filename=None, verbose=False, testmode=False):
-        super(CaptureWai, self).__init__()
+        super().__init__()
         self.exit = threading.Event()
         self.verbose = verbose
         self.filename = filename
@@ -152,31 +152,28 @@ class CaptureWai(threading.Thread):
     def run(self):
         import csv
 
-        if self.verbose:
-            # header
-            print('{0:^20} {1:>12} {2:>12} {3:>12} {4:>12} {5:>12} {6:>12} {7:>5} {8:>5}'.format(*self.columns))
-
         if self.filename is None:
             self.filename = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
 
         fout = open(self.filename, 'w')
         self.outfile = csv.writer(fout)
         self.outfile.writerow(self.columns)
+        if self.verbose:
+            # header
+            print('{0:^20} {1:>12} {2:>12} {3:>12} {4:>12} {5:>12} {6:>12} {7:>5} {8:>5}'.format(*self.columns))
+        self.update(True)
 
         uid = os.environ.get('SUDO_UID')
         gid = os.environ.get('SUDO_GID')
         if uid is not None:
             os.chown(self.filename, int(uid), int(gid))
 
-        try:
-            tag = time.time()
-            while not self.exit.is_set():
-                if (time.time() - tag) > self.interval:
-                    self.update()
-                    tag = time.time()
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            pass
+        tag = time.time()
+        while not self.exit.is_set():
+            if (time.time() - tag) > self.interval:
+                self.update()
+                tag = time.time()
+            time.sleep(0.1)
 
         self.update(True)
         fout.close()

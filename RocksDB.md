@@ -15,11 +15,6 @@ sudo apt-get install libzstd-dev
 ```bash
 git clone https://github.com/facebook/rocksdb
 git checkout v5.14.2
-
-export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
-
-make clean
-make all
 ```
 
 ## Add debug information for stream allocation to env/io_posix.cc
@@ -32,6 +27,7 @@ make all
 
 ## static build 
 ```bash
+export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
 make jclean
 make -j12 rocksdbjavastatic -e DISABLE_WARNING_AS_ERROR=ON
 mvn install:install-file -Dfile=java/target/rocksdbjni-5.16.0-linux64.jar -Dversion=5.16.0 -DgroupId=org.rocksdb -DartifactId=rocksdbjni -Dpackaging=jar
@@ -39,8 +35,16 @@ mvn install:install-file -Dfile=java/target/rocksdbjni-5.16.0-linux64.jar -Dvers
 
 ## debug build
 ```bash
+export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
 make jclean
 make -j8 rocksdbjava
 mvn install:install-file -Dfile=java/target/rocksdbjni-5.13.0-linux64.jar -Dversion=5.13.0 -DgroupId=org.rocksdb -DartifactId=rocksdbjni -Dpackaging=jar
 ```
 
+## full build
+```bash
+export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
+
+make clean
+make all
+```
