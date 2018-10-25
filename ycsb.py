@@ -10,12 +10,13 @@ import time
 from getwai import *
 from nvmesnoop import *
 
-class ycsbWorker(multiprocessing.Process):
+class testWorker(multiprocessing.Process):
 
-    def __init__(self, name, script):
+    def __init__(self, name, script, cwd='./'):
         super().__init__()
         self.script = script.split()
         self.filename = name + '.log'
+        self.cwd = cwd
 
     def drop_privileges(self):
         if os.getuid() != 0:
@@ -34,15 +35,15 @@ class ycsbWorker(multiprocessing.Process):
         self.drop_privileges()
 
         # start ycsb script
-        file = open(self.filename, "w")
+        logfile = open(self.filename, "w")
         p_ycsb = subprocess.Popen(self.script, stdout=subprocess.PIPE, universal_newlines=True,
-                                cwd='../ycsb')
+                                cwd=self.cwd)
 
         try:
             while p_ycsb.poll() is None:
                 logdata = p_ycsb.stdout.readline()
                 print(logdata.strip())
-                file.write(logdata)
+                logfile.write(logdata)
         except KeyboardInterrupt:
             p_ycsb.terminate()
             pass
@@ -69,7 +70,7 @@ def set_open_file_limit_up_to(limit=65536):
     print('open file limit set to %d:%d'% (soft, hard))
     return (soft, hard)
 
-def bm_test(name, script, nvme='/dev/nvme0'):
+def bm_test(name, script, nvme='/dev/nvme0', cwd='./'):
     # start nvmesnoop
     nvmesnoop = CaptureLog(name+'.nvme.csv')
     nvmesnoop.start()
@@ -81,17 +82,32 @@ def bm_test(name, script, nvme='/dev/nvme0'):
     set_open_file_limit_up_to()
 
     try:
-        p = ycsbWorker(name, script)
+        p = testWorker(name, script)
         p.start()
         p.join()
     except KeyboardInterrupt:
         pass
 
     time.sleep(3)
-    wai_info.shutdown()
     nvmesnoop.shutdown()
-    wai_info.join()
+    wai_info.shutdown()
     nvmesnoop.join()
+    wai_info.join()
+
+    print()
+    print('Total operation count: ', nvmesnoop.count)
+    print(' Write count: {}, written data: {}'.format(*nvmesnoop.streaminfo.total()))
+    info = nvmesnoop.streaminfo.summary()
+    for n in range(len(info)):
+        print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
+
+    print()
+    print('start', wai_info.wai_start)
+    print('end  ', wai_info.wai_end)
+    print('  Host writes : ', wai_info.wai_end['host_writes'] - wai_info.wai_start['host_writes'])
+    print('  NAND written: ', wai_info.wai_end['nand_written'] - wai_info.wai_start['nand_written'])
+    print('  NAND erased : ', wai_info.wai_end['nand_erased'] - wai_info.wai_start['nand_erased'])
+
 
 
 #script = ''
@@ -116,15 +132,23 @@ def main():
 
     #    subprocess.Popen(stream_on, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
-    target_path = '/mnt/gemini'
+    nvme_dev = None
+
     if args.path:
         target_path = args.path
+    else:
+        target_path = '/mnt/gemini'
 
-    nvme_dev = '/dev/nvme0'
-    out = subprocess.Popen('df {}'.format(target_path).split(), stdout=subprocess.PIPE).communicate()
-    m = re.search(r'(/[^\s]+)\s', str(out))
-    if m:
-        nvme_dev = m.group(1)
+    if args.nvme:
+        nvme_dev = args.nvme
+
+    if nvme_dev is None:
+        out = subprocess.Popen('df {}'.format(target_path).split(), stdout=subprocess.PIPE).communicate()
+        m = re.search(r'(/[^\s]+)\s', str(out))
+        if m:
+            nvme_dev = m.group(1)
+        else:
+            nvme_dev = '/dev/nvme0'
 
     if args.title:
         title = args.title

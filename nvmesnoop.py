@@ -175,6 +175,10 @@ class Data(ct.Structure):
         ("taskid", ct.c_char * TASK_COMM_LEN)
     ]
 
+Display_Format = '{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'
+NVMe_dtype = {'timestamp': 'float64', 'taskid': 'category', 'nvme': 'category', 'opcode': 'category', 'stream': 'uint8',
+         'slba': 'uint32', 'len': 'uint16', 'latency': 'float16'}
+NVMe_Columns = ['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
 
 # process event
 def get_event(cpu, data, size):
@@ -184,25 +188,47 @@ def get_event(cpu, data, size):
     global count
     global outfile
     global display
+    global streaminfo
 
     result = [round(float(event.ts) / 1000000000, 6), event.taskid.decode('UTF-8'), event.disk_name.decode('UTF-8'), nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
               event.stream, int(event.slba), int(event.len), round(float(event.latency) / 1000000000, 6)]
     count += 1
     outfile.writerow(result)
 
+    if nvme_cmd_opcode.get(event.opcode) is 'write':
+        streaminfo.add(event.stream, event.len)
+
     if display & ((time.time() - tag) > 1):
-        print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(count, *result))
+        print(Display_Format.format(count, *result))
         tag = time.time()
+
+
+class StreamInfo:
+
+    def __init__(self, streams):
+        self.streams = np.zeros((streams + 1, 2))
+
+    def add(self, stream, length):
+        self.streams[stream] += [1, length]
+
+    def total(self):
+        return np.sum(self.streams[:, 0]), np.sum(self.streams[:, 1])
+
+    def summary(self):
+        return self.streams.tolist()
 
 
 class CaptureLog(threading.Thread):
 
-    def __init__(self, filename=None, verbose=False):
+    def __init__(self, filename=None, verbose=False, testmode=False):
         super().__init__()
         self.exit = threading.Event()
         self.verbose = verbose
         self.filename = filename
-        self.columns = ['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
+        self.columns = NVMe_Columns
+        self.testmode = testmode
+        if testmode:
+            self.verbose = True
 
 
     def run(self):
@@ -213,19 +239,16 @@ class CaptureLog(threading.Thread):
         global count
         global outfile
         global display
+        global streaminfo
 
         tag = time.time()
         count = 0
         display = 0
+        streaminfo = StreamInfo(8)
 
         b = BPF(text=prog, cflags=['-w'])
         b.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
         b.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
-
-        if self.verbose:
-            display = 1
-            # header
-            print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format('index', *self.columns))
 
         if self.filename is None:
             self.filename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -242,10 +265,17 @@ class CaptureLog(threading.Thread):
         # loop with callback to print_event
         b["events"].open_perf_buffer(get_event, page_cnt=1024 * 64 )
 
+        if self.verbose:
+            display = 1
+            # header
+            print(Display_Format.format('index', *self.columns))
+
         while not self.exit.is_set():
             b.perf_buffer_poll()
 
         fout.close()
+        self.count = count
+        self.streaminfo = streaminfo
 
     def shutdown(self):
         self.exit.set()
@@ -293,12 +323,10 @@ def ViewResult(filename):
     skiprows = 0
     nrows = 100000
 
-    dtype = {'timestamp': 'float64', 'taskid': 'category', 'nvme': 'category', 'opcode': 'category', 'stream': 'uint8',
-             'slba': 'uint32', 'len': 'uint16', 'latency': 'float16'}
     start = time.time()
     # trace_datas = pd.DataFrame()
     # trace_datas = pd.read_csv(filename, header=0, dtype=dtype)
-    chunks = pd.read_csv(filename, index_col=0, header=0, dtype=dtype, chunksize=1000000)
+    chunks = pd.read_csv(filename, index_col=0, header=0, dtype=NVMe_dtype, chunksize=1000000)
     #, skiprows= skiprows, nrows=nrows)
     print('elaps {} seconds'.format(time.time()-start))
 
@@ -326,6 +354,7 @@ def main():
     argparser.add_argument('-o', '--outfile', help='output file')
     argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
     argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')
+    argparser.add_argument('-t', '--testmode', action='store_true', help='test mode: do not save data')
     args = argparser.parse_args()
 
     outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -336,8 +365,8 @@ def main():
     if args.filename:
         ViewResult(args.filename)
     else:
-        process = CaptureLog(outfilename, args.verbose)
-        process.start()
+        nvmesnoop = CaptureLog(outfilename, args.verbose)
+        nvmesnoop.start()
 
         try:
             while 1:
@@ -345,8 +374,16 @@ def main():
         except KeyboardInterrupt:
             pass
 
-        process.shutdown()
-        process.join()
+        nvmesnoop.shutdown()
+        nvmesnoop.join()
+
+        print()
+        print('Total operation count: ', nvmesnoop.count)
+        print(' Write count: {}, written data: {}'.format(*nvmesnoop.streaminfo.total()))
+        info = nvmesnoop.streaminfo.summary()
+        for n in range(len(info)):
+            print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
+
         if args.display:
             ViewResult([outfilename])
 
