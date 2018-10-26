@@ -17,7 +17,7 @@ YCSB_DISK_ID=0
 Clean_Device(){
 	echo Clean Device $1 | tee -a $2
 	
-	rm $1/* 2> /dev/null
+	rm -rf $1/* 2> /dev/null
 #	sudo fstrim -v $1
 }
 
@@ -179,11 +179,13 @@ Run_YCSB(){
 			echo "=============================================="					| tee -a $MAIN_LOG
 			echo "Load YCSB Data  ***************************"					| tee -a $MAIN_LOG
 			echo "=============================================="					| tee -a $MAIN_LOG
-			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Load.klog $DETAIL_LOG_DIR/Load.slog $DETAIL_LOG_DIR/Load.dlog $i
+#			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Load.klog $DETAIL_LOG_DIR/Load.slog $DETAIL_LOG_DIR/Load.dlog $i
 
 			`./bin/ycsb load rocksdb -s -P workloads/workloadx -p recordcount=$RECCNT -p rocksdb.dir=$ROCKSDB_DIR > $DETAIL_LOG_DIR/Load.log 2>&1`
 			
-			Stop_BackgroungMinitoring
+#			Stop_BackgroungMinitoring
+
+			#sleep 30
 
 			Display_TIME_WAI_CAPACITY $MAIN_LOG
 			;;
@@ -192,11 +194,13 @@ Run_YCSB(){
 			echo "==============================================" 					| tee -a $MAIN_LOG
 			echo "RUN YCSB Data : $i ***************************"					| tee -a $MAIN_LOG
 			echo "=============================================="					| tee -a $MAIN_LOG
-			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Run$i.klog $DETAIL_LOG_DIR/Run$i.slog $DETAIL_LOG_DIR/Run$i.dlog $i
+#			Start_BackgroungMonitoring $DETAIL_LOG_DIR/Run$i.klog $DETAIL_LOG_DIR/Run$i.slog $DETAIL_LOG_DIR/Run$i.dlog $i
 
 			`./bin/ycsb run rocksdb -s -P workloads/workloadx -threads $THREADCNT -p recordcount=$RECCNT -p operationcount=$OPCNT -p rocksdb.dir=$ROCKSDB_DIR > $DETAIL_LOG_DIR/Run$i.log 2>&1`
 
-			Stop_BackgroungMinitoring
+#			Stop_BackgroungMinitoring
+
+			#sleep 30
 
 			Display_TIME_WAI_CAPACITY $MAIN_LOG
 			
@@ -212,15 +216,18 @@ Run_YCSB(){
 
 trap ctrl_c INT
 
+#DEVICE_PRODUCT="ePhoenix256"
+DEVICE_PRODUCT="Gemini960G"
+
 # Parameter
 #     $1	   $2	       $3		$4		$5		$6
 # Stream offon | RUN Count |Thread count | RockDB Directory | RecordCount | Operation Count
 ##### for RUN ############################
-Run_YCSB 0 12 32 Gemini960G 500000000 150000000
+Run_YCSB 0 12 32 $DEVICE_PRODUCT 500000000 150000000
 
-Run_YCSB 1 12 32 Gemini960G 500000000 150000000
+Run_YCSB 1 12 32 $DEVICE_PRODUCT 500000000 150000000
 
 ##### for Test ############################
-#Run_YCSB 0 12 32 Gemini960G 100000 10000
+#Run_YCSB 0 6 32 $DEVICE_PRODUCT 100000 10000
 
-#Run_YCSB 1 1 32 Gemini960G 100000000 150000000
+#Run_YCSB 1 6 32 $DEVICE_PRODUCT 100000 10000
