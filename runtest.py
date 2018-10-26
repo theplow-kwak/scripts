@@ -12,10 +12,11 @@ from nvmesnoop import *
 
 class testWorker(multiprocessing.Process):
 
-    def __init__(self, name, script):
+    def __init__(self, name, script, cwd='./'):
         super().__init__()
         self.script = script.split()
         self.filename = name + '.log'
+        self.cwd = cwd
 
     def drop_privileges(self):
         if os.getuid() != 0:
@@ -35,7 +36,8 @@ class testWorker(multiprocessing.Process):
 
         # start ycsb script
         logfile = open(self.filename, "w")
-        p_ycsb = subprocess.Popen(self.script, stdout=subprocess.PIPE, universal_newlines=True)
+        p_ycsb = subprocess.Popen(self.script, stdout=subprocess.PIPE, universal_newlines=True,
+                                cwd=self.cwd)
 
         try:
             while p_ycsb.poll() is None:
@@ -68,7 +70,7 @@ def set_open_file_limit_up_to(limit=65536):
     print('open file limit set to %d:%d'% (soft, hard))
     return (soft, hard)
 
-def bm_test(name, script, nvme='/dev/nvme0'):
+def bm_test(name, script, nvme='/dev/nvme0', cwd='./'):
     # start nvmesnoop
     nvmesnoop = CaptureLog(name+'.nvme.csv')
     nvmesnoop.start()
@@ -91,6 +93,13 @@ def bm_test(name, script, nvme='/dev/nvme0'):
     wai_info.shutdown()
     nvmesnoop.join()
     wai_info.join()
+
+    print()
+    print('Total operation count: ', nvmesnoop.count)
+    print(' Write count: {}, written data: {}'.format(*nvmesnoop.streaminfo.total()))
+    info = nvmesnoop.streaminfo.summary()
+    for n in range(len(info)):
+        print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
 
     print()
     print('start', wai_info.wai_start)
@@ -144,7 +153,7 @@ def main():
     if args.title:
         title = args.title
     else:
-        title = 'test'
+        title = 'workloadf'
 
     if args.script:
         script = args.script
