@@ -71,13 +71,12 @@ def set_open_file_limit_up_to(limit=65536):
     print('open file limit set to %d:%d'% (soft, hard))
     return (soft, hard)
 
-def bm_test(name, script, nvme='/dev/nvme0', cwd='./', verbose='t'):
-    # start nvmesnoop
-    nvmesnoop = CaptureLog(name+'.nvme.csv')
-    nvmesnoop.start()
+def bm_test(name, script, nvme='/dev/nvme0', verbose='t', cwd='./'):
 
-    # start getwai
-    wai_info = CaptureWai(nvme, name+'.wai.csv', verbose)
+    nvmesnoop = CaptureNvme(filename=name+'.nvme.csv', verbose=verbose)
+    wai_info = CaptureWai(nvme, filename=name+'.wai.csv', verbose=verbose)
+
+    nvmesnoop.start()
     wai_info.start()
 
     set_open_file_limit_up_to()
@@ -156,8 +155,7 @@ def main():
     else:
         script = './bin/ycsb run rocksdb -s -P workloads/{0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(title, target_path)
 
-    bm_test(title, script, nvme_dev, args.verbose)
-
+    bm_test(name=title, script=script, nvme=nvme_dev, verbose=args.verbose)
 
 
 if __name__ == "__main__":

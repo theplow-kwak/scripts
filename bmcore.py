@@ -77,7 +77,7 @@ class CaptureThread(threading.Thread):
     logformat = '{0:^20} {1:>12}'
     header = ['timestamp', 'count']
 
-    def __init__(self, filename=None, verbose='t'):
+    def __init__(self, filename=None, verbose='s'):
         super().__init__()
         self.exit = threading.Event()
         self.verbose = verbose

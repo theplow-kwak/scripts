@@ -321,7 +321,7 @@ def main():
     argparser.add_argument('-d', '--display', action='store_true', help='display the reports')
     argparser.add_argument('-o', '--outfile', help='output file')
     argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
-    argparser.add_argument('-v', '--verbose', nargs='?', default='t', help='verbose display')
+    argparser.add_argument('-v', '--verbose', nargs='?', default='s', help='verbose display')
     args = argparser.parse_args()
 
     outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"

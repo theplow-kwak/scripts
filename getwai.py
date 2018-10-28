@@ -110,7 +110,7 @@ def main():
     argparser.add_argument('-p', '--path', help='target path')
     argparser.add_argument('-n', '--nvme', help='nvme device name')
     argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
-    argparser.add_argument('-v', '--verbose', nargs='?', default='t', help='verbose display')
+    argparser.add_argument('-v', '--verbose', nargs='?', default='s', help='verbose display')
     args = argparser.parse_args()
 
     outfilename = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -127,7 +127,7 @@ def main():
     if args.nvme:
         nvme_dev = args.nvme
 
-    wai_info = CaptureWai(nvme_dev, outfilename, args.verbose)
+    wai_info = CaptureWai(nvme_dev, filename=outfilename, verbose=args.verbose)
     wai_info.start()
 
     try:
