@@ -6,6 +6,7 @@ import subprocess
 import multiprocessing
 import resource
 import time
+import logging
 
 from getwai import *
 from nvmesnoop import *
@@ -70,13 +71,13 @@ def set_open_file_limit_up_to(limit=65536):
     print('open file limit set to %d:%d'% (soft, hard))
     return (soft, hard)
 
-def bm_test(name, script, nvme='/dev/nvme0', cwd='./'):
+def bm_test(name, script, nvme='/dev/nvme0', cwd='./', verbose='t'):
     # start nvmesnoop
     nvmesnoop = CaptureLog(name+'.nvme.csv')
     nvmesnoop.start()
 
     # start getwai
-    wai_info = CaptureWai(nvme, name+'.wai.csv')
+    wai_info = CaptureWai(nvme, name+'.wai.csv', verbose)
     wai_info.start()
 
     set_open_file_limit_up_to()
@@ -101,12 +102,7 @@ def bm_test(name, script, nvme='/dev/nvme0', cwd='./'):
     for n in range(len(info)):
         print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
 
-    print()
-    print('start', wai_info.wai_start)
-    print('end  ', wai_info.wai_end)
-    print('  Host writes : ', wai_info.wai_end['host_writes'] - wai_info.wai_start['host_writes'])
-    print('  NAND written: ', wai_info.wai_end['nand_written'] - wai_info.wai_start['nand_written'])
-    print('  NAND erased : ', wai_info.wai_end['nand_erased'] - wai_info.wai_start['nand_erased'])
+    wai_info.summary()
 
 
 
@@ -127,7 +123,7 @@ def main():
     argparser.add_argument('-w', '--workload', help='ycsb workload')
     argparser.add_argument('-p', '--path', help='target path')
     argparser.add_argument('-s', '--script', help='test script')
-    argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')
+    argparser.add_argument('-v', '--verbose', nargs='?', default='t', help='verbose display')
     args = argparser.parse_args()
 
     #    subprocess.Popen(stream_on, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -160,7 +156,7 @@ def main():
     else:
         script = './bin/ycsb run rocksdb -s -P workloads/{0} -p rocksdb.dir={1}/ycsb-rocksdb-data -threads 32'.format(title, target_path)
 
-    bm_test(title, script, nvme_dev)
+    bm_test(title, script, nvme_dev, args.verbose)
 
 
 

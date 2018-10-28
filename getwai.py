@@ -11,62 +11,7 @@ import time
 import getpass
 import pandas as pd
 
-
-class SudoProcess:
-    sudo_passwd = None
-
-    def __init__(self, shell=False, passwd=None):
-        if shell:
-            self.sudo_cmd = 'sudo -S sh -c'.split()
-        else:
-            self.sudo_cmd = 'sudo -S'.split()
-        if passwd:
-            SudoProcess.sudo_passwd = passwd
-        if SudoProcess.sudo_passwd is None:
-            SudoProcess.sudo_passwd = getpass.getpass('password:')
-
-    def Popen(self, commands, wait=True):
-        # print(self.sudo_cmd+commands)
-        echo_passwd = subprocess.Popen(['echo', self.sudo_passwd], stdout=subprocess.PIPE)
-        try:
-            cmd = subprocess.Popen(self.sudo_cmd+commands, stdin=echo_passwd.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if wait:
-                cmd.communicate()
-            else:
-                return cmd
-        except:
-            print('process open error! {}'.format(commands))
-
-
-class RingBuffer:
-    """ class that implements a not-yet-full buffer """
-    def __init__(self,size_max):
-        self.max = size_max
-        self.len = 0
-        self.data = []
-
-    class __Full:
-        """ class that implements a full buffer """
-        def append(self, x):
-            """ Append an element overwriting the oldest one. """
-            self.data[self.cur] = x
-            self.cur = (self.cur+1) % self.max
-        def get(self):
-            """ return list of elements in correct order """
-            return self.data[self.cur:]+self.data[:self.cur]
-
-    def append(self,x):
-        """append an element at the end of the buffer"""
-        self.data.append(x)
-        self.len += 1
-        if len(self.data) == self.max:
-            self.cur = 0
-            # Permanently change self's class from non-full to full
-            self.__class__ = self.__Full
-
-    def get(self):
-        """ Return a list of elements from the oldest to the newest. """
-        return self.data
+from bmcore import *
 
 
 class WaiInfo:
@@ -74,11 +19,9 @@ class WaiInfo:
 
     def __init__(self, dev='/dev/nvme0'):
         self.nvme = dev
-        self.script = 'nvme hynix wai-information {}'.format(self.nvme).split()
-        self.index = 0
-        self.last_time = time.time()
         self.sudo_exec = SudoProcess()
-        self.first_data = self.last_data = self.get_data()
+        self.script = 'nvme hynix wai-information {}'.format(self.nvme).split()
+        self.last_data = {'nand_written': 0, 'host_writes': 0, 'nand_erased': 0}
 
     def __to_num(self, str_num):
         try:
@@ -109,79 +52,50 @@ class WaiInfo:
         else:
             waf = 0.0
             wai = 0.0
-        return [start['host_writes'], start['nand_written'], start['nand_erased'], host_writes, nand_written, nand_erased, waf, wai]
-
-    def update(self):
-        self.__current = self.get_data()
-
-        if self.__current is not None:
-            datas = self.get_diff(self.__current)
-            __time = round(time.time(), 6)
-            __result = [__time] + datas
-            self.last_data = self.__current
-            self.last_time = __time
-            self.index += 1
-            return __result
+        return host_writes, nand_written, nand_erased, waf, wai
 
 
-class CaptureWai(threading.Thread):
+class CaptureWai(CaptureThread):
+    name = 'wai'
+    interval = 60
+    logformat = '{0:<20} {1:>16} {2:>16} {3:>16} {4:>12} {5:>12} {6:>12} {7:>5.3} {8:>5.3}'
+    header = ['timestamp', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
+              'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai']
 
-    def __init__(self, nvme='/dev/nvme0', filename=None, verbose=False, testmode=False):
-        super().__init__()
-        self.exit = threading.Event()
-        self.verbose = verbose
-        self.filename = filename
+    def __init__(self, nvme='/dev/nvme0', filename=None, verbose='t'):
+        super().__init__(filename, verbose)
+        self.count = 0
+        self.__tag = time.time()
         self.wai_info = WaiInfo(nvme)
-        self.wai_start = self.wai_info.get_data()
-        self.interval = 60
-        self.columns = ['timestamp', 'cum_host_writes', 'cum_nand_written', 'cum_nand_erased',
-                          'host_writes', 'nand_written', 'nand_erased', 'waf', 'wai']
+        self.wai_start = self.wai_last = self.wai_info.get_data()
 
-        self.testmode = testmode
-        if testmode:
-            self.verbose = True
-            self.interval = 1
-
-    def update(self, forceupdate=False):
-        result = self.wai_info.update()
-        if (result[4] > 0) or forceupdate:
-            if not self.testmode:
-                self.outfile.writerow(result)
-            if self.verbose:
-                print('{0:<20} {1:>12} {2:>12} {3:>12} {4:>12} {5:>12} {6:>12} {7:>5.3} {8:>5.3}'.format(*result))
-
-    def run(self):
-        import csv
-
-        if self.filename is None:
-            self.filename = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
-
-        fout = open(self.filename, 'w')
-        self.outfile = csv.writer(fout)
-        self.outfile.writerow(self.columns)
-        if self.verbose:
-            # header
-            print('{0:^20} {1:>12} {2:>12} {3:>12} {4:>12} {5:>12} {6:>12} {7:>5} {8:>5}'.format(*self.columns))
-        self.update(True)
-
-        uid = os.environ.get('SUDO_UID')
-        gid = os.environ.get('SUDO_GID')
-        if uid is not None:
-            os.chown(self.filename, int(uid), int(gid))
-
-        tag = time.time()
-        while not self.exit.is_set():
-            if (time.time() - tag) > self.interval:
-                self.update()
-                tag = time.time()
-            time.sleep(0.1)
-
-        self.update(True)
-        self.wai_end = self.wai_info.get_data()
-        fout.close()
+    def work(self):
+        if (time.time() - self.__tag) > self.interval:
+            self.wai_current = self.wai_info.get_data()
+            host_writes, nand_written, nand_erased, waf, wai = self.wai_info.get_diff(self.wai_current, self.wai_last)
+            if host_writes:
+                self.logging([self.__tag, self.wai_last['host_writes'], self.wai_last['nand_written'], self.wai_last['nand_erased'], host_writes, nand_written, nand_erased, waf, wai])
+                self.wai_last = self.wai_current
+            self.__tag = time.time()
+        time.sleep(0.001)
 
     def shutdown(self):
-        self.exit.set()
+        self.wai_current = self.wai_info.get_data()
+        host_writes, nand_written, nand_erased, waf, wai = self.wai_info.get_diff(self.wai_current, self.wai_last)
+        self.logging(
+            [time.time(), self.wai_last['host_writes'], self.wai_last['nand_written'], self.wai_last['nand_erased'],
+             host_writes, nand_written, nand_erased, waf, wai])
+        self.wai_last = self.wai_current
+
+        super().shutdown()
+
+    def summary(self):
+        print()
+        print('start', self.wai_start)
+        print('end  ', self.wai_last)
+        print('  Host writes : ', self.wai_last['host_writes'] - self.wai_start['host_writes'])
+        print('  NAND written: ', self.wai_last['nand_written'] - self.wai_start['nand_written'])
+        print('  NAND erased : ', self.wai_last['nand_erased'] - self.wai_start['nand_erased'])
 
 
 nvme_path = '/mnt/nvme'
@@ -196,8 +110,7 @@ def main():
     argparser.add_argument('-p', '--path', help='target path')
     argparser.add_argument('-n', '--nvme', help='nvme device name')
     argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
-    argparser.add_argument('-v', '--verbose', action='store_true', help='verbose display')
-    argparser.add_argument('-t', '--testmode', action='store_true', help='test mode: do not save data')
+    argparser.add_argument('-v', '--verbose', nargs='?', default='t', help='verbose display')
     args = argparser.parse_args()
 
     outfilename = "waf_info" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -214,8 +127,8 @@ def main():
     if args.nvme:
         nvme_dev = args.nvme
 
-    process = CaptureWai(nvme_dev, outfilename, args.verbose, args.testmode)
-    process.start()
+    wai_info = CaptureWai(nvme_dev, outfilename, args.verbose)
+    wai_info.start()
 
     try:
         while 1:
@@ -223,16 +136,9 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    process.shutdown()
-    process.join()
-
-    print()
-    print('start', process.wai_start)
-    print('end  ', process.wai_end)
-    print('  Host writes : ', process.wai_end['host_writes'] - process.wai_start['host_writes'])
-    print('  NAND written: ', process.wai_end['nand_written'] - process.wai_start['nand_written'])
-    print('  NAND erased : ', process.wai_end['nand_erased'] - process.wai_start['nand_erased'])
-
+    wai_info.shutdown()
+    wai_info.join()
+    wai_info.summary()
 
 
 if __name__ == "__main__":
