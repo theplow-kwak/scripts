@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 import os, re
 import argparse
 import subprocess
+import multiprocessing
 import threading
 import time
 import getpass
@@ -64,7 +65,8 @@ class RingBuffer:
 
     def get(self):
         """ Return a list of elements from the oldest to the newest. """
-        return self.data
+        self.lock = self.len
+        return self.data[:self.len]
 
 
 from abc import ABCMeta, abstractmethod
@@ -81,6 +83,7 @@ class CaptureThread(threading.Thread):
         super().__init__()
         self.exit = threading.Event()
         self.verbose = verbose
+        self.tag = 0
         # 't' - test mode, display on consol with 1 sec interval
         # 'c' - display on consol
         # 'f' - save data to file
@@ -104,12 +107,11 @@ class CaptureThread(threading.Thread):
             if __uid is not None:
                 os.chown(self.filename, int(__uid), int(__gid))
 
-    def logging(self, data, mode=None):
-        if mode is None:
-            mode = self.verbose
-        if 'c' in mode:
+    def logging(self, data):
+        if ('c' in self.verbose) and ((time.time() - self.tag) > self.interval):
             print(self.logformat.format(*data))
-        if 'f' in mode:
+            self.tag = time.time()
+        if 'f' in self.verbose:
             try:
                 self.outfile.writerow(data)
             except:
@@ -137,3 +139,5 @@ class CaptureThread(threading.Thread):
     @abstractmethod
     def summary(self):
         pass
+
+

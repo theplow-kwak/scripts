@@ -71,13 +71,15 @@ int trace_req_start(struct pt_regs *ctx, struct nvme_ns *ns, struct request *req
     u64 ts;
     struct val_t val = {};
 
-    val.ts = bpf_ktime_get_ns();
-    bpf_get_current_comm(&val.taskid, sizeof(val.taskid));
     if(ns)
         val.admin = 0;
     else
         val.admin = 1;
     
+    FILTER_ADMIN
+    
+    val.ts = bpf_ktime_get_ns();
+    bpf_get_current_comm(&val.taskid, sizeof(val.taskid));
     start.update(&req, &val);
 
     return 0;
@@ -86,36 +88,45 @@ int trace_req_start(struct pt_regs *ctx, struct nvme_ns *ns, struct request *req
 int trace_req_completion(struct pt_regs *ctx, struct request *req)
 {
     u64 tsp,ts;
+    bool admin;
+    u16 opcode;
     struct val_t *valp;
     struct data_t data = {};
 
     valp = start.lookup(&req);
-    ts = bpf_ktime_get_ns();
     if (valp == 0) {
         // missed tracing issue
         return 0;
     }
     
     tsp = valp->ts;
-    data.latency = ts - tsp;
-    data.ts = tsp;
+    admin = valp->admin;
     bpf_probe_read(&data.taskid, sizeof(data.taskid), valp->taskid);
+    start.delete(&req);
     
-    if (valp->admin) {
+    if (admin) {
         data.opcode = (((struct nvme_request*)(req+1))->cmd)->common.opcode | 0x100;
     } else {
-        data.opcode = req->cmd_flags & REQ_OP_MASK;
-        if(data.opcode == 0 || data.opcode == 1 || data.opcode == 3 || data.opcode == 9 ) {
+        struct gendisk *rq_disk = req->rq_disk;
+        bpf_probe_read(&data.disk_name, sizeof(data.disk_name), rq_disk->disk_name);       
+        FILTER_NVME
+        
+        opcode = data.opcode = req->cmd_flags & REQ_OP_MASK;
+        FILTER_OPCODE
+        
+        if(opcode == 0 || opcode == 1 || opcode == 3 || opcode == 9 ) 
+        {
             data.len = req->__data_len >> 9;
             data.slba = req->__sector;
             data.stream = (req->write_hint) ? (req->write_hint-1) : 0;
         }
-        struct gendisk *rq_disk = req->rq_disk;
-        bpf_probe_read(&data.disk_name, sizeof(data.disk_name), rq_disk->disk_name);
     }
     
+    ts = bpf_ktime_get_ns();
+    data.latency = ts - tsp;
+    data.ts = tsp;
+    
     events.perf_submit(ctx, &data, sizeof(data));
-    start.delete(&req);
 
     return 0;
 }
@@ -198,13 +209,22 @@ class CaptureNvme(CaptureThread):
     interval = 1
     logformat = '{:>8} {:<20} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'
     header = ['index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
+    nvmedata = RingBuffer(200000)
 
-    def __init__(self, dev='/dev/nvme0', filename=None, verbose='t'):
+    def __init__(self, dev=None, filename=None, verbose='t'):
         super().__init__(filename, verbose)
         self.count = 0
-        self.__tag = time.time()
 
         self.streaminfo = StreamInfo(8)
+
+        global prog
+        prog = prog.replace("FILTER_ADMIN", "")
+        if dev is not None:
+            prog = prog.replace('FILTER_NVME', '{}'.format(dev))
+        else:
+            prog = prog.replace("FILTER_NVME", "")
+        prog = prog.replace("FILTER_OPCODE", "")
+
         self.bcc = BPF(text=prog, cflags=['-w'])
         self.bcc.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
         self.bcc.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
@@ -222,17 +242,16 @@ class CaptureNvme(CaptureThread):
                   nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
                   event.stream, int(event.slba), int(event.len), round(float(event.latency) / 1000000000, 6)]
         self.count += 1
-        self.logging([self.count] + self.result, 'f')
+        #self.nvmedata.append(self.result)
+        self.logging([self.count] + self.result)
 
-        #if nvme_cmd_opcode.get(event.opcode) is 'write':
-        #    self.streaminfo.add(event.stream, event.len)
+        if nvme_cmd_opcode.get(event.opcode) is 'write':
+            self.streaminfo.add(event.stream, event.len)
 
 
     def work(self):
         self.bcc.perf_buffer_poll()
-        if (time.time() - self.__tag) > self.interval:
-            self.logging([self.count] + self.result)
-            self.__tag = time.time()
+
 
     def summary(self):
         print()
@@ -241,6 +260,10 @@ class CaptureNvme(CaptureThread):
         info = self.streaminfo.summary()
         for n in range(len(info)):
             print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
+
+    def getdata(self):
+        return self.nvmedata.get()
+
 
 
 def Statistics(trace_datas):
@@ -316,6 +339,56 @@ def ViewResult(filename):
     return trace_datas
 
 
+import sys
+from PyQt5 import QtCore, QtGui
+import pyqtgraph as pg
+
+
+class App(QtGui.QMainWindow):
+    def __init__(self, parent=None):
+        super(App, self).__init__(parent)
+
+        #### Create Gui Elements ###########
+        self.mainbox = QtGui.QWidget()
+        self.setCentralWidget(self.mainbox)
+        self.mainbox.setLayout(QtGui.QVBoxLayout())
+
+        self.canvas = pg.GraphicsLayoutWidget()
+        self.mainbox.layout().addWidget(self.canvas)
+
+        self.label = QtGui.QLabel()
+        self.mainbox.layout().addWidget(self.label)
+
+        self.view = self.canvas.addViewBox()
+        self.view.setAspectLocked(True)
+        self.view.setRange(QtCore.QRectF(0,0, 100, 100))
+
+        self.canvas.nextRow()
+        #  line plot
+        self.otherplot = self.canvas.addPlot()
+        self.h2 = self.otherplot.plot(pen='y')
+
+        self.x = np.linspace(0,50., num=200000)
+
+        self.nvmesnoop = CaptureNvme(filename='test', verbose='s')
+        self.nvmesnoop.start()
+
+        self._update()
+
+
+    def _update(self):
+
+        self.nvmedata = np.array(self.nvmesnoop.getdata())
+        if len(self.nvmedata):
+            self.ydata = list(self.nvmedata[:,5])
+        else:
+            self.ydata = []
+
+        self.h2.setData(self.ydata)
+
+        QtCore.QTimer.singleShot(10, self._update)
+
+
 def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('-d', '--display', action='store_true', help='display the reports')
@@ -332,17 +405,28 @@ def main():
     if args.filename:
         ViewResult(args.filename)
     else:
+        #app = QtGui.QApplication(sys.argv)
+        #thisapp = App()
+        #thisapp.show()
+
+        #sys.exit(app.exec_())
+
+
         nvmesnoop = CaptureNvme(filename=outfilename, verbose=args.verbose)
         nvmesnoop.start()
 
         try:
             while 1:
-                time.sleep(0.001)
+                #datas = np.array(nvmesnoop.getdata())
+                #if len(datas):
+                #    print(datas[-10:,5])
+                time.sleep(1)
         except KeyboardInterrupt:
             pass
 
         nvmesnoop.shutdown()
         nvmesnoop.join()
+        #print(nvmesnoop.getdata())
         nvmesnoop.summary()
 
 

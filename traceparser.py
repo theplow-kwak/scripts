@@ -44,20 +44,17 @@ class TraceParser:
 class RequestComplition:
     stack = {}
 
-    def lookup(self, values):
-        for key, value in self.stack.items():
-            if value == values:
-                return key
+    def lookup(self, key):
+        for rkey, value in self.stack.items():
+            if key == rkey:
+                return value
         return -1
 
-    def start(self, key, values):
-        self.stack[key] = values
+    def start(self, key, value):
+        self.stack[key] = value
 
-    def completion(self, values):
-        key = self.lookup(values)
-        if key != -1:
-            del self.stack[key]
-        return key
+    def delete(self, key):
+        del self.stack[key]
 
 
 def to_num(str_num):
@@ -120,7 +117,7 @@ class TraceLog:
         traceLogs = {}
         parser = TraceParser()
         request = RequestComplition()
-        last = 0
+        index = 0
         tag = time.time()
 
         print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
@@ -133,17 +130,14 @@ class TraceLog:
                 if tresult:
 
                     if tresult['event'] == "nvme_setup_admin_cmd":
-                        request.start(last, tresult['cmdid'])
-
                         result = [to_num(tresult['timestamp']), tresult['taskid'], '', tresult['opcode'].replace('nvme_admin_',''), 0, 0, 0, 0]
-                        traceLogs[last] = result
-                        last += 1
+                        request.start(tresult['cmdid'], result)
+                        #traceLogs[last] = result
+                        #last += 1
 
                     if tresult['event'] == "nvme_setup_nvm_cmd":
-                        if tresult.get('nvme','nvme0n1') != 'nvme0n1':
-                            continue
-
-                        request.start(last, tresult['cmdid'])
+                        #if tresult.get('nvme','nvme0n1') != 'nvme0n1':
+                        #    continue
 
                         try:
                             tresult['stream'] = to_num(tresult['dsmgmt']) >> 16
@@ -152,15 +146,18 @@ class TraceLog:
 
                         result = [to_num(tresult['timestamp']), tresult['taskid'], tresult.get('nvme','nvme0n1'), tresult['opcode'].replace('nvme_cmd_',''), tresult['stream'],
                                   to_num(tresult.get('slba',0)), to_num(tresult.get('len',0)), 0]
-                        traceLogs[last] = result
-                        last += 1
+                        request.start(tresult['cmdid'], result)
+
+                        #traceLogs[last] = result
+                        #last += 1
 
                     elif tresult['event'] == "nvme_complete_rq":
-                        index = request.completion(tresult['cmdid'])
-                        if index != -1:
-                            traceLogs[index][7] = round(to_num(tresult['timestamp']) - traceLogs[index][0], 6)
+                        result = request.lookup(tresult['cmdid'])
+                        if result != -1:
+                            result[7] = round(to_num(tresult['timestamp']) - result[0], 6)
+                            index += 1
                             if (time.time() - tag) > 1:
-                                print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(index, *traceLogs[index]))
+                                print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(index, *result))
                                 tag = time.time()
 
 

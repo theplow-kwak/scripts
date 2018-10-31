@@ -71,7 +71,7 @@ def set_open_file_limit_up_to(limit=65536):
     print('open file limit set to %d:%d'% (soft, hard))
     return (soft, hard)
 
-def bm_test(name, script, nvme='/dev/nvme0', verbose='t', cwd='./'):
+def bm_test(name, script, nvme='/dev/nvme0', verbose='s', cwd='./'):
 
     nvmesnoop = CaptureNvme(filename=name+'.nvme.csv', verbose=verbose)
     wai_info = CaptureWai(nvme, filename=name+'.wai.csv', verbose=verbose)
@@ -88,7 +88,7 @@ def bm_test(name, script, nvme='/dev/nvme0', verbose='t', cwd='./'):
     except KeyboardInterrupt:
         pass
 
-    time.sleep(3)
+    time.sleep(5)
     nvmesnoop.shutdown()
     wai_info.shutdown()
     nvmesnoop.join()
@@ -122,7 +122,7 @@ def main():
     argparser.add_argument('-w', '--workload', help='ycsb workload')
     argparser.add_argument('-p', '--path', help='target path')
     argparser.add_argument('-s', '--script', help='test script')
-    argparser.add_argument('-v', '--verbose', nargs='?', default='t', help='verbose display')
+    argparser.add_argument('-v', '--verbose', nargs='?', default='s', help='verbose display')
     args = argparser.parse_args()
 
     #    subprocess.Popen(stream_on, stdin=subprocess.PIPE, stdout=subprocess.PIPE)

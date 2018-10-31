@@ -65,18 +65,17 @@ class CaptureWai(CaptureThread):
     def __init__(self, nvme='/dev/nvme0', filename=None, verbose='t'):
         super().__init__(filename, verbose)
         self.count = 0
-        self.__tag = time.time()
         self.wai_info = WaiInfo(nvme)
         self.wai_start = self.wai_last = self.wai_info.get_data()
 
     def work(self):
-        if (time.time() - self.__tag) > self.interval:
+        if (time.time() - self.tag) > self.interval:
             self.wai_current = self.wai_info.get_data()
             host_writes, nand_written, nand_erased, waf, wai = self.wai_info.get_diff(self.wai_current, self.wai_last)
             if host_writes:
-                self.logging([self.__tag, self.wai_last['host_writes'], self.wai_last['nand_written'], self.wai_last['nand_erased'], host_writes, nand_written, nand_erased, waf, wai])
+                self.logging([self.tag, self.wai_last['host_writes'], self.wai_last['nand_written'], self.wai_last['nand_erased'], host_writes, nand_written, nand_erased, waf, wai])
                 self.wai_last = self.wai_current
-            self.__tag = time.time()
+            self.tag = time.time()
         time.sleep(0.001)
 
     def shutdown(self):
