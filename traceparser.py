@@ -23,12 +23,12 @@ class TraceParser:
         event = '\s+(?P<event>\w+):'
         self.__trace_exp = re.compile(taskid + cpuid + timestamp + event)
         self.__keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>\w+),?')
-        self.__cmd_exp = re.compile(r'cmd=\((?P<opcode>\w+)')
+        self.__opcode_exp = re.compile(r'cmd=\((?P<opcode>\w+)')
 
     def parse(self, line):
         try:
             __tresult = self.__trace_exp.search(line).groupdict()
-            __opcode = self.__cmd_exp.search(line)
+            __opcode = self.__opcode_exp.search(line)
             if __opcode:
                 __tresult.update(__opcode.groupdict())
             __params = self.__keyval_exp.findall(line)
@@ -48,7 +48,6 @@ class RequestComplition:
         for rkey, value in self.stack.items():
             if key == rkey:
                 return value
-        return -1
 
     def start(self, key, value):
         self.stack[key] = value
@@ -151,9 +150,10 @@ class TraceLog:
                         #traceLogs[last] = result
                         #last += 1
 
-                    elif tresult['event'] == "nvme_complete_rq":
+                    if tresult['event'] == "nvme_complete_rq":
                         result = request.lookup(tresult['cmdid'])
                         if result != -1:
+                            request.delete(tresult['cmdid'])
                             result[7] = round(to_num(tresult['timestamp']) - result[0], 6)
                             index += 1
                             if (time.time() - tag) > 1:
