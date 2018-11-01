@@ -152,7 +152,7 @@ class TraceLog:
 
                     if tresult['event'] == "nvme_complete_rq":
                         result = request.lookup(tresult['cmdid'])
-                        if result != -1:
+                        if result:
                             request.delete(tresult['cmdid'])
                             result[7] = round(to_num(tresult['timestamp']) - result[0], 6)
                             index += 1
