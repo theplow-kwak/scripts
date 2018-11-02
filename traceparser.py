@@ -45,9 +45,13 @@ class RequestComplition:
     stack = {}
 
     def lookup(self, key):
-        for rkey, value in self.stack.items():
-            if key == rkey:
-                return value
+        try:
+            return self.stack[key]
+        except:
+            pass
+        #for rkey, value in self.stack.items():
+        #    if key == rkey:
+        #        return value
 
     def start(self, key, value):
         self.stack[key] = value
@@ -112,7 +116,7 @@ nvme_opcode = {**nvme_cmd_opcode, **nvme_admin_opcode}
 
 class TraceLog:
 
-    def read_logs(file):
+    def read_logs(infile, outfile):
         traceLogs = {}
         parser = TraceParser()
         request = RequestComplition()
@@ -123,7 +127,7 @@ class TraceLog:
             'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
 
         try:
-            for line in file:
+            for line in infile:
                 tresult = parser.parse(line.strip())
 
                 if tresult:
@@ -135,9 +139,6 @@ class TraceLog:
                         #last += 1
 
                     if tresult['event'] == "nvme_setup_nvm_cmd":
-                        #if tresult.get('nvme','nvme0n1') != 'nvme0n1':
-                        #    continue
-
                         try:
                             tresult['stream'] = to_num(tresult['dsmgmt']) >> 16
                         except:
@@ -156,6 +157,7 @@ class TraceLog:
                             request.delete(tresult['cmdid'])
                             result[7] = round(to_num(tresult['timestamp']) - result[0], 6)
                             index += 1
+                            outfile.writerow(result)
                             if (time.time() - tag) > 1:
                                 print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(index, *result))
                                 tag = time.time()
@@ -194,20 +196,25 @@ if __name__ == "__main__":
     else:
         infile = sys.stdin
         if args.outpath:
-            outfile = args.outpath
+            o_filename = args.outpath
         else:
-            outfile = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
+            o_filename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
         if args.rawfile:
             infile = open(args.rawfile, 'r', encoding='UTF8')
-            outfile = args.rawfile + ".csv"
+            o_filename = args.rawfile + ".csv"
+
+        import csv
+
+        __fout = open(o_filename, 'w')
+        outfile = csv.writer(__fout)
 
         start = time.time()
-        trace_datas = pd.DataFrame.from_dict(TraceLog.read_logs(infile), orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+        trace_datas = pd.DataFrame.from_dict(TraceLog.read_logs(infile, outfile), orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
 #        TraceLog.read_logs(infile)
         end = time.time()
         print("labs time: ", end - start, "\n")
 
-        trace_datas.to_csv(outfile, index=False)
+        #trace_datas.to_csv(outfile, index=False)
 
     print(trace_datas.memory_usage())
 
