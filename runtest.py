@@ -88,19 +88,13 @@ def bm_test(name, script, nvme='/dev/nvme0', verbose='s', cwd='./'):
     except KeyboardInterrupt:
         pass
 
-    time.sleep(5)
+    time.sleep(10)
     nvmesnoop.shutdown()
     wai_info.shutdown()
     nvmesnoop.join()
     wai_info.join()
 
-    print()
-    print('Total operation count: ', nvmesnoop.count)
-    print(' Write count: {}, written data: {}'.format(*nvmesnoop.streaminfo.total()))
-    info = nvmesnoop.streaminfo.summary()
-    for n in range(len(info)):
-        print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
-
+    nvmesnoop.summary()
     wai_info.summary()
 
 

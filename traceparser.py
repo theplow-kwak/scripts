@@ -12,46 +12,51 @@ import matplotlib.pyplot as plt
 # from nvmeparserui import *
 
 class TraceParser:
-
     def __init__(self):
         # ------------------------------------------------------------------------
         # Define Grammars
         # ------------------------------------------------------------------------
-        taskid = '\s*(?P<taskid>.+)-(?:\d+)'
-        cpuid = '\s+(?:\[\d+\])(?:\s.{4})'
-        timestamp = '\s+(?P<timestamp>\d+.\d+):'
-        event = '\s+(?P<event>\w+):'
-        self.__trace_exp = re.compile(taskid + cpuid + timestamp + event)
-        self.__keyval_exp = re.compile(r'\s?(?P<key>\w+)=(?P<val>\w+),?')
-        self.__opcode_exp = re.compile(r'cmd=\((?P<opcode>\w+)')
+        self.params = {}
 
     def parse(self, line):
         try:
-            __tresult = self.__trace_exp.search(line).groupdict()
-            __opcode = self.__opcode_exp.search(line)
-            if __opcode:
-                __tresult.update(__opcode.groupdict())
-            __params = self.__keyval_exp.findall(line)
-            if __params:
-                __tresult.update(dict(__params))
-            return __tresult
+            self.__taskid = line[:22].strip()
+            self.__cpuid = line[24:27]
+            self.__tresult = re.split('[ ,)] *', line[35:])
+            self.event = self.__tresult[1]
+            self.__timestamp = float(self.__tresult[0].rstrip(':'))
+            self.result = [self.__timestamp]
+            for x in self.__tresult[2:13]:
+                try:
+                    key, val = x.split('=')
+                    self.params[key] = val
+                except:
+                    continue
+
+            self.req_key = self.__cpuid + self.params['cmdid']
+            if self.event == 'nvme_setup_admin_cmd:':
+                self.result = [self.__timestamp, self.__taskid, '', self.params['cmd'].replace('(nvme_admin_', ''), 0, 0, 0, 0]
+            if self.event == 'nvme_setup_nvm_cmd:':
+                self.result = [self.__timestamp, self.__taskid, self.params.get('nvme', ''), self.params['cmd'].replace('(nvme_cmd_', ''),
+                          int(self.params.get('dsmgmt', 0)) >> 16, self.params.get('slba', 0), self.params.get('len', 0), 0]
+
+            return self.event, self.req_key, self.result
+
         except Exception as e:
-            print(e)
+            print('\n', e)
             print(line, "\n")
-            pass
+            return None, None, None
 
 
 class RequestComplition:
-    stack = {}
+    def __init__(self):
+        self.stack = {}
 
     def lookup(self, key):
         try:
             return self.stack[key]
         except:
             pass
-        #for rkey, value in self.stack.items():
-        #    if key == rkey:
-        #        return value
 
     def start(self, key, value):
         self.stack[key] = value
@@ -115,59 +120,47 @@ nvme_cmd_opcode = {
 nvme_opcode = {**nvme_cmd_opcode, **nvme_admin_opcode}
 
 class TraceLog:
+    logformat = '{:>8} {:<20} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'
+    header = ['index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
 
-    def read_logs(infile, outfile):
-        traceLogs = {}
-        parser = TraceParser()
-        request = RequestComplition()
-        index = 0
-        tag = time.time()
+    def __init__(self):
+        self.traceLogs = {}
+        self.parser = TraceParser()
+        self.request = RequestComplition()
+        self.index = 0
+
+    def read_logs(self, infile, outfile):
+        self.tag = time.time()
 
         print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(
             'index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'))
+        outfile.writerow(['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
 
-        try:
-            for line in infile:
-                tresult = parser.parse(line.strip())
+        for line in infile:
+            try:
+                event, req_key, req_val = self.parser.parse(line.rstrip('\n)'))
 
-                if tresult:
+                if event == 'nvme_complete_rq:':
+                    result = self.request.lookup(req_key)
+                    if result:
+                        self.request.delete(req_key)
+                        result[7] = round(req_val[0] - result[0], 6)
+                        self.index += 1
+                        outfile.writerow(result)
+                        if (time.time() - self.tag) > 1:
+                            print('{:>8} {:>16} {:^22} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(self.index, *result))
+                            self.tag = time.time()
+                else:
+                    self.request.start(req_key, req_val)
 
-                    if tresult['event'] == "nvme_setup_admin_cmd":
-                        result = [to_num(tresult['timestamp']), tresult['taskid'], '', tresult['opcode'].replace('nvme_admin_',''), 0, 0, 0, 0]
-                        request.start(tresult['cmdid'], result)
-                        #traceLogs[last] = result
-                        #last += 1
+            except ValueError:
+                continue
 
-                    if tresult['event'] == "nvme_setup_nvm_cmd":
-                        try:
-                            tresult['stream'] = to_num(tresult['dsmgmt']) >> 16
-                        except:
-                            tresult['stream'] = 0
+            except KeyboardInterrupt:
+                sys.stdout.flush()
+                pass
 
-                        result = [to_num(tresult['timestamp']), tresult['taskid'], tresult.get('nvme','nvme0n1'), tresult['opcode'].replace('nvme_cmd_',''), tresult['stream'],
-                                  to_num(tresult.get('slba',0)), to_num(tresult.get('len',0)), 0]
-                        request.start(tresult['cmdid'], result)
-
-                        #traceLogs[last] = result
-                        #last += 1
-
-                    if tresult['event'] == "nvme_complete_rq":
-                        result = request.lookup(tresult['cmdid'])
-                        if result:
-                            request.delete(tresult['cmdid'])
-                            result[7] = round(to_num(tresult['timestamp']) - result[0], 6)
-                            index += 1
-                            outfile.writerow(result)
-                            if (time.time() - tag) > 1:
-                                print('{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'.format(index, *result))
-                                tag = time.time()
-
-
-        except KeyboardInterrupt:
-            sys.stdout.flush()
-            pass
-
-        return traceLogs
+        return self.traceLogs
 
 """
 def plot(key, ):
@@ -207,9 +200,10 @@ if __name__ == "__main__":
 
         __fout = open(o_filename, 'w')
         outfile = csv.writer(__fout)
+        tracer = TraceLog()
 
         start = time.time()
-        trace_datas = pd.DataFrame.from_dict(TraceLog.read_logs(infile, outfile), orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
+        trace_datas = pd.DataFrame.from_dict(tracer.read_logs(infile, outfile), orient='index', columns=['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency'])
 #        TraceLog.read_logs(infile)
         end = time.time()
         print("labs time: ", end - start, "\n")
