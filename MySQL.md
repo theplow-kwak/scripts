@@ -1,6 +1,7 @@
 ﻿# MySQL Build 
-## Installing MySQL from Source with the MySQL APT Repository
-> https://dev.mysql.com/doc/mysql-apt-repo-quick-guide/en/#repo-qp-apt-install-from-source
+MySQL Source code에 NVMe multi-stream feature를 적용하여 설치하는 방법을 설명합니다. MySQL document중 [A Quick Guide to Using the MySQL APT Repository](https://dev.mysql.com/doc/mysql-apt-repo-quick-guide/en/#repo-qp-apt-install-from-source) 를 참조하였습니다.  
+
+## Download source code
 
 You can download the source code for MySQL and build it using the MySQL APT Repository:
 ```bash
@@ -10,7 +11,12 @@ sudo apt-get install mysql-common
 apt-get source mysql-server
 ```
 
-## modify debian/rules
+
+
+## Modify debian/rules
+
+source code build후 생성되는 **.deb ** file의 prefix와 **DATADIR**을 변경하기 위하여 ***debian/rules*** file 수정. 
+
 ```
     :
 		-DCOMPILATION_COMMENT="($(DISTRIBUTION))" \
@@ -20,13 +26,61 @@ apt-get source mysql-server
     :
 ```
 
-## build mysql-server
+
+
+## NVMe Multi stream 적용 
+
+MySQL + InnoDB application에 multi stream 적용: InnoDB storage engine의 file handling code중 file open 부분에서 file type에 따라 write_hint를 지정하는 방식으로 수정한다.  
+
+InnoDB에서 사용하는 file type은 **OS_LOG_FILE**, **OS_DATA_FILE**, **OS_DATA_TEMPFILE** 세가지가 있다. 
+
+```
+/** Types for file create @{ */
+static const ulint OS_DATA_FILE = 100;
+static const ulint OS_LOG_FILE = 101;
+static const ulint OS_DATA_TEMP_FILE = 102;
+```
+
+InnoDB의 File open을 처리하는 code에 file type에 따라 stream을 할당하는 code 추가: 
+
+- file : `mysql/storage/innobase/os/os0file.cc`
+
+- function: `os_file_create_func`
+
+```c
+} while (retry);
+
+ulint		write_hint = (((type-100)%4)+3);
+
+if(file.m_file != -1) {
+    if( fcntl(file.m_file, F_SET_RW_HINT, &write_hint ) != 0 ) {
+        ib::error()
+            << "stream allocation error: (" << errno << ") "
+            << name << " type " << type << " hint " <<  write_hint;
+        ib::error()
+            << "file create mode "
+            << create_mode << " for file '" << name << "'";
+    } else {
+        ib::info()
+            << "stream allocation: "
+            << name << " type " << type << " hint " <<  write_hint;
+    }
+}
+
+/* We disable OS caching (O_DIRECT) only on data files */
+
+if (!read_only
+```
+
+
+## Build mysql-server
+
 ```bash
 apt-get source -b mysql-server
 ```
 deb packages for installing the various MySQL components are created.
 
-## install deb package
+## Install deb package
 Pick the deb packages for the MySQL components you need and install them with the command:
 ```
 sudo dpkg-preconfigure mysql-client-core-5.7_5.7.23-0ubuntu0.18.04.1_amd64.deb
