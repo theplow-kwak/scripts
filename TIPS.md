@@ -26,6 +26,14 @@ apt source linux-headers-$(uname -r)
 sudo apt build-dep linux-headers-$(uname -r)
 ```
 
+## Depackage the kernel source
+
+```
+dpkg-source -x linux_4.15.0-38.41.dsc
+```
+
+
+
 ## kernel tracing patch
 
 download nvme_driver.diff to ~/

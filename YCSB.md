@@ -1,13 +1,49 @@
-﻿
+
 # YCSB 
+## 환경 설정
+
+* ycsb 실행에 필요한 tool과 library를 설치한다.
+
+```bash
+sudo apt install maven
+sudo apt install openjdk-8-jdk
+```
+
+* ssl 인증 오류로 인하여 https를 사용하는 repository에서 library를 다운로드 하지 못하는 경우 인증서를 Java cacerts keystore에 추가한다.  
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
+sudo keytool -import -trustcacerts -storepass changeit -noprompt -keystore ${JAVA_HOME}/jre/lib/security/cacerts -file /usr/share/ca-certificates/mozilla/hynix.crt
+sudo keytool -import -trustcacerts -storepass changeit -noprompt -keystore ${JAVA_HOME}/jre/lib/security/cacerts -file /usr/share/ca-certificates/mozilla/hynixadca.crt
+```
+
+* 인증서가 제대로 추가되었는지 확인
+
+```bash
+keytool -list -keystore ${JAVA_HOME}/jre/lib/security/cacerts
+```
+
+* 인증서 삭제가 필요한 경우
+
+```bash
+keytool -delete  -alias letsencrypt -keystore ${JAVA_HOME}/jre/lib/security/cacerts -storepass changeit
+```
+
+
+
 ## clone YCSB source
+
 ```bash
 git clone https://github.com/brianfrankcooper/YCSB ycsb 
 git checkout 0.14.0
 ```
 
+
+
 ## ycsb for RocksDB
+
 ### patch RocksDB binding
+
 ```bash
 git remote add adamretter https://github.com/adamretter/YCSB
 git branch rocksdb

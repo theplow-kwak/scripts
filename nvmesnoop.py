@@ -420,7 +420,7 @@ def main():
                 #datas = np.array(nvmesnoop.getdata())
                 #if len(datas):
                 #    print(datas[-10:,5])
-                time.sleep(1)
+                time.sleep(0.1)
         except KeyboardInterrupt:
             pass
 
