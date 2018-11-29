@@ -3,8 +3,8 @@
 
 ```bash
 sudo apt install make 
-sudo apt install make-guile gcc g++ curl git dpkg-dev 
-sudo apt install python python3 python-pip python3-pip python-tk python3-tk bison
+sudo apt install make-guile gcc g++ curl git dpkg-dev bison flex ncurses-dev libelf-dev
+sudo apt install python python3 python-pip python3-pip python-tk python3-tk 
 sudo apt install libgflags-dev
 
 sudo apt install openjdk-8-jdk
@@ -21,7 +21,6 @@ sudo apt install libglib2.0-dev libpixman-1-dev libxen-dev libgtk-3-dev
 ## get kernel source 
 
 ```bash
-sudo apt install ncurses-dev
 apt source linux-headers-$(uname -r)
 sudo apt build-dep linux-headers-$(uname -r)
 ```
