@@ -11,29 +11,59 @@ sudo apt install openjdk-8-jdk
 sudo apt install maven
 sudo apt install vagrant
 
-sudo apt install libglib2.0-dev libpixman-1-dev libxen-dev libgtk-3-dev
-sudo apt install libspice-server-dev
-sudo apt install debootstrap
-sudo apt install dracut-core
+sudo apt install libglib2.0-dev libpixman-1-dev libcap-dev libxen-dev libgtk-3-dev 
+sudo apt install libspice-server-dev libattr1 libattr1-dev
+sudo apt install debootstrap dracut-core
 ```
 
 ## Custom kernel for Open-channel SSD
 
-The development of the lightnvm subsystem is hosted here:
+lightnvm subsystem이 포함된 커널 소스를 다운 받는다
 
 ```bash
 git clone https://github.com/OpenChannelSSD/linux.git linux-ocssd
 ```
 
+커널 config 파일에서 virtio와 pblk 관련 항목을 설정하고 kernel build를 할 것이다. base로 사용할 config file을 복사 후 olddefconfig를 수행하여 default 설정 값을 setting한다. 
+
 ```bash
 cp /boot/config-$(uname -r) .config
+make olddefconfig
+```
 
-cp kernel.config .config
-make oldconfig
+생성된 .config file에서 필요한 아래 항목을 수정
+
+```
+CONFIG_NVM_PBLK=y
+CONFIG_VETH=y
+CONFIG_VIRTIO_PCI=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_NET=y
+CONFIG_9P_FS=y
+```
+
+kernel을 build하여 bzImage 생성한다. 생성된 kernel image는 QEMU 부팅 시 사용한다.  
+
+```bash
 make prepare
 make scripts
+make -j `getconf _NPROCESSORS_ONLN` bzImage LOCALVERSION=-ocssd
+```
+
+필요한 경우 modules를 build 하고 rootfs에 설치한다. 이때 대상 경로는 VM disk image가 mount 된 위치이다.
+
+```bash
+make -j `getconf _NPROCESSORS_ONLN` modules LOCALVERSION=-ocssd
+sudo INSTALL_MOD_PATH=${HOME}/vm/image/rootfs make modules_install
+```
+
+debian package image가 필요한 경우 빌드하는 방법 (option)
+
+```bash
 make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-ocssd
 ```
+
+
 
 
 
@@ -41,11 +71,13 @@ make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-ocssd
 
 ### Compiling & Installing QEMU
 
+
+
 ```bash
 git clone https://github.com/OpenChannelSSD/qemu-nvme.git
 
 cd qemu-nvme
-./configure --enable-kvm --target-list=x86_64-softmmu --enable-linux-aio --disable-werror --disable-xen --prefix=$HOME/qemu-nvme --enable-gtk --enable-spice
+./configure --enable-kvm --target-list=x86_64-softmmu --enable-linux-aio --disable-werror --disable-xen --prefix=$HOME/qemu-nvme --enable-gtk --enable-spice --enable-virtfs --enable-vhost-net --enable-modules --enable-snappy
 
 make -j `getconf _NPROCESSORS_ONLN`
 make install
@@ -59,16 +91,6 @@ make install
 dd if=/dev/zero of=ocssd_backend.img bs=1M count=16384
 ```
 
-* QEMU reference
-
-```bash
-sudo $HOME/qemu-nvme/bin/qemu-system-x86_64 -m 4G -smp 8 -s \
--drive file={path to vm image},id=diskdrive,format=raw,if=none \
--device virtio-blk-pci,drive=diskdrive,scsi=off,config-wce=off,x-data-plane=on \
--drive file={path to ocssd backend file},id=myocssd,format=raw,if=none \
--device nvme,drive=myocssd,serial=deadbeef,lnum_pu=4,lstrict=1,meta=16,mc=3
-```
-
 * QEMU parameter
 
 ```
@@ -79,61 +101,58 @@ Linux/Multiboot boot specific:
 -dtb    file    use 'file' as device tree image
 ```
 
-* create boot/rootfs image 
 
-```bash
-$HOME/qemu-nvme/bin/qemu-img create -f raw boot.img 1G
-$HOME/qemu-nvme/bin/qemu-img create -f raw rootfs.img 16G
-```
 
 * run QEMU
 
 ```bash
-sudo $HOME/qemu-nvme/bin/qemu-system-x86_64 -m 8G -smp 8 --enable-kvm \
--cdrom ubuntu-18.10-live-server-amd64.iso \
--object iothread,id=iothread0 \
--drive file=rootfs.img,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd0 \
--device virtio-blk-pci,drive=hd0,scsi=off,config-wce=off,iothread=iothread0 \
--object iothread,id=iothread1 \
--drive file=boot.img,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd1 \
--device virtio-blk-pci,drive=hd1,scsi=off,config-wce=off,iothread=iothread1 \
--drive file=ocssd_backend.img,id=myocssd,format=raw,if=none \
--device nvme,drive=myocssd,serial=deadbeef,lnum_pu=4,lstrict=1,meta=16,mc=3 \
--kernel $HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage -append root=/dev/vda1 \
--device qxl-vga \
--monitor stdio
+QEMU="${HOME}/qemu-nvme/bin/qemu-system-x86_64"
+QEMU3="${HOME}/qemu3/bin/qemu-system-x86_64"
+OPT="-m 8G -smp 8 --enable-kvm -vga qxl"
+USERVERCD="-cdrom ${HOME}/vm/cd/ubuntu-18.10-live-server-amd64.iso"
+UBUNTUCD="-cdrom ${HOME}/vm/cd/ubuntu-18.04.1-desktop-amd64.iso"
+WINCD="-cdrom ${HOME}/vm/cd/Win10_1809Oct_Korean_x64.iso"
+OCSSD="-drive file=${HOME}/vm/image/ocssd_backend.img,id=myocssd,format=raw,if=none -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=4,lstrict=1,meta=16,mc=3"
+KERNEL="-kernel ${HOME}/projects/linux-ocssd/arch/x86_64/boot/bzImage"
+GEMINI="-object iothread,id=iothread0 -drive file=/dev/nvme0n1,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd0 -device virtio-blk-pci,drive=hd0,scsi=off,config-wce=off,iothread=iothread0"
+ROOTFS="-object iothread,id=iothread1 -drive file=rootfs.img,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd0 -device virtio-blk-pci,drive=hd0,scsi=off,config-wce=off,iothread=iothread1"
+BOOT="-object iothread,id=iothread2 -drive file=boot.img,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd1 -device virtio-blk-pci,drive=hd1,scsi=off,config-wce=off,iothread=iothread2"
+VNC="-vnc localhost:1"
+SPICE="-vga qxl -spice port=3001,disable-ticketing"
+SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
+SHARE="-fsdev local,id=fsdev0,path=${HOME}/vm/share,security_model=mapped -device virtio-9p-pci,fsdev=fsdev0,mount_tag=sharepoint"
+NET="-netdev user,id=vmnic -device virtio-net,netdev=vmnic"
+
+sudo $QEMU $OPT $UBUNTUCD $OCSSD $SHARE $NET $GEMINI $KERNEL -append "root=/dev/vda vga=0x380"
+sudo $QEMU $OPT $UBUNTUCD $OCSSD $SHARE $NET $ROOTFS $KERNEL -append "root=/dev/vda vga=0x380"
 
 -boot d
-
 -initrd /boot/initrd.img-4.18.0-11-generic 
-
--vnc localhost:1 \
--chardev socket,id=console1,path=/tmp/console1,server,nowait \
--device spapr-vty,chardev=console1 \
 ```
 
-* spice setup and connect to 
+* connect to spice
 
 ```bash
-sudo $HOME/qemu-nvme/bin/qemu-system-x86_64 -m 8G -smp 8 --enable-kvm \
--vga qxl -spice port=3001,disable-ticketing \
-
 remote-viewer spice://localhost:3001
 ```
 
-* To setup an Ubuntu system from Debian:
+
+
+## To setup an Ubuntu system from Debian:
+
+debootstrap을 이용하여 rootfs.img file에 ubuntu를 설치한다
 
 ```bash
-mkdir ubuntu_bionic
-sudo debootstrap --arch=amd64 bionic ubuntu_bionic http://archive.ubuntu.com/ubuntu/
+dd if=/dev/zero of=rootfs.img bs=1M count=32768
+mkfs.ext4 ./rootfs.img
+sudo mount -o loop ./rootfs.img ./rootfs
+sudo debootstrap --verbose --arch amd64 bionic ./rootfs http://archive.ubuntu.com/ubuntu
 ```
 
+fstab 설정
+
 ```bash
-dd if=/dev/zero of=rootfs.img bs=400M count=1
-mkfs.ext4 ./rootfs.img
-sudo mount -o loop ./rootfs.img /mnt/rootfs
-sudo debootstrap --verbose --arch amd64 bionic /mnt/rootfs http://archive.ubuntu.com/ubuntu
-cat << '___EOF___' | sudo dd of=/mnt/rootfs/etc/fstab
+cat << '___EOF___' | sudo dd of=./rootfs/etc/fstab
 # UNCONFIGURED FSTAB FOR BASE SYSTEM
 #
 /dev/vda        /               ext3    defaults        1 1
@@ -144,22 +163,91 @@ sysfs           /sys            sysfs   defaults        0 0
 proc            /proc           proc    defaults        0 0
 ___EOF___
 
-sudo umount /mnt/rootfs
 ```
 
-* Direct connect to Physical drive Gemini NVMe 
+certification file을 추가한다
 
 ```bash
-sudo $HOME/qemu-nvme/bin/qemu-system-x86_64 -m 8G -smp 8 --enable-kvm \
--cdrom ubuntu-18.04.1-desktop-amd64.iso \
--object iothread,id=iothread0 \
--drive file=/dev/nvme0n1,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd0 \
--device virtio-blk-pci,drive=hd0,scsi=off,config-wce=off,iothread=iothread0 \
--drive file=ocssd_backend.img,id=myocssd,format=raw,if=none \
--device nvme,drive=myocssd,serial=deadbeef,lnum_pu=4,lstrict=1,meta=16,mc=3 \
--device qxl-vga \
--kernel $HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage -append root=/dev/vda1 \
+TMP=${HOME}/vm/share
+sudo cp $TMP/hynix.crt $TMP/hynixadca.crt ./rootfs/usr/share/ca-certificates/mozilla/
+sudo chmod 644 ./rootfs/usr/share/ca-certificates/mozilla/hynixadca.crt
+sudo chmod 644 ./rootfs/usr/share/ca-certificates/mozilla/hynix.crt
+sudo sh -c 'echo "mozilla/hynixadca.crt" >> ./rootfs/etc/ca-certificates.conf'
+sudo sh -c 'echo "mozilla/hynix.crt" >> ./rootfs/etc/ca-certificates.conf'
+```
+
+hostname 설정
+
+```bash
+sudo sh -c 'echo QEMU-OCSSD > ./rootfs/etc/hostname'
+```
+
+Ubuntu 17.10 이후로는 ifupdown을 더 이상 사용하지 않고 netplan을 사용하여 네트웍을 관리하고 있다. DHCP를 사용하도록 ethernet을 설정한다.
+
+```bash
+cat << '___EOF___' | sudo dd of=./rootfs/etc/netplan/01-network-manager-all.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens:
+      match:
+        name: ens*
+      dhcp4: true
+___EOF___
+      
+```
+
+chroot를 이용하여 guest rootfs에 연결하고 이후 설정 작업을 진행
+
+```bash
+LANG=C.UTF-8 sudo chroot ./rootfs /bin/bash
+```
+
+ The installed system will be very basic. If you would like to make the system a bit more mature, there is an easy method to install all packages with "standard" priority
+
+```bash
+sudo apt install tasksel
+sudo tasksel install standard
+sudo apt install net-tools
+sudo apt install nvme-cli
+```
+
+user를 추가하고 root password 설정
+
+```bash
+adduser dhkwak
+addgroup --system admin
+adduser dhkwak admin
+passwd root
+```
 
 
+
+작업 완료 후 rootfs.img file을 닫고 QEMU booting
+
+```bash
+sudo umount ./rootfs
+
+KERNEL="-kernel ${HOME}/projects/linux-ocssd/arch/x86_64/boot/bzImage -append root=/dev/vda"
+sudo $QEMU $OPT $ROOTFS $KERNEL $SHARE
+```
+
+How to set up shared folders 
+
+To start the guest add the following options to enable 9P sharing in QEMU 
+
+```bash
+SHARE="-fsdev local,id=fsdev0,path=${HOME}/vm/share,security_model=mapped -device virtio-9p-pci,fsdev=fsdev0,mount_tag=sharepoint"
+
+SHARE="-virtfs local,id=fsdev0,path=${HOME}/vm/share,security_model=mapped,writeout=writeout,mount_tag=sharepoint"
+```
+
+in the Guest OS
+
+```bash
+root@host# mkdir /share
+root@host# chmod 777 /share
+sudo mount -t 9p -o trans=virtio sharepoint ./share
 ```
 
