@@ -16,6 +16,8 @@ sudo apt install libspice-server-dev libattr1 libattr1-dev
 sudo apt install debootstrap dracut-core
 ```
 
+
+
 ## Custom kernel for Open-channel SSD
 
 lightnvm subsystem이 포함된 커널 소스를 다운 받는다
@@ -71,8 +73,6 @@ make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-ocssd
 
 ### Compiling & Installing QEMU
 
-
-
 ```bash
 git clone https://github.com/OpenChannelSSD/qemu-nvme.git
 
@@ -82,6 +82,8 @@ cd qemu-nvme
 make -j `getconf _NPROCESSORS_ONLN`
 make install
 ```
+
+
 
 ### Configuring the virtual open-channel SSD drive
 
@@ -100,8 +102,6 @@ Linux/Multiboot boot specific:
 -initrd file    use 'file' as initial ram disk
 -dtb    file    use 'file' as device tree image
 ```
-
-
 
 * run QEMU
 
@@ -126,7 +126,7 @@ BOOTP="-object iothread,id=iothread2 \
 -drive file=boot.img,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd1 \
 -device virtio-blk-pci,drive=hd1,scsi=off,config-wce=off,iothread=iothread2"
 
-SHARE="-virtfs local,id=fsdev0,path=${HOME}/vm/share,security_model=mapped,writeout=writeout,mount_tag=sharepoint"
+SHARE="-virtfs local,id=fsdev0,path=${HOME}/vm/share,security_model=passthrough,writeout=writeout,mount_tag=sharepoint"
 NET="-netdev user,id=vmnic,hostfwd=tcp::5555-:22 -device virtio-net,netdev=vmnic"
 
 VNC="-vnc localhost:1"
@@ -155,9 +155,15 @@ sudo $QEMU $OPT $UBUNTUCD $OCSSD $SHARE $NET $GEMINI $KERNEL -append "root=/dev/
 remote-viewer spice://localhost:3001
 ```
 
+- connect to Geust with SSH
+
+```bash
+ssh dhkwak@localhost -p 5555
+```
 
 
-## Setup an Ubuntu system from Debian:
+
+## Setup an Ubuntu system from Debian
 
 ### Base image 생성
 
@@ -184,7 +190,6 @@ devpts          /dev/pts        devpts  gid=5,mode=620  0 0
 sysfs           /sys            sysfs   defaults        0 0
 proc            /proc           proc    defaults        0 0
 ___EOF___
-
 ```
 
 certification file을 추가한다
@@ -217,7 +222,6 @@ network:
         name: ens*
       dhcp4: true
 ___EOF___
-      
 ```
 
 apt repository 추가
@@ -233,8 +237,9 @@ deb-src http://kr.archive.ubuntu.com/ubuntu/ bionic-updates main restricted univ
 deb http://kr.archive.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse
 deb-src http://kr.archive.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse
 ___EOF___
-
 ```
+
+
 
 ### Configure The Base System
 
@@ -279,8 +284,6 @@ adduser dhkwak admin
 passwd root
 ```
 
-
-
 작업 완료 후 rootfs.img file을 닫고 QEMU booting
 
 ```bash
@@ -290,27 +293,100 @@ KERNEL="-kernel ${HOME}/projects/linux-ocssd/arch/x86_64/boot/bzImage -append ro
 sudo $QEMU $OPT $ROOTFS $KERNEL $SHARE
 ```
 
-### Guest OS에서 기타 설정 
 
-How to set up shared folders 
 
-To start the guest add the following options to enable 9P sharing in QEMU 
+### Host와 Guest OS 사이에 공유 폴더 설정 
+
+virtio 9P sharing을 사용하여 host의 폴더를 guest와 공유하도록 설정한다. 
 
 ```bash
-SHARE="-fsdev local,id=fsdev0,path=${HOME}/vm/share,security_model=mapped -device virtio-9p-pci,fsdev=fsdev0,mount_tag=sharepoint"
-
-SHARE="-virtfs local,id=fsdev0,path=${HOME}/vm/share,security_model=mapped,writeout=writeout,mount_tag=sharepoint"
+SHARE="-virtfs local,id=fsdev0,path=./path to/share,security_model=passthrough,writeout=writeout,mount_tag=sharepoint"
 ```
 
-in the Guest OS
+
+
+security_model로는 mapped, passthrough, none 세가지가 있다. mapped를 사용하면 guest에서 write한 파일의 소유자가 host에서는 root로 적용되고, passthrough를 사용하여야 guest user의 소유자 정보대로 파일이 생성된다. 이에 `security_model`은 `passthrough`를 사용한다.
+
+```bash
+SHARE="-virtfs local,id=fsdev0,path=${HOME}/vm/share,security_model=passthrough,writeout=writeout,mount_tag=sharepoint"
+```
+
+
+
+Guest OS에서 sharepoint mount 하기
 
 ```bash
 sudo mount -t 9p -o trans=virtio sharepoint ./share
 ```
 
+
+
 ## Setting OCSSD
 
-list
+Open-Channel SSDs 를 구동하고 test하는데 필요한 library와 tool 설치
+
+
+
+### liblightnvm
+
+liblightnvm source를 다운 받고 빌드시 필요한 library  libcunit1-dev을 설치한다.
+
+```bash
+git clone https://github.com/OpenChannelSSD/liblightnvm.git
+sudo apt install libcunit1-dev
+```
+
+build and install
+
+```bash
+make debug_on configure
+make
+sudo make install
+```
+
+
+
+### lnvm 
+
+Administrative tool for LightNVM compatible Open-Channel SSDs 
+
+```bash
+git clone https://github.com/OpenChannelSSD/lnvm.git
+make
+```
+
+
+
+### lnvm-tools  
+
+Tools for conditioning, testing, and verify integrity on Open-Channel SSDs 
+
+```bash
+git clone https://github.com/OpenChannelSSD/lnvm-tools.git
+```
+
+```bash
+
+```
+
+
+
+### pblk_tools
+
+```bash
+git clone https://github.com/OpenChannelSSD/pblk-tools.git
+sudo apt install libudev-dev
+```
+
+```bash
+error: expected declaration specifiers or ‘...’ before ‘sizeof’
+```
+
+Documentation available at http://lightnvm.io/pblk-tools
+
+
+
+### list
 
 ```bash
 sudo nvme lnvm list
