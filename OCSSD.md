@@ -158,7 +158,7 @@ remote-viewer spice://localhost:3001
 - connect to Geust with SSH
 
 ```bash
-ssh dhkwak@localhost -p 5555
+ssh localhost -p 5555
 ```
 
 
@@ -170,11 +170,13 @@ ssh dhkwak@localhost -p 5555
 debootstrap을 이용하여 rootfs.img file에 ubuntu를 설치한다
 
 ```bash
-IMGFILE="./image/rootfs.img"
-dd if=/dev/zero of=$IMGFILE bs=1M count=32768
-mkfs.ext4 $IMGFILE
-sudo mount -o loop $IMGFILE ./rootfs
-sudo debootstrap --verbose --arch amd64 bionic ./rootfs http://archive.ubuntu.com/ubuntu
+_IMGFILE="./image/rootfs.img"
+_TARGETDIR="./rootfs"
+
+dd if=/dev/zero of=$_IMGFILE bs=1M count=32768
+mkfs.ext4 $_IMGFILE
+sudo mount -o loop $_IMGFILE $_TARGETDIR
+sudo debootstrap --verbose --arch amd64 bionic $_TARGETDIR http://archive.ubuntu.com/ubuntu
 ```
 
 fstab 설정
@@ -190,17 +192,6 @@ devpts          /dev/pts        devpts  gid=5,mode=620  0 0
 sysfs           /sys            sysfs   defaults        0 0
 proc            /proc           proc    defaults        0 0
 ___EOF___
-```
-
-certification file을 추가한다
-
-```bash
-TMP=${HOME}/vm/share
-sudo cp $TMP/hynix.crt $TMP/hynixadca.crt ./rootfs/usr/share/ca-certificates/mozilla/
-sudo chmod 644 ./rootfs/usr/share/ca-certificates/mozilla/hynixadca.crt
-sudo chmod 644 ./rootfs/usr/share/ca-certificates/mozilla/hynix.crt
-sudo sh -c 'echo "mozilla/hynixadca.crt" >> ./rootfs/etc/ca-certificates.conf'
-sudo sh -c 'echo "mozilla/hynix.crt" >> ./rootfs/etc/ca-certificates.conf'
 ```
 
 hostname 설정
@@ -278,9 +269,9 @@ tasksel install standard
 user를 추가하고 root password 설정
 
 ```bash
-adduser dhkwak
+adduser $USERNAME
 addgroup --system admin
-adduser dhkwak admin
+adduser $USERNAME admin
 passwd root
 ```
 

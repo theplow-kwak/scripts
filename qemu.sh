@@ -1,15 +1,18 @@
 #!/bin/bash
 
-IMGFILE="./image/rootfs.img"
+PORT=5555
 
-while getopts ":ui:" opt; do
+while getopts ":p:" opt; do
 	case $opt in
-		u)    UNLOAD=1 ;;	
-		i)    IMGFILE=$OPTARG ;;
+		p)    PORT=$OPTARG ;;	
 		\?)   echo "Invalid option: -$OPTARG" >&2 ;;
 		:)    echo "Option -$OPTARG requires an argument." >&2 ;;
 	esac
 done 
+
+shift $(($OPTIND-1)) 
+
+IMGFILE=${1:-"./image/rootfs.img"}
 
 QEMU="${HOME}/qemu-nvme/bin/qemu-system-x86_64"
 OPT="-m 8G -smp 8 --enable-kvm -vga qxl"
@@ -33,7 +36,7 @@ BOOTP="-object iothread,id=iothread2 \
 
 SHARE0="-virtfs local,id=fsdev0,path=${HOME}/vm/share,security_model=passthrough,writeout=writeout,mount_tag=sharepoint"
 SHARE1="-virtfs local,id=fsdev1,path=${HOME}/projects,security_model=passthrough,writeout=writeout,mount_tag=projects"
-NET="-netdev user,id=vmnic,hostfwd=tcp::5555-:22 -device virtio-net,netdev=vmnic"
+NET="-netdev user,id=vmnic,hostfwd=tcp::$PORT-:22 -device virtio-net,netdev=vmnic"
 
 VNC="-vnc localhost:1"
 SPICE="-vga qxl -spice port=3001,disable-ticketing"
@@ -41,4 +44,8 @@ SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spa
 QEMU3="${HOME}/qemu3/bin/qemu-system-x86_64"
 
 
-$QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL -append "root=/dev/vda vga=0x380" &
+$QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL -append "root=/dev/vda vga=0x300" &
+
+sleep 5
+ssh localhost -p $PORT
+
