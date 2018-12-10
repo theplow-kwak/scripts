@@ -4,7 +4,7 @@ UNLOAD=0
 CHROOT=0
 FORMAT=0
 MKROOT=0
-USER=$USERNAME
+UNAME=$USERNAME
 
 while getopts ":ucfrn:" opt; do
     case $opt in
@@ -12,7 +12,7 @@ while getopts ":ucfrn:" opt; do
         c)  CHROOT=1 ;;
         f)  FORMAT=1 ;;
         r)  MKROOT=1 ;;
-        n)  USER=$OPTARG ;;
+        n)  UNAME=$OPTARG ;;
         \?) echo "Invalid option: -$OPTARG" >&2 
             exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2 
@@ -22,8 +22,8 @@ done
 
 shift $(($OPTIND-1)) 
 
-IMGFILE=${1:-"./image/rootfs.img"}
-TARGETDIR=${2:-"./rootfs"}
+IMGFILE=${1:-"/dev/nvme0n1p2"}
+TARGETDIR=${2:-"$PWD/rootfs"}
 
 isEmptyFolder() 
 {
@@ -48,23 +48,26 @@ FormatDisk()
 MakeRootFS()
 {
     local _TARGETDIR=$1
+    if [[ ! $(findmnt $_TARGETDIR) ]]; then
+        echo $_TARGETDIR does not mounted !! stop processing !
+        exit 1
+    fi
 
     sudo debootstrap --verbose --arch amd64 bionic $_TARGETDIR http://archive.ubuntu.com/ubuntu
 
+    pushd $_TARGETDIR
+
+    sudo mkdir ./mnt/host
     printf "%s\n" \
         "# UNCONFIGURED FSTAB FOR BASE SYSTEM" \
         "#" \
-        "/dev/vda        /               ext3    defaults        1 1" \
-        "dev             /dev            tmpfs   rw              0 0" \
-        "tmpfs           /dev/shm        tmpfs   defaults        0 0" \
-        "devpts          /dev/pts        devpts  gid=5,mode=620  0 0" \
-        "sysfs           /sys            sysfs   defaults        0 0" \
-        "proc            /proc           proc    defaults        0 0" \
-        | sudo dd of=$_TARGETDIR/etc/fstab
+        "/dev/vda       /               ext4    defaults        1 1" \
+        "sharepoint     /mnt/host       9p      trans=virtio    0 0" \
+        | sudo dd of=./etc/fstab
 
-    pushd $_TARGETDIR
-    sudo sh -c 'echo QEMU-OCSSD > ./etc/hostname'
-    popd
+    printf "%s\n" \
+        "QEMU-OCSSD" \
+        | sudo dd of=./etc/hostname
 
     printf "%s\n" \
         "network:" \
@@ -75,7 +78,7 @@ MakeRootFS()
         "      match:" \
         "        name: ens*" \
         "      dhcp4: true" \
-        | sudo dd of=$_TARGETDIR/etc/netplan/01-network-all.yaml
+        | sudo dd of=./etc/netplan/01-network-all.yaml
 
     printf "%s\n" \
         "deb http://kr.archive.ubuntu.com/ubuntu/ bionic main restricted universe multiverse" \
@@ -86,7 +89,7 @@ MakeRootFS()
         "" \
         "deb http://kr.archive.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse" \
         "deb-src http://kr.archive.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse" \
-        | sudo dd of=$_TARGETDIR/etc/apt/sources.list
+        | sudo dd of=./etc/apt/sources.list
 
     printf "%s\n" \
         "dpkg-reconfigure tzdata" \
@@ -96,15 +99,18 @@ MakeRootFS()
         "apt install tasksel net-tools nvme-cli" \
         "tasksel install standard" \
         "apt upgrade" \
-        "adduser $USER" \
+        "adduser $UNAME" \
         "addgroup --system admin" \
-        "adduser $USER admin" \
+        "adduser $UNAME admin" \
         "passwd root" \
-        | sudo dd of=$_TARGETDIR/setupenv.sh
-        sudo chmod +x $_TARGETDIR/setupenv.sh
+        | sudo dd of=./setupenv.sh
+        sudo chmod +x ./setupenv.sh
     
     LANG=C.UTF-8 sudo chroot $_TARGETDIR /bin/bash setupenv.sh
-    sudo rm $_TARGETDIR/setupenv.sh
+    sudo rm ./setupenv.sh
+    popd
+    
+    unMountFolder $_TARGETDIR
 }
 
 MountFolder() {
