@@ -2,7 +2,7 @@
 
 ## pre-install tools 
 ```bash
-sudo apt install make 
+sudo apt install make cmake
 sudo apt install make-guile gcc g++ curl git dpkg-dev bison flex ncurses-dev libelf-dev
 sudo apt install python python3 python-pip python3-pip python-tk python3-tk 
 sudo apt install libgflags-dev
@@ -42,6 +42,15 @@ CONFIG_VIRTIO_PCI=y
 CONFIG_VIRTIO_BLK=y
 CONFIG_VIRTIO_NET=y
 CONFIG_9P_FS=y
+
+CONFIG_DRM=y
+CONFIG_PCI=y
+CONFIG_MMU=y
+CONFIG_DRM_QXL=y
+CONFIG_MOUSE_PS2=y
+CONFIG_MOUSE_PS2_VMMOUSE=y
+CONFIG_SERIO_I8042=y
+
 ```
 
 kernel을 build하여 bzImage 생성한다. 생성된 kernel image는 QEMU 부팅 시 사용한다.  
@@ -77,7 +86,11 @@ make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-ocssd
 git clone https://github.com/OpenChannelSSD/qemu-nvme.git
 
 cd qemu-nvme
-./configure --enable-kvm --target-list=x86_64-softmmu --enable-linux-aio --disable-werror --disable-xen --prefix=$HOME/qemu-nvme --enable-gtk --enable-spice --enable-virtfs --enable-vhost-net --enable-modules --enable-snappy
+./configure --enable-kvm --target-list=x86_64-softmmu --enable-linux-aio \
+--disable-werror --disable-xen --prefix=$HOME/${PWD##*/} --enable-gtk --enable-spice \
+--enable-virtfs --enable-vhost-net --enable-modules --enable-snappy \
+--enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" --disable-stack-protector \
+--enable-trace-backends=simple --with-git='tsocks git' 
 
 make -j `getconf _NPROCESSORS_ONLN`
 make install
@@ -354,11 +367,15 @@ Tools for conditioning, testing, and verify integrity on Open-Channel SSDs
 
 ```bash
 git clone https://github.com/OpenChannelSSD/lnvm-tools.git
+make
 ```
 
-```bash
+linlightnvme 최신 code를 설치하면 pblk_tools build시 *"error: expected declaration specifiers or ‘...’ before ‘sizeof’ "* 가 발생한다. 이를 해결하려면 **C11 Compiler**를 사용해야 한다. 
 
-```
+linlightnvme v0.1.3 이후 version에서 `struct nvm_ret` 가 변경되면서 아래와 같은 에러 발생한다.  
+
+> nvm_pblk.c:219:44: error: invalid operands to binary || (have ‘int’ and ‘const union <anonymous>’)
+>   int smeta_read = !(line->smeta_ret.status || line->smeta_ret.result);
 
 
 
@@ -367,17 +384,23 @@ git clone https://github.com/OpenChannelSSD/lnvm-tools.git
 ```bash
 git clone https://github.com/OpenChannelSSD/pblk-tools.git
 sudo apt install libudev-dev
+make
 ```
 
-```bash
-error: expected declaration specifiers or ‘...’ before ‘sizeof’
-```
+* linlightnvme 최신 code를 설치하면 pblk_tools build시 ***"error: expected declaration specifiers or ‘...’ before ‘sizeof’ "*** 가 발생한다. 이를 해결하려면 **C11 Compiler**를 사용해야 한다. 
+
+* linlightnvme v0.1.3 이후 version에서 `struct nvm_ret` 가 변경되면서 아래와 같은 에러 발생.  
+
+  > nvm_pblk.c:219:44: error: invalid operands to binary || (have ‘int’ and ‘const union <anonymous>’)
+  >   int smeta_read = !(line->smeta_ret.status || line->smeta_ret.result);
+
+
 
 Documentation available at http://lightnvm.io/pblk-tools
 
 
 
-### list
+## OCSSD test in Guest OS
 
 ```bash
 sudo nvme lnvm list
@@ -394,7 +417,7 @@ Add Target pblk: QEMU 실행시 parallel unit을 4로 지정하였기 때문에 
 
 ```bash
 DEVICE=nvme0n1
-TARGET_NAME=pblkdev
+TARGET_NAME=pblk0
 TARGET_TYPE=pblk
 LUN_BEGIN=0
 LUN_END=3
@@ -403,3 +426,18 @@ sudo nvme lnvm create -d $DEVICE -n $TARGET_NAME -t $TARGET_TYPE -b $LUN_BEGIN -
 
 
 
+# GDB 사용법
+
+b <function>
+
+handle SIGUSR1 nostop noprint
+
+
+
+
+
+catch fork
+
+catch vfork
+
+set follow-fork-mode child

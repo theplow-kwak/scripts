@@ -143,7 +143,6 @@ ConvertTo-MvmcVirtualHardDisk -SourceLiteralPath "D:\VMPC\Ubuntu 1804 64-bit\Ubu
 sudo apt install wine-stable ttf-mscorefonts-installer --install-recommends
 sudo apt install fonts-nanum fonts-nanum-extra fonts-nanum-coding
 sudo apt install wine64
-
 ```
 
 
