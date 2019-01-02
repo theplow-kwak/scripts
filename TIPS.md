@@ -157,6 +157,23 @@ Exec=env LC_ALL=C BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/git
 
 
 
+# OS disk 이동
+
+ ```
+mkdir src dest
+sudo mkfs.ext4 /dev/nvme1n1p2
+sudo mount -o loop /dev/nvme0n1p2 src/
+sudo mount -o loop /dev/nvme1n1p2 dest/
+cd dest/
+sudo cp -av ../src/* .
+cd ..
+sudo umount src dest
+ ```
+
+
+
+
+
 # Deleting a git commit
 
 ## Example git log
