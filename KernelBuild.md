@@ -27,6 +27,18 @@ In order to make your kernel "newer" than the stock Ubuntu kernel from which you
 
 
 
+## Reset build to return Debian build
+
+```bash
+make clean
+rm .config
+rm Module.symvers
+rm -rdf include/config
+rm -rdf include/generated
+rm -rdf arch/*/include/generated
+find . -name *.ur-* -type f -delete
+```
+
 ## Build Kernel by using debian rules
 
 ```bash
@@ -102,25 +114,17 @@ cd linux-xxx
 cp /boot/config-$(uname -r) .config
 cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
 
-make oldconfig
+make olddefconfig
 make prepare
 make scripts
 make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-nvme
-sudo make modules_install install
+make -j `getconf _NPROCESSORS_ONLN` bzImage modules LOCALVERSION=-nvme
+sudo make headers_install modules_install install
 ```
 
 ## reference of module-signing 
 > https://github.com/Canonical-kernel/Ubuntu-kernel/blob/master/Documentation/module-signing.txt
 
-
-## Reset build to return Debian build
-```bash
-make clean
-rm .config
-rm Module.symvers
-rm -rdf include/config
-rm -rdf include/generated
-rm -rdf arch/*/include/generated
-find . -name *.ur-* -type f -delete
-```
+## reference of kernel build options 
+> https://www.linuxsecrets.com/2826-kernel-headers-from-source
 

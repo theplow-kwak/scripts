@@ -42,8 +42,14 @@ if [[ $BASE == "qemu" ]]; then
     SRC="/dev/nvme1n1p1" 
     OCSSD_BACKEND="/dev/nvme0n1p1"
 fi
+if [[ $BASE == "qemu1" ]]; then
+    SSHPORT=5555
+    SRC="/dev/nvme1n1p2" 
+    OCSSD_BACKEND="/dev/nvme0n1p2"
+fi
 
 IMG_ROOTFS=${1:-$SRC}
+NUM_NS=${NUM_NS:-4}
 
 runQEMU() 
 {
@@ -56,7 +62,7 @@ runQEMU()
     WINCD="-cdrom $HOME/vm/cd/Win10_1809Oct_Korean_x64.iso"
 
     OCSSD="-drive file=$OCSSD_BACKEND,id=myocssd,format=raw,if=none \
-    -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3"
+    -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"
     GEMINI="-object iothread,id=iothread0 \
     -drive file=/dev/nvme0n1,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd0 \
     -device virtio-blk-pci,drive=hd0,scsi=off,config-wce=off,iothread=iothread0"

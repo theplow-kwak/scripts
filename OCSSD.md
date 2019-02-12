@@ -5,14 +5,14 @@
 sudo apt install make cmake
 sudo apt install make-guile gcc g++ curl git dpkg-dev bison flex ncurses-dev libelf-dev
 sudo apt install python python3 python-pip python3-pip python-tk python3-tk 
-sudo apt install libgflags-dev
+sudo apt install libgflags-dev pkg-config
 
 sudo apt install openjdk-8-jdk
 sudo apt install maven
 sudo apt install vagrant
 
 sudo apt install libglib2.0-dev libpixman-1-dev libcap-dev libxen-dev libgtk-3-dev 
-sudo apt install libspice-server-dev libattr1 libattr1-dev
+sudo apt install libspice-server-dev libattr1 libattr1-dev libsnappy-dev libaio-dev
 sudo apt install debootstrap dracut-core
 ```
 
@@ -441,3 +441,17 @@ catch fork
 catch vfork
 
 set follow-fork-mode child
+
+
+
+# ezfio
+
+./ocssd.sh init
+
+./ocssd.sh pblk 0 63
+
+cd /mnt/host/projects/ezfio/
+
+sudo ./ezfio.py -d /dev/pblk0 
+
+sudo ./ezfio.py -d /dev/nvme0n1 

@@ -3,14 +3,16 @@
 MODULE_INSTALL=0
 MKCONFIG=0
 
-while getopts ":kmdiI:cC:" opt; do
+while getopts ":b:i:t:cC:l:" opt; do
     case $opt in
-        k)  TARGET="$TARGET bzImage" ;;	
-        m)  TARGET="$TARGET modules" ;;
-        d)  TARGET="$TARGET bindeb-pkg" ;;
-        i)  MODULE_INSTALL=1 ;;
-        I)  MODULE_INSTALL=1
-            TARGETDIR=$OPTARG ;;
+        b)  [ $OPTARG == 'k' ] && BUILD="$BUILD bzImage"
+            [ $OPTARG == 'm' ] && BUILD="$BUILD modules"
+            [ $OPTARG == 'd' ] && BUILD="$BUILD bindeb-pkg" ;;
+        i)  [ $OPTARG == 'k' ] && INSTALL="$INSTALL bzImage"
+            [ $OPTARG == 'm' ] && INSTALL="$INSTALL modules_install"
+            [ $OPTARG == 'h' ] && INSTALL="$INSTALL headers_install" ;;
+        t)  TARGETDIR=$OPTARG ;;
+        l)  LOCALVERSION=$OPTARG ;;
         c)  MKCONFIG=1 ;;
         C)  MKCONFIG=1
             CFG_FILE=$OPTARG ;;
@@ -23,9 +25,10 @@ done
 
 shift $(($OPTIND-1)) 
 
-[[ -z $TARGET ]] && TARGET="bzImage"
-[[ -z $CFG_FILE ]] && CFG_FILE="/boot/config-$(uname -r)"
-[[ -z $TARGETDIR ]] && TARGETDIR="$HOME/vm/rootfs"
+BUILD=${BUILD:-"bzImage"}
+CFG_FILE=${CFG_FILE:-"/boot/config-$(uname -r)"}
+TARGETDIR=${TARGETDIR:-"$HOME/vm/rootfs"}
+LOCALVERSION=${LOCALVERSION:-"ocssd"}
 
 isEmptyFolder() 
 {
@@ -36,23 +39,46 @@ isEmptyFolder()
 MakeConfig() {
     make clean
     cp $1 .config
+    cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
     make olddefconfig
 }
 
 KernelBuild() {
     make prepare
     make scripts
-    make -j `getconf _NPROCESSORS_ONLN` $1 LOCALVERSION=-ocssd
+    make -j `getconf _NPROCESSORS_ONLN` $1 LOCALVERSION=-$LOCALVERSION
+}
+
+Install()
+{
+    local _TARGETDIR=$1
+    
+    if [ -z $_TARGETDIR ]; then
+        sudo make $INSTALL
+    else
+        sudo INSTALL_MOD_PATH=$_TARGETDIR INSTALL_HDR_PATH=$_TARGETDIR make $INSTALL
+    fi
 }
 
 ModuleInstall()
 {
     local _TARGETDIR=$1
     
+    if [ -z $_TARGETDIR ]; then
+        sudo make modules_install
+    else
+        sudo INSTALL_MOD_PATH=$_TARGETDIR make modules_install
+    fi
+}
+
+HeaderInstall()
+{
+    local _TARGETDIR=$1
+    
     if ( isEmptyFolder $_TARGETDIR ); then
         echo empty folder $_TARGETDIR
     else
-        sudo INSTALL_MOD_PATH=$_TARGETDIR make modules_install
+        sudo INSTALL_HDR_PATH=$_TARGETDIR make headers_install
     fi
 }
 
