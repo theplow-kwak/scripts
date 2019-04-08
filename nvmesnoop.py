@@ -23,7 +23,7 @@ import argparse
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import threading
 
 
@@ -35,8 +35,7 @@ prog = """
 #include <linux/nvme.h>
 
 struct val_t {
-    u64 ts;
-    bool admin;
+    bool isAdminCmd;
     char taskid[TASK_COMM_LEN];
 };
 
@@ -49,6 +48,8 @@ struct data_t {
     u8 stream;
     char disk_name[DISK_NAME_LEN];
     char taskid[TASK_COMM_LEN];
+    u64 start_time_ns;
+    u64 io_start_time_ns;    
 };
 
 struct nvme_request {
@@ -72,13 +73,12 @@ int trace_req_start(struct pt_regs *ctx, struct nvme_ns *ns, struct request *req
     struct val_t val = {};
 
     if(ns)
-        val.admin = 0;
+        val.isAdminCmd = 0;
     else
-        val.admin = 1;
+        val.isAdminCmd = 1;
     
     FILTER_ADMIN
     
-    val.ts = bpf_ktime_get_ns();
     bpf_get_current_comm(&val.taskid, sizeof(val.taskid));
     start.update(&req, &val);
 
@@ -88,7 +88,7 @@ int trace_req_start(struct pt_regs *ctx, struct nvme_ns *ns, struct request *req
 int trace_req_completion(struct pt_regs *ctx, struct request *req)
 {
     u64 tsp,ts;
-    bool admin;
+    bool isAdminCmd;
     u16 opcode;
     struct val_t *valp;
     struct data_t data = {};
@@ -99,12 +99,12 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
         return 0;
     }
     
-    tsp = valp->ts;
-    admin = valp->admin;
+    tsp = req->io_start_time_ns;
+    isAdminCmd = valp->isAdminCmd;
     bpf_probe_read(&data.taskid, sizeof(data.taskid), valp->taskid);
     start.delete(&req);
     
-    if (admin) {
+    if (isAdminCmd) {
         data.opcode = (((struct nvme_request*)(req+1))->cmd)->common.opcode | 0x100;
     } else {
         struct gendisk *rq_disk = req->rq_disk;
@@ -125,6 +125,8 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
     ts = bpf_ktime_get_ns();
     data.latency = ts - tsp;
     data.ts = tsp;
+    data.start_time_ns = req->start_time_ns;
+    data.io_start_time_ns = req->io_start_time_ns;
     
     events.perf_submit(ctx, &data, sizeof(data));
 
@@ -183,7 +185,9 @@ class Data(ct.Structure):
         ("ts", ct.c_ulonglong),
         ("stream", ct.c_byte),
         ("disk_name", ct.c_char * DISK_NAME_LEN),
-        ("taskid", ct.c_char * TASK_COMM_LEN)
+        ("taskid", ct.c_char * TASK_COMM_LEN),
+        ("start_time_ns", ct.c_ulonglong),
+        ("io_start_time_ns", ct.c_ulonglong),
     ]
 
 
@@ -212,7 +216,7 @@ class CaptureNvme(CaptureThread):
     nvmedata = RingBuffer(200000)
 
     def __init__(self, dev=None, filename=None, verbose='t'):
-        super().__init__(filename, verbose)
+        super(CaptureNvme, self).__init__(filename, verbose)
         self.count = 0
 
         self.streaminfo = StreamInfo(8)
@@ -231,8 +235,8 @@ class CaptureNvme(CaptureThread):
 
     def run(self):
         # loop with callback to print_event
-        self.bcc["events"].open_perf_buffer(self.get_event, page_cnt=1024 * 64 )
-        super().run()
+        self.bcc["events"].open_perf_buffer(self.get_event, page_cnt=4096 * 64 )
+        super(CaptureNvme, self).run()
 
     # process event
     def get_event(self, cpu, data, size):
@@ -250,7 +254,7 @@ class CaptureNvme(CaptureThread):
 
 
     def work(self):
-        self.bcc.perf_buffer_poll()
+        self.bcc.perf_buffer_poll(1000)
 
 
     def summary(self):
@@ -337,56 +341,6 @@ def ViewResult(filename):
 
     plt.show()
     return trace_datas
-
-
-import sys
-from PyQt5 import QtCore, QtGui
-import pyqtgraph as pg
-
-
-class App(QtGui.QMainWindow):
-    def __init__(self, parent=None):
-        super(App, self).__init__(parent)
-
-        #### Create Gui Elements ###########
-        self.mainbox = QtGui.QWidget()
-        self.setCentralWidget(self.mainbox)
-        self.mainbox.setLayout(QtGui.QVBoxLayout())
-
-        self.canvas = pg.GraphicsLayoutWidget()
-        self.mainbox.layout().addWidget(self.canvas)
-
-        self.label = QtGui.QLabel()
-        self.mainbox.layout().addWidget(self.label)
-
-        self.view = self.canvas.addViewBox()
-        self.view.setAspectLocked(True)
-        self.view.setRange(QtCore.QRectF(0,0, 100, 100))
-
-        self.canvas.nextRow()
-        #  line plot
-        self.otherplot = self.canvas.addPlot()
-        self.h2 = self.otherplot.plot(pen='y')
-
-        self.x = np.linspace(0,50., num=200000)
-
-        self.nvmesnoop = CaptureNvme(filename='test', verbose='s')
-        self.nvmesnoop.start()
-
-        self._update()
-
-
-    def _update(self):
-
-        self.nvmedata = np.array(self.nvmesnoop.getdata())
-        if len(self.nvmedata):
-            self.ydata = list(self.nvmedata[:,5])
-        else:
-            self.ydata = []
-
-        self.h2.setData(self.ydata)
-
-        QtCore.QTimer.singleShot(10, self._update)
 
 
 def main():

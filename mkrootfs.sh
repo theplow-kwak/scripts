@@ -48,12 +48,15 @@ FormatDisk()
 MakeRootFS()
 {
     local _TARGETDIR=$1
+    local _DESTRO="cosmic"
+    
     if [[ ! $(findmnt $_TARGETDIR) ]]; then
         echo $_TARGETDIR does not mounted !! stop processing !
         exit 1
     fi
 
-    sudo debootstrap --verbose --arch amd64 bionic $_TARGETDIR http://archive.ubuntu.com/ubuntu
+    echo debootstrap --verbose --arch amd64 $_DESTRO $_TARGETDIR http://archive.ubuntu.com/ubuntu
+    sudo debootstrap --verbose --arch amd64 $_DESTRO $_TARGETDIR http://archive.ubuntu.com/ubuntu
 
     pushd $_TARGETDIR
 
@@ -81,22 +84,22 @@ MakeRootFS()
         | sudo dd of=./etc/netplan/01-network-all.yaml
 
     printf "%s\n" \
-        "deb http://kr.archive.ubuntu.com/ubuntu/ bionic main restricted universe multiverse" \
-        "deb-src http://kr.archive.ubuntu.com/ubuntu/ bionic main restricted universe multiverse" \
+        "deb http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO main restricted universe multiverse" \
+        "deb-src http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO main restricted universe multiverse" \
         "" \
-        "deb http://kr.archive.ubuntu.com/ubuntu/ bionic-updates main restricted universe multiverse" \
-        "deb-src http://kr.archive.ubuntu.com/ubuntu/ bionic-updates main restricted universe multiverse" \
+        "deb http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-updates main restricted universe multiverse" \
+        "deb-src http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-updates main restricted universe multiverse" \
         "" \
-        "deb http://kr.archive.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse" \
-        "deb-src http://kr.archive.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse" \
+        "deb http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-security main restricted universe multiverse" \
+        "deb-src http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-security main restricted universe multiverse" \
         | sudo dd of=./etc/apt/sources.list
 
     printf "%s\n" \
         "dpkg-reconfigure tzdata" \
         "apt update" \
-        "apt install language-pack-ko" \
-        "apt install openssh-server" \
-        "apt install tasksel net-tools nvme-cli" \
+        "apt install -y language-pack-ko" \
+        "apt install -y openssh-server" \
+        "apt install -y tasksel net-tools nvme-cli" \
         "tasksel install standard" \
         "apt upgrade" \
         "adduser $UNAME" \

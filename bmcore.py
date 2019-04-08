@@ -80,7 +80,7 @@ class CaptureThread(threading.Thread):
     header = ['timestamp', 'count']
 
     def __init__(self, filename=None, verbose='s'):
-        super().__init__()
+        super(CaptureThread, self).__init__()
         self.exit = threading.Event()
         self.verbose = verbose
         self.tag = 0
@@ -91,6 +91,9 @@ class CaptureThread(threading.Thread):
         if 't' in self.verbose:
             self.verbose += 'c'
             self.interval = 1
+        if 'a' in self.verbose:
+            self.verbose += 'c'
+            self.interval = 0
 
     def fileopen(self):
         import csv

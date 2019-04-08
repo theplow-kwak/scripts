@@ -18,14 +18,49 @@ done
 
 shift $(($OPTIND-1)) 
 
+on()
+{
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
+sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/scsi/enable'
+sudo sh -c 'echo block_rq_complete >> /sys/kernel/debug/tracing/set_event'
+#sudo sh -c 'echo block_rq_insert >> /sys/kernel/debug/tracing/set_event'
+sudo sh -c 'echo block_rq_issue >> /sys/kernel/debug/tracing/set_event'
+sudo sh -c 'echo block_rq_remap >> /sys/kernel/debug/tracing/set_event'
+sudo sh -c 'echo block_rq_requeue >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
 sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
+}
 
-if [ $getlog == 1 ]
-then
-    sudo cat /sys/kernel/debug/tracing/trace_pipe > ${outfile}
-else
-    sudo cat /sys/kernel/debug/tracing/trace_pipe | python3 ${parserpath}traceparser.py -v $@
-fi
+off()
+{
+sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
+sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/tracing_on'
+sudo sh -c 'echo > /sys/kernel/debug/tracing/set_event'
+}
+
+log()
+{
+    OUTFILE_NAME=${1:-"tracelog.log"}
+
+    if [[ -z $1 ]]
+    then
+        echo sudo cat /sys/kernel/debug/tracing/trace_pipe 
+        sudo cat /sys/kernel/debug/tracing/trace_pipe 
+    else
+        echo sudo cat /sys/kernel/debug/tracing/trace_pipe > ${OUTFILE_NAME}
+        sudo cat /sys/kernel/debug/tracing/trace_pipe > ${OUTFILE_NAME}
+    fi
+}
+
+echo $1 $2
+$1 $2
+
+#if [ $getlog == 1 ]
+#then
+#    tracingOn
+#    sudo cat /sys/kernel/debug/tracing/trace_pipe > ${outfile}
+#else
+#    tracingOn
+#    sudo cat /sys/kernel/debug/tracing/trace_pipe | python3 ${parserpath}traceparser.py -v $@
+#fi
 

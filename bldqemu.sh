@@ -4,8 +4,8 @@ TARGET=${PWD##*/}
 
 while getopts ":p:P:" opt; do
     case $opt in
-        p)  TARGET=$OPTARG ;;     # Specify a new ssh port.
-        P)  PREFIX=$OPTARG ;;       # Remove existing SSH keys and specify a new ssh port.
+        p)  TARGET=$OPTARG ;;
+        P)  PREFIX=$OPTARG ;;
         *)  usage ;;
     esac
 done 

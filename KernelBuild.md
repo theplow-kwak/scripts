@@ -1,10 +1,16 @@
+Ubuntu 환경에서 Linux kernel source를 다운 받고 build 하는 방법을 설명한다.
+
+Kernel source를 Linux org에서 받을수도 있겠지만, 여기서는 Ubuntu 배포판의 환경을 그대로 사용할 수 있도록 한다.  
+
+
+
 # Bulid your own kernel with NVMe linux kernel driver
 
-This document was written in Ubuntu 18.04 based on linux kernel v.4.15. The kernel build refers to the [BuildYourOwnKernel](https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel) page of the Ubuntu wiki.
+참고 page: The kernel build refers to the [BuildYourOwnKernel](https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel) page of the Ubuntu wiki.
 
 
 
-Obtaining the source for an Ubuntu release 
+먼저 apt를 이용하여 Ubuntu release의 kernel source code를 다운 받는다.
 
 ```bash
 apt source linux-headers-$(uname -r)

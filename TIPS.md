@@ -1,5 +1,6 @@
-
 # pre-install tools 
+
+Ubuntu를 기본 설치 후 개발 작업을 진행하기 위해 필요한 package들을 미리 설치한다. 
 
 ```bash
 sudo apt install make 
@@ -15,7 +16,9 @@ sudo apt install libglib2.0-dev libpixman-1-dev libxen-dev libgtk-3-dev
 ```
 
 
+
 # kernel tracing on ubuntu
+
 > https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel#Obtaining_the_source_for_an_Ubuntu_release
 
 ## get kernel source 
@@ -30,8 +33,6 @@ sudo apt build-dep linux-headers-$(uname -r)
 ```
 dpkg-source -x linux_4.15.0-38.41.dsc
 ```
-
-
 
 ## kernel tracing patch
 
@@ -80,7 +81,7 @@ sudo cat /sys/kernel/debug/tracing/trace_pipe | tee ./nvme.log
 
 
 
-# nvme-cli
+# nvme-cli 사용 예제
 
 ```bash
 sudo nvme id-ctrl /dev/nvme0
@@ -90,7 +91,7 @@ sudo nvme smart-log /dev/nvme0
 
 
 
-# bcc 
+# bcc 설치 
 
 ```bash
 sudo apt install cmake clang libedit-dev llvm libclang-dev luajit libfl-dev
@@ -99,8 +100,8 @@ sudo apt install netperf iperf
 
 git clone https://github.com/iovisor/bcc.git
 mkdir bcc/build; cd bcc/build
-cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DPYTHON_CMD=python3
-make
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DPYTHON_CMD=python3 -DLLVM_LIBRARY_DIRS=/usr/lib/llvm-7/lib
+make -j `getconf _NPROCESSORS_ONLN`
 sudo make install
 ```
 
@@ -159,6 +160,8 @@ Exec=env LC_ALL=C BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/git
 
 # OS disk 이동
 
+Ubuntu 설치 디스크를 다른 디스크로 변경하려고 한다. 
+
  ```
 mkdir src dest
 sudo mkfs.ext4 /dev/nvme1n1p2
@@ -175,6 +178,8 @@ sudo umount src dest
 
 
 # Deleting a git commit
+
+Git server에 지저분하게 커밋된것들을 다 지우고 필요한 항목만 선정하여 깨끝하게 다시 커밋하고 싶을때 사용.
 
 ## Example git log
 
@@ -224,3 +229,36 @@ Say we want to remove commits 2 & 4 from the repo.
 6. `git reset --hard b3d92c5` Reset master to last usable commit.
 7. `git merge repair` Merge our new branch onto master.
 8. `git push --hard origin master` Push master to the remote repo.
+
+
+
+# Windows 10에서 samba server 인증 안되는 경우 해결 방안
+
+Windows 10에서 samba server에 연결이 안되고 계속 인증 에러가 나는 경우 발생. ubuntu에서 `sudo smbstatus`로 확인 결과 user name이 ***nobody***로 바뀌어 있다.
+
+```
+Samba version 4.8.4-Ubuntu
+PID     Username     Group        Machine                                   Protocol Version  Encryption           Signing              
+----------------------------------------------------------------------------------------------------------------------------------------
+3406    nobody       nogroup      10.152.126.210 (ipv4:10.152.126.210:61267) SMB3_11           -                    -                    
+```
+
+
+
+- Ubuntu samba에서 설정하는 방법:
+
+You can also fix this on the server (Ubuntu 18.04.1 LTS) side: In `/etc/samba/smb.conf`, put:
+
+```
+ntlm auth = true
+```
+
+
+
+- Windows에서 설정하는 방법:
+
+if anyone else runs into this problem, my solution was to adjust the security policies on the Windows client.
+
+`Run > Secpol.msc`
+
+then I set Local Policies > Security Options > Network Security: LAN Manager authentication level to 'Send NTLMv2 response only. Refuse LM & NTLM'
