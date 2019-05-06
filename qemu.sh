@@ -85,8 +85,8 @@ runQEMU()
         gdb -q --args $QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG -append "root=/dev/vda vga=0x300" 
     else
         echo $QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG -append "root=/dev/vda vga=0x300" 
-#        $QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG -append "root=/dev/vda vga=0x300" &
-        $QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $DEBUG &
+        $QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG -append "root=/dev/vda vga=0x300" &
+#        $QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $DEBUG &
         sleep 1
     fi
 }

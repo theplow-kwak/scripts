@@ -19,11 +19,44 @@ sudo apt build-dep linux-headers-$(uname -r)
 
 
 
+# Kernel build 
+
+Kernel을 빌드하기 위한 두가지 방법을 설명한다. 첫번째는 Linux의 build 방식이고, 두번째는 Ubuntu kernel의 데비안 패키지 빌드 방식 
+
+## Build Kernel by upstream way
+
+```bash
+cd linux-xxx
+cp /boot/config-$(uname -r) .config
+cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
+
+make olddefconfig
+make prepare
+make scripts
+make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-nvme
+make -j `getconf _NPROCESSORS_ONLN` bzImage modules LOCALVERSION=-nvme
+sudo make headers_install modules_install install
+```
+
+## reference of module-signing 
+
+> https://github.com/Canonical-kernel/Ubuntu-kernel/blob/master/Documentation/module-signing.txt
+
+## reference of kernel build options 
+
+> https://www.linuxsecrets.com/2826-kernel-headers-from-source
+
+
+
+
+
 ## Modifying the configuration
 
 In order to make your kernel "newer" than the stock Ubuntu kernel from which you are based you should add a local version modifier. Add something like **'.nvme'** to the end of the first version number in the `debian.master/changelog` file, before building.
 
 *"linux (4.15.0-38**.nvme**) bionic; urgency=medium"*
+
+
 
 ## Patching NVMe kernel tracing related files. 
 
@@ -111,26 +144,4 @@ sudo nvme smart-log /dev/nvme0
 ```
 
 
-
-# Another way to build the kernel
-
-## Build Kernel by upstream way
-```bash
-cd linux-xxx
-cp /boot/config-$(uname -r) .config
-cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
-
-make olddefconfig
-make prepare
-make scripts
-make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-nvme
-make -j `getconf _NPROCESSORS_ONLN` bzImage modules LOCALVERSION=-nvme
-sudo make headers_install modules_install install
-```
-
-## reference of module-signing 
-> https://github.com/Canonical-kernel/Ubuntu-kernel/blob/master/Documentation/module-signing.txt
-
-## reference of kernel build options 
-> https://www.linuxsecrets.com/2826-kernel-headers-from-source
 

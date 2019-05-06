@@ -18,24 +18,34 @@ done
 
 shift $(($OPTIND-1)) 
 
-on()
+set()
 {
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/scsi/enable'
-sudo sh -c 'echo block_rq_complete >> /sys/kernel/debug/tracing/set_event'
 #sudo sh -c 'echo block_rq_insert >> /sys/kernel/debug/tracing/set_event'
+sudo sh -c 'echo block_rq_complete >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_issue >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_remap >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_requeue >> /sys/kernel/debug/tracing/set_event'
-sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+}
+
+reset()
+{
+sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/events/nvme/enable'
+sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/events/scsi/enable'
+sudo sh -c 'echo > /sys/kernel/debug/tracing/set_event'
+}
+
+on()
+{
 sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
+sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
 }
 
 off()
 {
-sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
 sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/tracing_on'
-sudo sh -c 'echo > /sys/kernel/debug/tracing/set_event'
+sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
 }
 
 log()
