@@ -262,3 +262,65 @@ if anyone else runs into this problem, my solution was to adjust the security po
 `Run > Secpol.msc`
 
 then I set Local Policies > Security Options > Network Security: LAN Manager authentication level to 'Send NTLMv2 response only. Refuse LM & NTLM'
+
+
+
+# 레드햇에서 YUM 사용하는 방법
+
+1. CD 이용하여 local repo 사용
+
+   vi /etc/yum.repos.d/local.repo 
+
+   ```
+   [local-repo]
+   name=Local Repository
+   baseurl=file:///localrepo/
+   enabled=1
+   gpgcheck=0
+   ```
+
+2. CENTOS repo 사용하기
+
+   vi /etc/yum.repos.d/rhel-source.repo
+
+   ```
+   [base]
+   name=CentOS-$releasever - Base
+   baseurl=http://mirror.centos.org/centos/7/os/$basearch/
+   gpgcheck=1
+   
+   #released updates
+   [update]
+   name=CentOS-$releasever - Updates
+   baseurl=http://mirror.centos.org/centos/7/updates/$basearch/
+   gpgcheck=1
+   ```
+
+   rpm --import http://mirror.centos.org/centos/7/os/x86_64/RPM-GPG-KEY-CentOS-7 
+
+이후 yum repolist all 로 확인
+
+
+
+# CentOS / RHEL 7 : Eable To Start The Samba Service
+
+**Configure SELinux to allow SAMBA services**
+In case if you do not want to disable SELinux, you can review the SELinux policy allowing the SAMBA subsystem to run. To check the current SELinux policies, use the below commands.
+
+```
+# getsebool -a | grep samba
+# getsebool -a | grep nmb
+```
+
+This should give a list of options and whether these are on or off. They should be on. The settings can be changed using the commands given below.
+Syntax :
+
+```
+# setsebool -P [boolean] on
+```
+
+For example:
+
+```
+# setsebool -P bacula_use_samba on
+```

@@ -18,15 +18,22 @@ done
 
 shift $(($OPTIND-1)) 
 
+stringContain() { [ -z "${2##*$1*}" ]; }
+
 set()
 {
-sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
-sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/scsi/enable'
+TARGET=${1:-"scsi block nvme"}
+
+if stringContain "nvme" "$TARGET"; then sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'; fi
+if stringContain "scsi" "$TARGET"; then sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/scsi/enable'; fi
+if stringContain "block" "$TARGET"
+then 
 #sudo sh -c 'echo block_rq_insert >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_complete >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_issue >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_remap >> /sys/kernel/debug/tracing/set_event'
 sudo sh -c 'echo block_rq_requeue >> /sys/kernel/debug/tracing/set_event'
+fi
 }
 
 reset()
@@ -62,15 +69,7 @@ log()
     fi
 }
 
-echo $1 $2
-$1 $2
+echo $1 "$2"
+$1 "$2"
 
-#if [ $getlog == 1 ]
-#then
-#    tracingOn
-#    sudo cat /sys/kernel/debug/tracing/trace_pipe > ${outfile}
-#else
-#    tracingOn
-#    sudo cat /sys/kernel/debug/tracing/trace_pipe | python3 ${parserpath}traceparser.py -v $@
-#fi
 
