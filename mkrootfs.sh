@@ -5,14 +5,18 @@ CHROOT=0
 FORMAT=0
 MKROOT=0
 UNAME=$USERNAME
+TARGETDIR="$PWD/rootfs"
 
-while getopts ":ucfrn:" opt; do
+while getopts ":ucfmn:d:s:t:" opt; do
     case $opt in
         u)  UNLOAD=1 ;;	
         c)  CHROOT=1 ;;
         f)  FORMAT=1 ;;
-        r)  MKROOT=1 ;;
+        m)  MKROOT=1 ;;
         n)  UNAME=$OPTARG ;;
+        d)  DESTRO=$OPTARG ;;
+        s)  SIZE=$OPTARG ;;
+        t)  TARGETDIR=$OPTARG ;;
         \?) echo "Invalid option: -$OPTARG" >&2 
             exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2 
@@ -22,11 +26,13 @@ done
 
 shift $(($OPTIND-1)) 
 
-IMGFILE=${1:-"/dev/nvme0n1p2"}
-TARGETDIR=${2:-"$PWD/rootfs"}
+IMGFILE=${1:-"/dev/nvme1n1p1"}
+IMGSIZE=${SIZE:-"16g"}
+TARGETDIR=${2:-"$TARGETDIR"}
 
 isEmptyFolder() 
 {
+    [ -d $1 ] || return 1 
     local _count=`find $1 -mindepth 1 -maxdepth 1 | wc -l`
     [ $_count -eq 0 ] && return 0 || return 1
 }
@@ -36,7 +42,8 @@ FormatDisk()
     local _IMGFILE=$1
 
     if [ ! -e $_IMGFILE ]; then
-        dd if=/dev/zero of=$_IMGFILE bs=1M count=32768
+        qemu-img create $_IMGFILE $IMGSIZE
+        # dd if=/dev/zero of=$_IMGFILE bs=1M count=32768
     fi
     if [ -u $_IMGFILE ]; then
         mkfs.ext4 $_IMGFILE
@@ -48,7 +55,7 @@ FormatDisk()
 MakeRootFS()
 {
     local _TARGETDIR=$1
-    local _DESTRO="cosmic"
+    local _DESTRO=${DESTRO:-"cosmic"}
     
     if [[ ! $(findmnt $_TARGETDIR) ]]; then
         echo $_TARGETDIR does not mounted !! stop processing !
@@ -64,8 +71,8 @@ MakeRootFS()
     printf "%s\n" \
         "# UNCONFIGURED FSTAB FOR BASE SYSTEM" \
         "#" \
-        "/dev/vda       /               ext4    defaults        1 1" \
-        "sharepoint     /mnt/host       9p      trans=virtio    0 0" \
+        "/dev/sda       /               ext4    defaults        1 1" \
+        "# sharepoint     /mnt/host       9p      trans=virtio    0 0" \
         | sudo dd of=./etc/fstab
 
     printf "%s\n" \
@@ -125,6 +132,8 @@ MountFolder() {
         sudo mount -o loop $_IMGFILE $_TARGETDIR
     else
         echo "$_TARGETDIR was not empty. can't mount $_IMGFILE"
+        MKROOT=0
+        CHROOT=0
     fi
 }
 

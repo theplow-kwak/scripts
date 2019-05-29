@@ -324,3 +324,35 @@ For example:
 ```
 # setsebool -P bacula_use_samba on
 ```
+
+
+
+# ftrace를 이용한 디버깅 방법
+
+- call graph 출력
+
+current_tracer에 function_graph를 설정하고 set_graph_function에 보고자 하는 function name을 설정한다.
+
+function_graph를 종료하고 싶을때는 current_tracer에 nop를 설정
+
+```bash
+cd /sys/kernel/debug/tracing/
+echo function_graph > current_tracer
+echo scsi_queue_rq > set_graph_function
+cat trace_pipe 
+echo nop > current_tracer
+```
+
+```
+echo 1 > /proc/sys/kernel/stack_tracer_enabled
+stacktrace
+```
+
+
+
+# 유용한 shell script
+
+```
+for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
+```
+
