@@ -1,6 +1,6 @@
 #!/bin/bash
 
-UNAME=$SUDO_USER
+UNAME=${SUDO_USER:-$USER}
 SSHCON=0
 RMSSH=0
 GDB=0
@@ -56,7 +56,13 @@ runQEMU()
     KERNEL="-kernel ${KERNEL_IMAGE:-"$HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage"}"
     INITRD="-initrd ${KERNEL_IMAGE/"vmlinuz"/"initrd.img"}"
 
-    OPT="-m 8G -smp 8 --enable-kvm -vga qxl"
+    if [[ $GRAPHIC -eq 1 ]]; then
+        OPT="-m 8G -smp 8 --enable-kvm -vga qxl"
+        PARAM="root=/dev/sda vga=0x300"
+    else
+        OPT="-m 8G -smp 8 --enable-kvm -nographic -serial mon:stdio"
+        PARAM="root=/dev/sda console=ttyS0"
+    fi
     DEBUG="--trace events=$HOME/vm/$BASE/events"
 
     USERVERCD="-cdrom $HOME/vm/cd/ubuntu-18.10-live-server-amd64.iso"
@@ -64,7 +70,7 @@ runQEMU()
     WINCD="-cdrom $HOME/vm/cd/Win10_1809Oct_Korean_x64.iso"
 
     OCSSD="\
-      -drive file=$OCSSD_BACKEND,id=myocssd,format=raw,if=none \
+      -drive file=$OCSSD_BACKEND,id=myocssd,format=raw,if=none,cache=none \
       -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"
     GEMINI="\
       -object iothread,id=iothread0 \
@@ -91,15 +97,14 @@ runQEMU()
     SPICE="-vga qxl -spice port=3001,disable-ticketing"
     SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
 
-    CMD="$QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG $MONITOR"
-    [[ -z $KERNEL_IMAGE ]] || CMD+=" $INITRD"
+    CMD="$QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG"
+    [[ ! -z $KERNEL_IMAGE ]] && CMD+=" $INITRD"
     
     if [ $GDB -eq 1 ]; then
         gdb -q --args $CMD -append "root=/dev/sda vga=0x300" 
     else
-        echo $CMD -append "root=/dev/sda vga=0x300" 
-        sudo $CMD -append "root=/dev/sda vga=0x300" &
-        sleep 1
+        echo $CMD -append $PARAM 
+        gnome-terminal -- sudo $CMD -append "$PARAM" 
     fi
 }
 
@@ -111,12 +116,8 @@ RemoveSSH()
 [[ -d $HOME/vm/$BASE ]] || mkdir $HOME/vm/$BASE
 pushd $HOME/vm/$BASE
 
-[[ $SSHCON -eq 0 ]] && runQEMU 
-
 [[ $RMSSH -eq 1 ]] && RemoveSSH
-
-# gnome-terminal -- bash -c "ssh $UNAME@localhost -p $SSHPORT" &
-# ( ssh $UNAME@localhost -p $SSHPORT )
+[[ $SSHCON -eq 0 ]] && runQEMU || gnome-terminal -- ssh $UNAME@localhost -p $SSHPORT
 
 popd
 

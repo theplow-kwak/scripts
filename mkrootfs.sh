@@ -4,7 +4,7 @@ UNLOAD=0
 CHROOT=0
 FORMAT=0
 MKROOT=0
-UNAME=$USERNAME
+UNAME=${SUDO_USER:-$USER}
 TARGETDIR="$PWD/rootfs"
 
 while getopts ":ucfmn:d:s:t:" opt; do
@@ -133,7 +133,6 @@ MountFolder() {
     else
         echo "$_TARGETDIR was not empty. can't mount $_IMGFILE"
         MKROOT=0
-        CHROOT=0
     fi
 }
 

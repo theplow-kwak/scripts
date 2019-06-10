@@ -5,12 +5,13 @@ MKCONFIG=0
 
 while getopts ":b:i:t:cC:l:" opt; do
     case $opt in
-        b)  [ $OPTARG == 'k' ] && BUILD+=" bzImage"
-            [ $OPTARG == 'm' ] && BUILD+=" modules"
-            [ $OPTARG == 'd' ] && BUILD+=" bindeb-pkg" ;;
-        i)  [ $OPTARG == 'k' ] && INSTALL+=" bzImage"
-            [ $OPTARG == 'm' ] && INSTALL+=" modules_install"
-            [ $OPTARG == 'h' ] && INSTALL+=" headers_install" ;;
+        b)  [[ $OPTARG =~ 'k' ]] && BUILD+=" bzImage"
+            [[ $OPTARG =~ 'm' ]] && BUILD+=" modules"
+            [[ $OPTARG =~ 'd' ]] && BUILD+=" deb-pkg"
+            [[ $OPTARG =~ 'b' ]] && BUILD+=" bindeb-pkg" ;;
+        i)  [[ $OPTARG =~ 'h' ]] && INSTALL+=" headers_install"
+            [[ $OPTARG =~ 'm' ]] && INSTALL+=" modules_install"
+            [[ $OPTARG =~ 'k' ]] && INSTALL+=" install" ;;
         t)  TARGETDIR=$OPTARG ;;
         l)  LOCALVERSION=$OPTARG ;;
         c)  MKCONFIG=1 ;;
@@ -28,7 +29,10 @@ shift $(($OPTIND-1))
 # BUILD=${BUILD:-"bzImage"}
 CFG_FILE=${CFG_FILE:-"/boot/config-$(uname -r)"}
 TARGETDIR=${TARGETDIR:-"$PWD/rootfs"}
-LOCALVERSION=${LOCALVERSION:-"ocssd"}
+LOCALVERSION=${LOCALVERSION:-"custom"}
+KVER=$(make kernelversion)-$LOCALVERSION
+# KSRC="-C $PWD"
+# export KBUILD_OUTPUT=$TARGETDIR/usr/src/$KVER
 
 isEmptyFolder() 
 {
@@ -38,20 +42,19 @@ isEmptyFolder()
 }
 
 MakeConfig() {
-    make clean
+    sudo make $KSRC clean
     cp $CFG_FILE .config
-    # cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
-    make olddefconfig
+    cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
+    make $KSRC olddefconfig
 }
 
 KernelBuild() {
-    echo $TARGETDIR $1
+    echo $TARGETDIR $BUILD
 
-    make prepare
-    make modules_prepare
-    make scripts
-    echo make -j `getconf _NPROCESSORS_ONLN` $1 LOCALVERSION=-$LOCALVERSION
-    make -j `getconf _NPROCESSORS_ONLN` $1 LOCALVERSION=-$LOCALVERSION
+    make $KSRC prepare && make $KSRC modules_prepare && make $KSRC scripts
+    local _CMD="make $KSRC -j `getconf _NPROCESSORS_ONLN` $BUILD LOCALVERSION=-$LOCALVERSION"
+    echo $_CMD
+    $_CMD
 }
 
 Install()
@@ -65,37 +68,30 @@ Install()
         if ( isEmptyFolder $_TARGETDIR ); then
             echo empty folder $_TARGETDIR
         else
-            echo sudo make INSTALL_MOD_PATH=$_TARGETDIR INSTALL_HDR_PATH=$_TARGETDIR/usr/src/$(make kernelversion) $INSTALL
-            sudo make INSTALL_MOD_PATH=$_TARGETDIR INSTALL_HDR_PATH=$_TARGETDIR/usr/src/$(make kernelversion) $INSTALL
+            local _CMD="make $KSRC INSTALL_PATH=$_TARGETDIR/boot INSTALL_MOD_PATH=$_TARGETDIR INSTALL_HDR_PATH=$_TARGETDIR/usr/src/$KVER $INSTALL"
+            echo $_CMD
+            sudo $_CMD && { 
+                            sudo rm $_TARGETDIR/lib/modules/$KVER/build ;
+                            sudo rm $_TARGETDIR/lib/modules/$KVER/source ;
+                            sudo ln -s /usr/src/$KVER $_TARGETDIR/lib/modules/$KVER/build ;
+                            sudo ln -s /usr/src/$KVER $_TARGETDIR/lib/modules/$KVER/source ; }
         fi
     fi
 }
 
-ModuleInstall()
-{
-    local _TARGETDIR=$1
-    
-    if [ -z $_TARGETDIR ]; then
-        sudo make modules_install
-    else
-        sudo INSTALL_MOD_PATH=$_TARGETDIR make modules_install
-    fi
+kpkgBuild() {
+    fakeroot make-kpkg -j `getconf _NPROCESSORS_ONLN` --append-to-version "-$LOCALVERSION" "$INSTALL"
 }
 
-HeaderInstall()
-{
-    local _TARGETDIR=$1
+kpkgInstall() {
     
-    if ( isEmptyFolder $_TARGETDIR ); then
-        echo empty folder $_TARGETDIR
-    else
-        sudo INSTALL_HDR_PATH=$_TARGETDIR make headers_install
-    fi
+
 }
+
 
 [ $MKCONFIG -eq 1 ] && MakeConfig $CFG_FILE
 
-KernelBuild $BUILD
+[[ ! -z $BUILD ]] && KernelBuild  
 
-[[ -z $INSTALL ]] || Install $TARGETDIR
+[[ ! -z $INSTALL ]] && Install $TARGETDIR
 
