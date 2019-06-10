@@ -22,10 +22,14 @@ while getopts ":sSp:P:b:n:dk:q:mr" opt; do
     esac
 done 
 
-BASE=${PWD##*/}
-[[ $BASE == *qemu* ]] && QEMU=${QEMU:-"$HOME/$BASE/bin/qemu-system-x86_64"}
+shift $(($OPTIND-1)) 
+
+BASE=${BASE:-${PWD##*/}}
+echo $BASE
+[[ $BASE == *ocssd* ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
 QEMU=${QEMU:-"qemu-system-x86_64"}
 
+VMHOME=${VMHOME:-"$HOME/vm"}
 
 runQEMU() 
 {
@@ -36,17 +40,17 @@ runQEMU()
     SSHPORT=5556
     NET="-netdev user,id=vmnic,hostfwd=tcp::$SSHPORT-:22 -device virtio-net,netdev=vmnic"
 
-    UEFI="-drive file=/usr/share/ovmf/OVMF.fd,if=pflash,format=raw,unit=0"
-    UEFI_VAR="-drive file=$HOME/.config/qemu-windows.nvram,if=pflash,format=raw,unit=1"
+    UEFI="-drive file=$VMHOME/bios/OVMF_CODE.fd,if=pflash,format=raw,unit=0 \
+          -drive file=$VMHOME/bios/OVMF_VARS.ms.fd,if=pflash,format=raw,unit=1"
 
-    WINHD="-drive file=/dev/sda,format=raw,cache=none"
-    WINCD="-cdrom $HOME/temp/Win10_1903_V1_Korean_x64.iso"
+    WINHD="-drive file=/dev/sdb,format=raw,cache=none"
+    WINCD="-cdrom $VMHOME/cd/Win10_1903_V1_Korean_x64.iso"
 
-    CMD="$QEMU $OPT $DISPLAY $UEFI $WINHD $WINCD $MONITOR $@"
+    CMD="$QEMU $OPT $DISPLAY $UEFI $WINHD $MONITOR $@"
     echo $CMD
     sudo $CMD
 }
 
-runQEMU
+runQEMU "$@"
 
 

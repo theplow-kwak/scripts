@@ -36,6 +36,7 @@ shift $(($OPTIND-1))
 
 QEMU=${QEMU:-"$HOME/$BASE/bin/qemu-system-x86_64"}
 OCSSD_BACKEND="$HOME/vm/image/ocssd_$BASE.img"
+VMHOME=${VMHOME:-"$HOME/vm"}
 
 if [[ $BASE == "qemu" ]]; then
     SSHPORT=5556
@@ -89,6 +90,9 @@ runQEMU()
       -drive file=boot.img,if=none,format=raw,discard=unmap,aio=native,cache=none,id=hd1 \
       -device virtio-blk-pci,drive=hd1,scsi=off,config-wce=off,iothread=iothread2"
 
+    UEFI="-drive file=$VMHOME/bios/OVMF_CODE.fd,if=pflash,format=raw,unit=0 \
+          -drive file=$VMHOME/bios/OVMF_VARS.ms.fd,if=pflash,format=raw,unit=1"
+
     SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=sharepoint"
     SHARE1="-virtfs local,id=fsdev1,path=$HOME/projects,security_model=passthrough,writeout=writeout,mount_tag=projects"
     NET="-netdev user,id=vmnic,hostfwd=tcp::$SSHPORT-:22 -device virtio-net,netdev=vmnic"
@@ -97,14 +101,14 @@ runQEMU()
     SPICE="-vga qxl -spice port=3001,disable-ticketing"
     SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
 
-    CMD="$QEMU $OPT $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG"
+    CMD="$QEMU $OPT $UEFI $OCSSD $SHARE0 $SHARE1 $NET $ROOTFS $KERNEL $DEBUG"
     [[ ! -z $KERNEL_IMAGE ]] && CMD+=" $INITRD"
     
     if [ $GDB -eq 1 ]; then
         gdb -q --args $CMD -append "root=/dev/sda vga=0x300" 
     else
         echo $CMD -append $PARAM 
-        gnome-terminal -- sudo $CMD -append "$PARAM" 
+        gnome-terminal -- sudo $CMD -append "$PARAM" -writeconfig ocssd.cfg 
     fi
 }
 
@@ -113,11 +117,11 @@ RemoveSSH()
     sudo ssh-keygen -f "/root/.ssh/known_hosts" -R "[localhost]:$SSHPORT"
 }
 
-[[ -d $HOME/vm/$BASE ]] || mkdir $HOME/vm/$BASE
-pushd $HOME/vm/$BASE
+[[ -d $VMHOME/$BASE ]] || mkdir $VMHOME/$BASE
+pushd $VMHOME/$BASE
 
 [[ $RMSSH -eq 1 ]] && RemoveSSH
-[[ $SSHCON -eq 0 ]] && runQEMU || gnome-terminal -- ssh $UNAME@localhost -p $SSHPORT
+[[ $SSHCON -eq 0 ]] && runQEMU "$@" || gnome-terminal -- ssh $UNAME@localhost -p $SSHPORT
 
 popd
 
