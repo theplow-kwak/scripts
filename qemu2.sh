@@ -36,7 +36,7 @@ runQEMU()
     SSHPORT=5556
     NET="-netdev user,id=vmnic,hostfwd=tcp::$SSHPORT-:22 -device virtio-net,netdev=vmnic"
 
-    UEFI="-bios /usr/share/ovmf/OVMF.fd"
+    UEFI="-drive file=/usr/share/ovmf/OVMF.fd,if=pflash,format=raw,unit=0"
     UEFI_VAR="-drive file=$HOME/.config/qemu-windows.nvram,if=pflash,format=raw,unit=1"
 
     WINHD="-drive file=/dev/sda,format=raw,cache=none"
