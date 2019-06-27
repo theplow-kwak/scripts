@@ -11,6 +11,34 @@ usage()
     exit 1
 }
 
+# wait until process start: process name, [timeout]
+waitUntil()
+{
+    local _PROCID=$1
+    local _timeout_cnt=${2:-10}
+    
+    until (ps -C $_PROCID > /dev/null); 
+    do 
+        ((_timeout_cnt--))
+        [[ $_timeout_cnt < 0 ]] && exit 1
+        sleep 1
+    done
+    exit 0
+}
+
+set_disks()
+{
+    local _disk_num=0
+    for _IMG in ${IMGs};
+    do
+      if [[ -b $_IMG ]] && [[ $_IMG != *nvme* ]]; then _disk_type="scsi-block"; else _disk_type="scsi-hd"; fi
+      DISKS+=" \
+        -drive file=$_IMG,id=drive-scsi$_disk_num,if=none,format=raw,discard=unmap,aio=native,cache=none \
+        -device $_disk_type,scsi-id=$_disk_num,drive=drive-scsi$_disk_num,id=scsi0-$_disk_num,bootindex=$_disk_num"
+      ((_disk_num++))
+    done
+}
+
 ocssd() 
 {
     KERNEL="-kernel ${KERNEL_IMAGE:="$HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage"}"
@@ -24,33 +52,38 @@ ocssd()
         PARAM="root=/dev/sda console=ttyS0"
     fi
 
-    OCSSD="\
-      -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-      -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"
-    DEBUG="--trace events=$VMHOME/$VMNAME/events"
+    IMGs=${IMGs:-"/dev/nvme1n1p1"}
 
     SCSI="\
       -object iothread,id=iothread0 \
       -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
-    ROOTFS="\
-      -drive file=${BOOTIMG:-"/dev/nvme1n1p1"},id=drive-scsi0,if=none,format=raw,discard=unmap,aio=native,cache=none \
-      -device scsi-hd,scsi-id=0,drive=drive-scsi0,id=scsi0-0"
+    set_disks
+    
+    OCSSD=${OCSSD-"\
+      -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+      -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
+      --trace events=$VMHOME/$VMNAME/events"}
 
     SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
     NET="-netdev user,id=vmnic,hostfwd=tcp::${SSHPORT:=5500}-:22 -device virtio-net,netdev=vmnic"
 
     VNC="-vnc localhost:1"
-    SPICE="-vga qxl -spice port=3001,disable-ticketing"
     SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
+    SPICEPORT=$(($SSHPORT+1))
+    SPICE="\
+      -vga qxl -spice port=$SPICEPORT,disable-ticketing \
+      -device virtio-serial \
+      -chardev spicevmc,id=vdagent,name=vdagent \
+      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
 
-    CMD="$QEMU $OPT $UEFI $NET $SCSI $ROOTFS $OCSSD $DEBUG $SHARE0 $KERNEL $INITRD"
+    CMD=($QEMU $OPT $UEFI $NET $SCSI $DISKS $OCSSD $SPICE $SHARE0 $KERNEL $INITRD -append "$PARAM" $@)
     
-    if [ $GDB -eq 1 ]; then
+    if [[ $GDB -eq 1 ]]; then
         gdb -q --args $CMD -append "$PARAM"
     else
-        echo $CMD -append $PARAM 
-        (ps -C $VMPROCID > /dev/null) || $G_TERM sudo $CMD -append "$PARAM"
-        until (ps -C $VMPROCID > /dev/null); do sleep 1; done; $G_TERM ssh $UNAME@localhost -p $SSHPORT
+        echo "${CMD[@]}"
+        (waitUntil $VMPROCID 0) || $G_TERM sudo "${CMD[@]}" 
+        (waitUntil $VMPROCID) && $G_TERM ssh $UNAME@localhost -p $SSHPORT 
     fi
 }
 
@@ -58,22 +91,17 @@ windows()
 {
     OPT+=" -machine q35,accel=kvm -device intel-iommu -vga qxl"
 
-    OS_SRC="/dev/sdb" 
-
-    OCSSD="\
-      -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-      -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"
-    DEBUG="--trace events=$VMHOME/$VMNAME/events"
+    IMGs=${IMGs:-"win10_1809.img /dev/sdb"}
 
     SCSI="\
       -object iothread,id=iothread0 \
       -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
-    ROOTFS="\
-      -drive file=${BOOTIMG:-"win10_1809.img"},id=drive-scsi0,if=none,format=raw,discard=unmap,aio=native,cache=none \
-      -device scsi-hd,scsi-id=0,drive=drive-scsi0,id=scsi0-0,bootindex=1"
-    SSD="\
-      -drive file=$OS_SRC,id=drive-scsi1,if=none,format=raw,discard=unmap,aio=native,cache=none \
-      -device scsi-block,scsi-id=1,drive=drive-scsi1,id=scsi0-1"
+    set_disks
+
+    OCSSD=${OCSSD-"\
+      -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+      -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
+      --trace events=$VMHOME/$VMNAME/events"}
 
     USB="-device piix4-usb-uhci"
 
@@ -86,11 +114,11 @@ windows()
       -chardev spicevmc,id=vdagent,name=vdagent \
       -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
 
-    CMD="$QEMU $OPT $UEFI $NET $SCSI $ROOTFS $OCSSD $DEBUG $USB $WINCD $VIRTCD $SSD $SPICE $@"
+    CMD=($QEMU $OPT $UEFI $NET $SCSI $DISKS $OCSSD $SPICE $USB $WINCD $VIRTCD $@)
 
-    echo $CMD 
-    (ps -C $VMPROCID > /dev/null) || $G_TERM sudo $CMD
-    until (ps -C $VMPROCID > /dev/null); do sleep 1; done; remote-viewer spice://localhost:$SPICEPORT &
+    echo "${CMD[@]}" 
+    (waitUntil $VMPROCID 0) || $G_TERM sudo "${CMD[@]}"
+    (waitUntil $VMPROCID) && remote-viewer spice://localhost:$SPICEPORT &
 }
 
 RemoveSSH()
@@ -123,14 +151,13 @@ shift $(($OPTIND-1))
 [[ $1 == *vmlinuz* ]] && { KERNEL_IMAGE=$1; shift 1; }
 [[ $1 == *.img* ]] && { BOOTIMG=$1; shift 1; }
 
+VMHOME=${VMHOME:-"$HOME/vm"}
 VMNAME=${VMNAME:-${PWD##*/}}
 echo $VMNAME
+
 [[ $VMNAME == *ocssd* ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
-QEMU=${QEMU:-"qemu-system-x86_64"}
-
+QEMU=${QEMU:-"qemu-system-x86_64"}; OCSSD= ;
 QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
-
-VMHOME=${VMHOME:-"$HOME/vm"}
 
 [[ -d $VMHOME/$VMNAME ]] || mkdir $VMHOME/$VMNAME
 pushd $VMHOME/$VMNAME
@@ -139,7 +166,7 @@ NCORE=$(($(nproc)/2))
 G_TERM=${G_TERM-"gnome-terminal --"}
 OPT="-m 8G -smp $NCORE --enable-kvm"
 
-if [ ! -e ${OVMF_VARS:="OVMF_VARS.fd"} ]; then
+if [[ ! -f ${OVMF_VARS:="OVMF_VARS.fd"} ]]; then
     cp $VMHOME/bios/OVMF_VARS.fd $OVMF_VARS
 fi
 UEFI=${UEFI-"-drive file=$VMHOME/bios/OVMF_CODE.fd,if=pflash,format=raw,readonly,unit=0 \
@@ -151,7 +178,7 @@ WINCD="-cdrom $VMHOME/cd/Win10_1809Oct_Korean_x64.iso"
 VIRTCD="-drive file=$VMHOME/cd/virtio-win-0.1.171.iso,index=3,media=cdrom"
 
 [[ $RMSSH -eq 1 ]] && RemoveSSH
-[[ $SSHCON -eq 0 ]] && ($VMNAME "$@") || $G_TERM ssh $UNAME@localhost -p $SSHPORT
+$VMNAME "$@" 
 
 popd
 

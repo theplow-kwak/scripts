@@ -28,11 +28,11 @@ if stringContain "nvme" "$TARGET"; then sudo sh -c 'echo 1 > /sys/kernel/debug/t
 if stringContain "scsi" "$TARGET"; then sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/scsi/enable'; fi
 if stringContain "block" "$TARGET"
 then 
-#sudo sh -c 'echo block_rq_insert >> /sys/kernel/debug/tracing/set_event'
-sudo sh -c 'echo block_rq_complete >> /sys/kernel/debug/tracing/set_event'
-sudo sh -c 'echo block_rq_issue >> /sys/kernel/debug/tracing/set_event'
-sudo sh -c 'echo block_rq_remap >> /sys/kernel/debug/tracing/set_event'
-sudo sh -c 'echo block_rq_requeue >> /sys/kernel/debug/tracing/set_event'
+  #sudo sh -c 'echo block_rq_insert >> /sys/kernel/debug/tracing/set_event'
+  sudo sh -c 'echo block_rq_complete >> /sys/kernel/debug/tracing/set_event'
+  sudo sh -c 'echo block_rq_issue >> /sys/kernel/debug/tracing/set_event'
+  sudo sh -c 'echo block_rq_remap >> /sys/kernel/debug/tracing/set_event'
+  sudo sh -c 'echo block_rq_requeue >> /sys/kernel/debug/tracing/set_event'
 fi
 }
 

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 # @lint-avoid-python-3-compatibility-imports
 #
 # biosnoop  Trace block device I/O and print details including issuing PID.
@@ -122,6 +122,7 @@ int trace_req_completion(struct pt_regs *ctx, struct request *req)
         }
     }
     
+    data.stream = (((struct nvme_request*)(req+1))->cmd)->common.opcode;
     ts = bpf_ktime_get_ns();
     data.latency = ts - tsp;
     data.ts = tsp;
