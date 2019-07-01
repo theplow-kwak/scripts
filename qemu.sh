@@ -28,18 +28,39 @@ waitUntil()
 
 set_disks()
 {
-    local _disk_num=0
-    for _IMG in ${IMGs};
+    _index=0
+    for _IMG in ${IMG};
     do
-      if [[ -b $_IMG ]] && [[ $_IMG != *nvme* ]]; then _disk_type="scsi-block"; else _disk_type="scsi-hd"; fi
-      DISKS+=" \
-        -drive file=$_IMG,id=drive-scsi$_disk_num,if=none,format=raw,discard=unmap,aio=native,cache=none \
-        -device $_disk_type,scsi-id=$_disk_num,drive=drive-scsi$_disk_num,id=scsi0-$_disk_num,bootindex=$_disk_num"
-      ((_disk_num++))
+      if [[ -e $_IMG ]]; then
+	      if [[ -b $_IMG ]] && [[ $_IMG != *nvme* ]]; then _disk_type="scsi-block"; else _disk_type="scsi-hd"; fi
+  	      if [[ $_IMG == *.qcow2* ]]; then 
+		      DISKS+=" $_IMG"
+#		        -drive file=$_IMG,id=drive-scsi$_index,if=none,aio=native,cache=none \
+#		        -device $_disk_type,scsi-id=$_index,drive=drive-scsi$_index,id=scsi0-$_index"
+  	      else
+		      DISKS+=" \
+		        -drive file=$_IMG,id=drive-scsi$_index,if=none,format=raw,discard=unmap,aio=native,cache=none \
+		        -device $_disk_type,scsi-id=$_index,drive=drive-scsi$_index,id=scsi0-$_index"
+	      fi
+	      ((_index++))
+	  fi
+    done
+    [[ -z $DISKS ]] && { echo "error!! There is no disks."; exit 1; } 
+}
+
+set_cdrom()
+{
+    for _IMG in ${CDIMG};
+    do
+		if [[ -e $_IMG ]]; then
+			CDROMS+=" \
+			  -drive file=$_IMG,if=ide,index=$_index,media=cdrom"
+			((_index++))
+		fi
     done
 }
 
-ocssd() 
+set_kernel() 
 {
     KERNEL="-kernel ${KERNEL_IMAGE:="$HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage"}"
     [[ $KERNEL_IMAGE == *vmlinuz* ]] && INITRD="-initrd ${KERNEL_IMAGE/"vmlinuz"/"initrd.img"}"
@@ -52,73 +73,19 @@ ocssd()
         PARAM="root=/dev/sda console=ttyS0"
     fi
 
-    IMGs=${IMGs:-"/dev/nvme1n1p1"}
-
-    SCSI="\
-      -object iothread,id=iothread0 \
-      -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
-    set_disks
-    
-    OCSSD=${OCSSD-"\
-      -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-      -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
-      --trace events=$VMHOME/$VMNAME/events"}
-
-    SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
-    NET="-netdev user,id=vmnic,hostfwd=tcp::${SSHPORT:=5500}-:22 -device virtio-net,netdev=vmnic"
-
-    VNC="-vnc localhost:1"
-    SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
-    SPICEPORT=$(($SSHPORT+1))
-    SPICE="\
-      -vga qxl -spice port=$SPICEPORT,disable-ticketing \
-      -device virtio-serial \
-      -chardev spicevmc,id=vdagent,name=vdagent \
-      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
-
-    CMD=($QEMU $OPT $UEFI $NET $SCSI $DISKS $OCSSD $SPICE $SHARE0 $KERNEL $INITRD -append "$PARAM" $@)
-    
-    if [[ $GDB -eq 1 ]]; then
-        gdb -q --args $CMD -append "$PARAM"
-    else
-        echo "${CMD[@]}"
-        (waitUntil $VMPROCID 0) || $G_TERM sudo "${CMD[@]}" 
-        (waitUntil $VMPROCID) && $G_TERM ssh $UNAME@localhost -p $SSHPORT 
-    fi
+    APPEND="-append"
+    CMD+=($KERNEL $INITRD $APPEND "$PARAM")
+    CONNECT=(ssh $UNAME@localhost -p $SSHPORT)
 }
 
 windows() 
 {
     OPT+=" -machine q35,accel=kvm -device intel-iommu -vga qxl"
 
-    IMGs=${IMGs:-"win10_1809.img /dev/sdb"}
-
-    SCSI="\
-      -object iothread,id=iothread0 \
-      -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
-    set_disks
-
-    OCSSD=${OCSSD-"\
-      -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-      -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
-      --trace events=$VMHOME/$VMNAME/events"}
+    IMG=${IMG:-"win10_1809.img /dev/sdb"}
+	CDIMG="$VMHOME/cd/Win10_1809Oct_Korean_x64.iso $VMHOME/cd/virtio-win-0.1.171.iso"
 
     USB="-device piix4-usb-uhci"
-
-    NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT:=5550}-:22 -device virtio-net,netdev=vmnic"
-         
-    SPICEPORT=$(($SSHPORT+1))
-    SPICE="\
-      -vga qxl -spice port=$SPICEPORT,disable-ticketing \
-      -device virtio-serial \
-      -chardev spicevmc,id=vdagent,name=vdagent \
-      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
-
-    CMD=($QEMU $OPT $UEFI $NET $SCSI $DISKS $OCSSD $SPICE $USB $WINCD $VIRTCD $@)
-
-    echo "${CMD[@]}" 
-    (waitUntil $VMPROCID 0) || $G_TERM sudo "${CMD[@]}"
-    (waitUntil $VMPROCID) && remote-viewer spice://localhost:$SPICEPORT &
 }
 
 RemoveSSH()
@@ -137,7 +104,7 @@ while getopts ":sSp:P:v:n:dk:q:mrb:" opt; do
         r)  RMSSH=1 ;;          # Remove existing SSH keys 
         n)  UNAME=$OPTARG ;;    # set login user name
         v)  VMNAME=$OPTARG ;;
-        b)  BOOTIMG=$OPTARG ;;
+        b)  IMG+=$OPTARG ;;
         d)  GDB=1 ;;
         q)  QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
@@ -149,22 +116,25 @@ done
 shift $(($OPTIND-1)) 
 
 [[ $1 == *vmlinuz* ]] && { KERNEL_IMAGE=$1; shift 1; }
-[[ $1 == *.img* ]] && { BOOTIMG=$1; shift 1; }
+[[ $1 == *.img* ]] && { IMG+=$1; shift 1; }
 
 VMHOME=${VMHOME:-"$HOME/vm"}
 VMNAME=${VMNAME:-${PWD##*/}}
-echo $VMNAME
-
-[[ $VMNAME == *ocssd* ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
-QEMU=${QEMU:-"qemu-system-x86_64"}; OCSSD= ;
-QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
+echo Virtual machine name: $VMNAME
 
 [[ -d $VMHOME/$VMNAME ]] || mkdir $VMHOME/$VMNAME
 pushd $VMHOME/$VMNAME
 
+[[ -f ${VMNAME}.cfg ]] && source ${VMNAME}.cfg
+
+[[ $VMNAME == *ocssd* ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
+QEMU=${QEMU:-"qemu-system-x86_64"}; OCSSD= ;
+QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
+CMD=($QEMU)
+
 NCORE=$(($(nproc)/2))
+OPT+=" -m 8G -smp $NCORE --enable-kvm"
 G_TERM=${G_TERM-"gnome-terminal --"}
-OPT="-m 8G -smp $NCORE --enable-kvm"
 
 if [[ ! -f ${OVMF_VARS:="OVMF_VARS.fd"} ]]; then
     cp $VMHOME/bios/OVMF_VARS.fd $OVMF_VARS
@@ -172,13 +142,41 @@ fi
 UEFI=${UEFI-"-drive file=$VMHOME/bios/OVMF_CODE.fd,if=pflash,format=raw,readonly,unit=0 \
       -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
 
-USERVERCD="-cdrom $VMHOME/cd/ubuntu-18.10-live-server-amd64.iso"
-UBUNTUCD="-cdrom $VMHOME/cd/ubuntu-18.04.1-desktop-amd64.iso"
-WINCD="-cdrom $VMHOME/cd/Win10_1809Oct_Korean_x64.iso"
-VIRTCD="-drive file=$VMHOME/cd/virtio-win-0.1.171.iso,index=3,media=cdrom"
+NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT:=5500}-:22 -device virtio-net,netdev=vmnic"
+SPICEPORT=$(($SSHPORT+1))
+SPICE="\
+  -vga qxl -spice port=$SPICEPORT,disable-ticketing \
+  -device virtio-serial \
+  -chardev spicevmc,id=vdagent,name=vdagent \
+  -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
+      
+SCSI="\
+  -object iothread,id=iothread0 \
+  -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
+
+OCSSD=${OCSSD-"\
+  -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
+  --trace events=$VMHOME/$VMNAME/events"}
+
+SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
+SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
+
+CONNECT=(remote-viewer spice://localhost:$SPICEPORT)
+
+[[ -n $KERNEL_IMAGE ]] && set_kernel
+set_disks
+set_cdrom
+
+CMD+=($OPT $UEFI $NET $SCSI $DISKS $OCSSD $SPICE $USB $CDROMS $SHARE0 $@)
+
+echo "${CMD[@]}" 
+echo "${CONNECT[@]}" 
+(waitUntil $VMPROCID 0) || $G_TERM sudo "${CMD[@]}"
+(waitUntil $VMPROCID) && $G_TERM "${CONNECT[@]}"
 
 [[ $RMSSH -eq 1 ]] && RemoveSSH
-$VMNAME "$@" 
+# $VMNAME "$@" 
 
 popd
 
