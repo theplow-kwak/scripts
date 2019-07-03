@@ -1,10 +1,5 @@
 #!/bin/bash
 
-UNAME=${SUDO_USER:-$USER}
-SSHCON=0
-RMSSH=0
-GDB=0
-
 usage()
 {
     echo "Usage: $0 [-p <SSH port number>] [-n <Guest login name>] [Guest image file]" 1>&2
@@ -133,7 +128,15 @@ RemoveSSH()
     sudo ssh-keygen -f "/root/.ssh/known_hosts" -R "[localhost]:$SSHPORT"
 }
 
-while getopts ":sSv:n:dk:q:mri:c:" opt; do
+# main
+
+UNAME=${SUDO_USER:-$USER}
+SSHCON=0
+RMSSH=0
+GDB=0
+USE_UEFI=0
+
+while getopts ":sSv:n:dk:q:mri:c:u" opt; do
     case $opt in
         s)  SSHCON=1 ;;         # make SSH connection to the running QEMU
         S)  SSHCON=1            # Remove existing SSH keys and make SSH connection to the running QEMU
@@ -147,6 +150,7 @@ while getopts ":sSv:n:dk:q:mri:c:" opt; do
         k)  KERNEL_IMAGE=$OPTARG ;;
         m)  MONITOR="-monitor stdio" ;;
         c)  CFGFILE=$OPTARG ;;
+        u)  USE_UEFI=1 ;;
         *)  usage ;;
     esac
 done 
@@ -185,7 +189,7 @@ CMD=($QEMU)
 
 SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
 
-set_uefi
+[[ $USE_UEFI -eq 1 ]] && set_uefi
 [[ -n $KERNEL_IMAGE ]] && set_kernel
 set_disks
 set_cdrom
@@ -194,7 +198,6 @@ set_net
 
 CMD+=($OPT $OCSSD $USB $@)
 [[ $SSHCON -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT)
-
 [[ $RMSSH -eq 1 ]] && RemoveSSH
 
 echo "${CMD[@]}" 
