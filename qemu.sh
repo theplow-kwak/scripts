@@ -59,7 +59,7 @@ set_cdrom()
 			((_index++))
 		fi
     done
-	CMD+=($CDROMS)
+	[[ -n $CDROMS ]] && CMD+=($CDROMS)
 }
 
 set_net()
@@ -82,7 +82,7 @@ set_kernel()
     KERNEL="-kernel ${KERNEL_IMAGE:="$HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage"}"
     [[ $KERNEL_IMAGE == *vmlinuz* ]] && INITRD="-initrd ${KERNEL_IMAGE/"vmlinuz"/"initrd.img"}"
 
-    if [[ $GRAPHIC -eq 1 ]]; then
+    if [[ $GUI_BOOT -eq 1 ]]; then
         OPT+=" -vga qxl"
         PARAM="root=/dev/sda vga=0x300"
     else
@@ -113,9 +113,37 @@ set_ocssd()
     CMD+=($OCSSD)
 }
 
+set_usb3()
+{
+    USB="\
+      -device nec-usb-xhci,id=usb3 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev1 \
+      -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev2 \
+      -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev3 \
+      -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
+    CMD+=($USB)
+}
+
+set_usb2()
+{
+    USB="-device ich9-usb-ehci1,id=usb \
+      -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
+      -device ich9-usb-uhci2,masterbus=usb.0,firstport=2 \
+      -device ich9-usb-uhci3,masterbus=usb.0,firstport=4 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev1 \
+      -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev2 \
+      -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev3 \
+      -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
+    CMD+=($USB)
+}
+
 windows() 
 {
-    OPT+=" -machine q35,accel=kvm -device intel-iommu -vga qxl"
+    OPT+=" -machine q35,accel=kvm -device intel-iommu"
 
     IMG=${IMG:-"win10_1809.img /dev/sdb"}
 	CDIMG="$VMHOME/cd/Win10_1809Oct_Korean_x64.iso $VMHOME/cd/virtio-win-0.1.171.iso"
@@ -134,7 +162,6 @@ UNAME=${SUDO_USER:-$USER}
 SSHCON=0
 RMSSH=0
 GDB=0
-USE_UEFI=0
 
 while getopts ":sSv:n:dk:q:mri:c:u" opt; do
     case $opt in
@@ -183,7 +210,7 @@ QEMU=${QEMU:-"qemu-system-x86_64"}; OCSSD= ;
 QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
 
 NCORE=$(($(nproc)/2))
-OPT+=" -m 8G -smp $NCORE --enable-kvm"
+OPT+=" -cpu host -m 8G -smp $NCORE --enable-kvm -machine q35,accel=kvm -device intel-iommu -monitor stdio"
 G_TERM=${G_TERM-"gnome-terminal --"}
 CMD=($QEMU)
 
@@ -195,9 +222,10 @@ set_disks
 set_cdrom
 set_ocssd
 set_net
+set_usb3
 
-CMD+=($OPT $OCSSD $USB $@)
-[[ $SSHCON -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT)
+CMD+=($OPT $@)
+[[ $SSHCON -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 [[ $RMSSH -eq 1 ]] && RemoveSSH
 
 echo "${CMD[@]}" 
