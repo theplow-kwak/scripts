@@ -86,6 +86,7 @@ set_kernel()
         OPT+=" -vga qxl"
         PARAM="root=/dev/sda vga=0x300"
     else
+		OPT=${OPT/"-monitor stdio"/""}
         OPT+=" -nographic -serial mon:stdio"
         PARAM="root=/dev/sda console=ttyS0"
     fi
@@ -106,10 +107,17 @@ set_uefi()
 
 set_ocssd()
 {
-	OCSSD=${OCSSD-"\
-	  -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-	  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
-	  --trace events=$VMHOME/$VMNAME/events"}
+	if [[ $C_QEMU -eq 1 ]]; then
+		OCSSD=${OCSSD-"\
+		  -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+		  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
+		  --trace events=$VMHOME/$VMNAME/events"}
+	else
+		OCSSD=${OCSSD-"\
+		  -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+		  -device nvme,drive=myocssd,serial=deadbeef \
+		  --trace events=$VMHOME/$VMNAME/events"}
+	fi	
     CMD+=($OCSSD)
 }
 
@@ -128,7 +136,8 @@ set_usb3()
 
 set_usb2()
 {
-    USB="-device ich9-usb-ehci1,id=usb \
+    USB="\
+      -device ich9-usb-ehci1,id=usb \
       -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
       -device ich9-usb-uhci2,masterbus=usb.0,firstport=2 \
       -device ich9-usb-uhci3,masterbus=usb.0,firstport=4 \
@@ -162,6 +171,7 @@ UNAME=${SUDO_USER:-$USER}
 SSHCON=0
 RMSSH=0
 GDB=0
+USE_USB3=1
 
 while getopts ":sSv:n:dk:q:mri:c:u" opt; do
     case $opt in
@@ -205,8 +215,9 @@ pushd $VMHOME/$VMNAME
 CFGFILE=${CFGFILE:-${VMNAME}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
 
-[[ $VMNAME == *ocssd* ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
-QEMU=${QEMU:-"qemu-system-x86_64"}; OCSSD= ;
+
+[[ $C_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
+QEMU=${QEMU:-"qemu-system-x86_64"};
 QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
 
 NCORE=$(($(nproc)/2))
@@ -214,15 +225,14 @@ OPT+=" -cpu host -m 8G -smp $NCORE --enable-kvm -machine q35,accel=kvm -device i
 G_TERM=${G_TERM-"gnome-terminal --"}
 CMD=($QEMU)
 
-SERIAL="-chardev socket,id=console1,path=/tmp/console1,server,nowait -device spapr-vty,chardev=console1"
-
 [[ $USE_UEFI -eq 1 ]] && set_uefi
 [[ -n $KERNEL_IMAGE ]] && set_kernel
 set_disks
 set_cdrom
 set_ocssd
 set_net
-set_usb3
+[[ $USE_USB2 -eq 1 ]] && set_usb2
+[[ $USE_USB3 -eq 1 ]] && set_usb3
 
 CMD+=($OPT $@)
 [[ $SSHCON -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
