@@ -352,7 +352,8 @@ stacktrace
 
 # 유용한 shell script
 
-```
+```bash
 for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
+tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 ```
 

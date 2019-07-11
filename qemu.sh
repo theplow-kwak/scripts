@@ -55,7 +55,7 @@ set_cdrom()
     do
 		if [[ -e $_IMG ]]; then
 			CDROMS+=" \
-			  -drive file=$_IMG,if=ide,index=$_index,media=cdrom"
+			  -drive file=$_IMG,if=ide,index=$_index,media=cdrom,readonly"
 			((_index++))
 		fi
     done
@@ -109,16 +109,20 @@ set_ocssd()
 {
 	if [[ $C_QEMU -eq 1 ]]; then
 		OCSSD=${OCSSD-"\
-		  -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-		  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4} \
-		  --trace events=$VMHOME/$VMNAME/events"}
+		  -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+		  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"}
 	else
 		OCSSD=${OCSSD-"\
-		  -drive file=${OCSSD_BACKEND:-"/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-		  -device nvme,drive=myocssd,serial=deadbeef \
-		  --trace events=$VMHOME/$VMNAME/events"}
-	fi	
-    CMD+=($OCSSD)
+		  -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
+		  -device nvme,drive=myocssd,serial=deadbeef"}
+	fi
+	
+	[[ -f $VMHOME/$VMNAME/events ]] && OCSSD+=${OCSSD:+" --trace events=$VMHOME/$VMNAME/events"}
+	if (sudo lsof |& grep "$OCSSD_BACKEND" >& /dev/null); then
+		echo "$OCSSD_BACKEND was locked !!"
+	else
+	    CMD+=($OCSSD)
+	fi
 }
 
 set_usb3()
@@ -150,6 +154,14 @@ set_usb2()
     CMD+=($USB)
 }
 
+set_M_Q35()
+{
+    OPT+=" \
+      -machine type=q35,accel=kvm -device intel-iommu"
+    RNGRANDOM="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"
+    CMD+=($RNGRANDOM)   
+}
+
 windows() 
 {
     OPT+=" -machine q35,accel=kvm -device intel-iommu"
@@ -171,7 +183,6 @@ UNAME=${SUDO_USER:-$USER}
 SSHCON=0
 RMSSH=0
 GDB=0
-USE_USB3=1
 
 while getopts ":sSv:n:dk:q:mri:c:u" opt; do
     case $opt in
@@ -215,16 +226,19 @@ pushd $VMHOME/$VMNAME
 CFGFILE=${CFGFILE:-${VMNAME}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
 
-
 [[ $C_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
 QEMU=${QEMU:-"qemu-system-x86_64"};
 QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
 
 NCORE=$(($(nproc)/2))
-OPT+=" -cpu host -m 8G -smp $NCORE --enable-kvm -machine q35,accel=kvm -device intel-iommu -monitor stdio"
+OPT+=" -cpu host -m 8G -smp $NCORE --enable-kvm -monitor stdio"
+
+USE_USB3=${USE_USB3-1}
+M_Q35=${M_Q35-1}
 G_TERM=${G_TERM-"gnome-terminal --"}
 CMD=($QEMU)
 
+[[ $M_Q35 -eq 1 ]] && set_M_Q35
 [[ $USE_UEFI -eq 1 ]] && set_uefi
 [[ -n $KERNEL_IMAGE ]] && set_kernel
 set_disks
