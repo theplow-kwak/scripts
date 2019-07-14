@@ -76,7 +76,7 @@ class CollectsWorkload:
         self.verbose = verbose
 
     def saveStatistics(self, ts):
-        if 't' in self.verbose or 'a' in self.verbose:
+        if 't' in self.verbose or 's' in self.verbose:
             print(str(ts)+', '+str(self.data))
         if self.fd:
             self.fd.write(str(ts)+', '+str(self.data)+'\n')
@@ -105,7 +105,7 @@ class CollectsWorkload:
 
     def close(self):
         self.saveStatistics(self.LastTimeTag)
-        if 't' in self.verbose or 'a' in self.verbose:
+        if 't' in self.verbose or 's' in self.verbose:
             print(str("total")+', '+str(self.total))
         if self.fd:
             self.fd.write(str("\ntotal")+', '+str(self.total)+'\n')
@@ -134,15 +134,16 @@ class logInfo():
     def __init__(self, format=None, verbose=False, interval=None):
         self.count = 0
         self.logformat = format
+        self.verboseType = None
         self.set(verbose, interval) 
 
     def set(self, verbose=None, interval=None):
         self.interval(interval)
-        self.setverbose(verbose) 
+        self.verbose(verbose) 
 
-    def setverbose(self, verbose=None):
+    def verbose(self, verbose=None):
         if 't' in verbose or 'a' in verbose:
-            self.verbose = verbose
+            self.verboseType = verbose
             if 'a' in verbose:
                 self.interval(0.0)
                 
@@ -155,7 +156,7 @@ class logInfo():
         self.logformat = format
 
     def display(self, header=None, data=None):
-        if self.verbose:
+        if self.verboseType:
             print(header, self.logformat.format(**data))
         
     def log(self, data=None):
@@ -265,10 +266,11 @@ class CaptureSSD:
         self.diskfilter.setfilter(filters)
 
 
-def readWorkloadFile(filename, verbose='f', interval=1, filters='*'):
+def readWorkloadFile(filename, verbose='f', interval=1, filters='*', outfile=None):
     workloadFile = open(filename, 'r')
     csvReader = csv.reader(workloadFile, quoting=csv.QUOTE_NONNUMERIC)
-    statisticFile = open(filename.replace('workload', 'statistics'), 'w')
+    outfile = 'statistics' if outfile is None else 'statistics.' + str(outfile)
+    statisticFile = open(filename.replace('workload', outfile), 'w')
     header = csvReader.next()
     cmdCount = CollectsWorkload(interval=interval, verbose=verbose, fd=statisticFile)
     logformat = '{ts:>14.6f} {taskid:^16s} {major:>3}:{minor:<3} {disk:^10s} {opcode:^10s} {cmnd:^7} {slba:>14} {len:>7} {latency:>14.3f}'
@@ -304,7 +306,7 @@ def main():
     outfilename = None
 
     if args.workloadfile:
-        readWorkloadFile(args.workloadfile, verbose=args.verbose, interval=args.interval, filters=args.diskfilter)
+        readWorkloadFile(args.workloadfile, verbose=args.verbose, interval=args.interval, filters=args.diskfilter, outfile=args.outfile)
         exit()
 
     if args.outfile:
