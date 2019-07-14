@@ -269,7 +269,7 @@ then I set Local Policies > Security Options > Network Security: LAN Manager aut
 
 1. CD 이용하여 local repo 사용
 
-   vi /etc/yum.repos.d/local.repo 
+   vim /etc/yum.repos.d/local.repo 
 
    ```
    [local-repo]
@@ -281,18 +281,18 @@ then I set Local Policies > Security Options > Network Security: LAN Manager aut
 
 2. CENTOS repo 사용하기
 
-   vi /etc/yum.repos.d/rhel-source.repo
+   vim /etc/yum.repos.d/rhel-source.repo
 
    ```
    [base]
    name=CentOS-$releasever - Base
-   baseurl=http://mirror.centos.org/centos/7/os/$basearch/
+   baseurl=http://mirror.kakao.com/centos/7/os/$basearch/
    gpgcheck=1
    
    #released updates
    [update]
    name=CentOS-$releasever - Updates
-   baseurl=http://mirror.centos.org/centos/7/updates/$basearch/
+   baseurl=http://mirror.kakao.com/centos/7/updates/$basearch/
    gpgcheck=1
    ```
 
