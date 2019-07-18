@@ -33,6 +33,7 @@ set_disks()
     for _IMG in ${IMG};
     do
       if [[ -e $_IMG ]]; then
+          if (sudo lsof $_IMG >& /dev/null); then continue; fi
 	      if [[ -b $_IMG ]] && [[ $_IMG != *nvme* ]]; then _disk_type="scsi-block"; else _disk_type="scsi-hd"; fi
   	      if [[ $_IMG == *.qcow2* ]]; then 
 		      DISKS+=" \
@@ -45,7 +46,10 @@ set_disks()
 	      ((_index++))
 	  fi
     done
-    [[ -z $DISKS ]] && { echo "error!! There is no disks."; exit 1; } 
+    if [[ -z $DISKS ]]; then
+    	echo "error!! There is no disks."
+    	(waitUntil $VMPROCID 0) || exit 1
+    fi 
 	CMD+=($SCSI $DISKS)
 }
 
@@ -117,8 +121,8 @@ set_ocssd()
 		  -device nvme,drive=myocssd,serial=deadbeef"}
 	fi
 	
-	[[ -f $VMHOME/$VMNAME/events ]] && OCSSD+=${OCSSD:+" --trace events=$VMHOME/$VMNAME/events"}
-	if (sudo lsof |& grep "$OCSSD_BACKEND" >& /dev/null); then
+	[[ -f ./events ]] && OCSSD+=${OCSSD:+" --trace events=./events"}
+	if (sudo lsof $OCSSD_BACKEND >& /dev/null); then
 		echo "$OCSSD_BACKEND was locked !!"
 	else
 	    CMD+=($OCSSD)
@@ -180,14 +184,14 @@ RemoveSSH()
 # main
 
 UNAME=${SUDO_USER:-$USER}
-SSHCON=0
+USE_SSH=0
 RMSSH=0
 GDB=0
 
-while getopts ":sSv:n:dk:q:mri:c:u" opt; do
+while getopts ":sSv:n:dk:q:ri:c:u" opt; do
     case $opt in
-        s)  SSHCON=1 ;;         # make SSH connection to the running QEMU
-        S)  SSHCON=1            # Remove existing SSH keys and make SSH connection to the running QEMU
+        s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
+        S)  USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
             RMSSH=1 ;;
         r)  RMSSH=1 ;;          # Remove existing SSH keys 
         n)  UNAME=$OPTARG ;;    # set login user name
@@ -196,7 +200,6 @@ while getopts ":sSv:n:dk:q:mri:c:u" opt; do
         d)  GDB=1 ;;
         q)  QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
-        m)  MONITOR="-monitor stdio" ;;
         c)  CFGFILE=$OPTARG ;;
         u)  USE_UEFI=1 ;;
         *)  usage ;;
@@ -217,26 +220,24 @@ while (($#)); do
 done
 
 VMHOME=${VMHOME:-"$HOME/vm"}
-VMNAME=${VMNAME:-${PWD##*/}}
+
+CFGFILE=${CFGFILE:-${PWD##*/}.cfg}
+[[ -f $CFGFILE ]] && source $CFGFILE
+VMNAME=${VMNAME:-${CFGFILE%%.*}}
 echo Virtual machine name: $VMNAME
 
-[[ -d $VMHOME/$VMNAME ]] || mkdir $VMHOME/$VMNAME
-pushd $VMHOME/$VMNAME
-
-CFGFILE=${CFGFILE:-${VMNAME}.cfg}
-[[ -f $CFGFILE ]] && source $CFGFILE
-
-[[ $C_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
+[[ $CUSTOM_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
 QEMU=${QEMU:-"qemu-system-x86_64"};
 QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
+CMD=($QEMU)
 
-NCORE=$(($(nproc)/2))
-OPT+=" -cpu host -m 8G -smp $NCORE --enable-kvm -monitor stdio"
+NUM_CORE=${NCORE:-$(($(nproc)/2))}
+MEM_SIZE=${MEM_SIZE:-"8G"}
+OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE --enable-kvm -monitor stdio"
 
 USE_USB3=${USE_USB3-1}
 M_Q35=${M_Q35-1}
 G_TERM=${G_TERM-"gnome-terminal --"}
-CMD=($QEMU)
 
 [[ $M_Q35 -eq 1 ]] && set_M_Q35
 [[ $USE_UEFI -eq 1 ]] && set_uefi
@@ -249,13 +250,11 @@ set_net
 [[ $USE_USB3 -eq 1 ]] && set_usb3
 
 CMD+=($OPT $@)
-[[ $SSHCON -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+[[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 [[ $RMSSH -eq 1 ]] && RemoveSSH
 
 echo "${CMD[@]}" 
 echo "${CONNECT[@]}" 
 (waitUntil $VMPROCID 0) || ($G_TERM sudo "${CMD[@]}")
 (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
-
-popd
 

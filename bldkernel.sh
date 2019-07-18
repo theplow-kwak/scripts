@@ -36,19 +36,21 @@ KVER=$(make kernelversion)-$LOCALVERSION
 
 isEmptyFolder() 
 {
-    [ -d $1 ] || return 1 
+    [[ -d $1 ]] || return 1 
     local _count=`find $1 -mindepth 1 -maxdepth 1 | wc -l`
-    [ $_count -eq 0 ] && return 0 || return 1
+    [[ $_count -eq 0 ]] && return 0 || return 1
 }
 
-MakeConfig() {
+MakeConfig()
+{
     sudo make $KSRC clean
     cp $CFG_FILE .config
     cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
     make $KSRC olddefconfig
 }
 
-KernelBuild() {
+KernelBuild()
+{
     echo $TARGETDIR $BUILD
 
     make $KSRC prepare && make $KSRC modules_prepare && make $KSRC scripts
@@ -61,7 +63,7 @@ Install()
 {
     local _TARGETDIR=$1
     
-    if [ -z $_TARGETDIR ]; then
+    if [[ -z $_TARGETDIR ]]; then
         echo sudo make $INSTALL
         sudo make $INSTALL
     else
@@ -79,17 +81,18 @@ Install()
     fi
 }
 
-kpkgBuild() {
+kpkgBuild()
+{
     fakeroot make-kpkg -j `getconf _NPROCESSORS_ONLN` --append-to-version "-$LOCALVERSION" "$INSTALL"
 }
 
-kpkgInstall() {
-    
-
+kpkgInstall()
+{
+    echo kpkgInstall
 }
 
 
-[ $MKCONFIG -eq 1 ] && MakeConfig $CFG_FILE
+[[ $MKCONFIG -eq 1 ]] && MakeConfig $CFG_FILE
 
 [[ ! -z $BUILD ]] && KernelBuild  
 
