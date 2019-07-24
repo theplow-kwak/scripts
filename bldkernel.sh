@@ -27,8 +27,8 @@ done
 shift $(($OPTIND-1)) 
 
 # BUILD=${BUILD:-"bzImage"}
+# TARGETDIR=${TARGETDIR:-"$PWD/rootfs"}
 CFG_FILE=${CFG_FILE:-"/boot/config-$(uname -r)"}
-TARGETDIR=${TARGETDIR:-"$PWD/rootfs"}
 LOCALVERSION=${LOCALVERSION:-"custom"}
 KVER=$(make kernelversion)-$LOCALVERSION
 # KSRC="-C $PWD"
@@ -45,15 +45,17 @@ MakeConfig()
 {
     sudo make $KSRC clean
     cp $CFG_FILE .config
-    cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
+    if [[ $(uname -v) == *Ubuntu* ]]; then
+        cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
+    else
+        cp /usr/src/kernels/$(uname -r)/Module.symvers .
+    fi
     make $KSRC olddefconfig
+    make $KSRC prepare && make $KSRC modules_prepare && make $KSRC scripts
 }
 
 KernelBuild()
 {
-    echo $TARGETDIR $BUILD
-
-    make $KSRC prepare && make $KSRC modules_prepare && make $KSRC scripts
     local _CMD="make $KSRC -j `getconf _NPROCESSORS_ONLN` $BUILD LOCALVERSION=-$LOCALVERSION"
     echo $_CMD
     $_CMD
@@ -61,22 +63,24 @@ KernelBuild()
 
 Install()
 {
-    local _TARGETDIR=$1
-    
-    if [[ -z $_TARGETDIR ]]; then
-        echo sudo make $INSTALL
-        sudo make $INSTALL
+    if [[ -z $TARGETDIR ]]; then
+        read -n 1 -p "Do you really want to install a new kernel on this machine? [y|n] " ans
+        echo ""
+        if [[ "$ans" == "y" ]]; then   
+            echo sudo make $INSTALL
+            sudo make $INSTALL
+        fi
     else
-        if ( isEmptyFolder $_TARGETDIR ); then
-            echo empty folder $_TARGETDIR
+        if ( isEmptyFolder $TARGETDIR ); then
+            echo empty folder $TARGETDIR
         else
-            local _CMD="make $KSRC INSTALL_PATH=$_TARGETDIR/boot INSTALL_MOD_PATH=$_TARGETDIR INSTALL_HDR_PATH=$_TARGETDIR/usr/src/$KVER $INSTALL"
+            local _CMD="make $KSRC INSTALL_PATH=$TARGETDIR/boot INSTALL_MOD_PATH=$TARGETDIR INSTALL_HDR_PATH=$TARGETDIR/usr/src/$KVER $INSTALL"
             echo $_CMD
             sudo $_CMD && { 
-                            sudo rm $_TARGETDIR/lib/modules/$KVER/build ;
-                            sudo rm $_TARGETDIR/lib/modules/$KVER/source ;
-                            sudo ln -s /usr/src/$KVER $_TARGETDIR/lib/modules/$KVER/build ;
-                            sudo ln -s /usr/src/$KVER $_TARGETDIR/lib/modules/$KVER/source ; }
+                            sudo rm $TARGETDIR/lib/modules/$KVER/build ;
+                            sudo rm $TARGETDIR/lib/modules/$KVER/source ;
+                            sudo ln -s /usr/src/$KVER $TARGETDIR/lib/modules/$KVER/build ;
+                            sudo ln -s /usr/src/$KVER $TARGETDIR/lib/modules/$KVER/source ; }
         fi
     fi
 }
@@ -92,9 +96,9 @@ kpkgInstall()
 }
 
 
-[[ $MKCONFIG -eq 1 ]] && MakeConfig $CFG_FILE
+[[ $MKCONFIG -eq 1 ]] && MakeConfig
 
 [[ ! -z $BUILD ]] && KernelBuild  
 
-[[ ! -z $INSTALL ]] && Install $TARGETDIR
+[[ ! -z $INSTALL ]] && Install
 
