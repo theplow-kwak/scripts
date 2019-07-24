@@ -1,39 +1,5 @@
 #!/bin/bash
 
-MODULE_INSTALL=0
-MKCONFIG=0
-
-while getopts ":b:i:t:cC:l:" opt; do
-    case $opt in
-        b)  [[ $OPTARG =~ 'k' ]] && BUILD+=" bzImage"
-            [[ $OPTARG =~ 'm' ]] && BUILD+=" modules"
-            [[ $OPTARG =~ 'd' ]] && BUILD+=" deb-pkg"
-            [[ $OPTARG =~ 'b' ]] && BUILD+=" bindeb-pkg" ;;
-        i)  [[ $OPTARG =~ 'h' ]] && INSTALL+=" headers_install"
-            [[ $OPTARG =~ 'm' ]] && INSTALL+=" modules_install"
-            [[ $OPTARG =~ 'k' ]] && INSTALL+=" install" ;;
-        t)  TARGETDIR=$OPTARG ;;
-        l)  LOCALVERSION=$OPTARG ;;
-        c)  MKCONFIG=1 ;;
-        C)  MKCONFIG=1
-            CFG_FILE=$OPTARG ;;
-        \?) echo "Invalid option: -$OPTARG" >&2 
-            exit 1 ;;
-        :)  echo "Option -$OPTARG requires an argument." >&2 
-            exit 1 ;;
-    esac
-done 
-
-shift $(($OPTIND-1)) 
-
-# BUILD=${BUILD:-"bzImage"}
-# TARGETDIR=${TARGETDIR:-"$PWD/rootfs"}
-CFG_FILE=${CFG_FILE:-"/boot/config-$(uname -r)"}
-LOCALVERSION=${LOCALVERSION:-"custom"}
-KVER=$(make kernelversion)-$LOCALVERSION
-# KSRC="-C $PWD"
-# export KBUILD_OUTPUT=$TARGETDIR/usr/src/$KVER
-
 isEmptyFolder() 
 {
     [[ -d $1 ]] || return 1 
@@ -95,10 +61,57 @@ kpkgInstall()
     echo kpkgInstall
 }
 
+removeKernel()
+{
+    echo removeKernel $KVER
+    sudo updatedb --prunepaths=/var/lib/dpkg
+    locate -b -e $KVER
+    echo
+    locate -b -e $KVER | xargs -p sudo rm -r
+    if [[ $(uname -v) == *Ubuntu* ]]; then
+        sudo update-grub
+    else
+        sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+    fi
+}
 
+MODULE_INSTALL=0
+MKCONFIG=0
+
+while getopts ":b:i:t:cC:l:r" opt; do
+    case $opt in
+        b)  [[ $OPTARG =~ 'k' ]] && BUILD+=" bzImage"
+            [[ $OPTARG =~ 'm' ]] && BUILD+=" modules"
+            [[ $OPTARG =~ 'd' ]] && BUILD+=" deb-pkg"
+            [[ $OPTARG =~ 'b' ]] && BUILD+=" bindeb-pkg" ;;
+        i)  [[ $OPTARG =~ 'h' ]] && INSTALL+=" headers_install"
+            [[ $OPTARG =~ 'm' ]] && INSTALL+=" modules_install"
+            [[ $OPTARG =~ 'k' ]] && INSTALL+=" install" ;;
+        t)  TARGETDIR=$OPTARG ;;
+        l)  LOCALVERSION=$OPTARG ;;
+        c)  MKCONFIG=1 ;;
+        C)  MKCONFIG=1
+            CFG_FILE=$OPTARG ;;
+        r)  RMKERNEL=1 ;;
+        \?) echo "Invalid option: -$OPTARG" >&2 
+            exit 1 ;;
+        :)  echo "Option -$OPTARG requires an argument." >&2 
+            exit 1 ;;
+    esac
+done 
+
+shift $(($OPTIND-1)) 
+
+# BUILD=${BUILD:-"bzImage"}
+# TARGETDIR=${TARGETDIR:-"$PWD/rootfs"}
+CFG_FILE=${CFG_FILE:-"/boot/config-$(uname -r)"}
+LOCALVERSION=${LOCALVERSION:-"custom"}
+KVER=$(make kernelversion)-$LOCALVERSION
+# KSRC="-C $PWD"
+# export KBUILD_OUTPUT=$TARGETDIR/usr/src/$KVER
+
+[[ $RMKERNEL -eq 1 ]] && removeKernel
 [[ $MKCONFIG -eq 1 ]] && MakeConfig
-
 [[ ! -z $BUILD ]] && KernelBuild  
-
 [[ ! -z $INSTALL ]] && Install
 
