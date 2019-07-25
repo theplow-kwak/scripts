@@ -7,11 +7,35 @@ isEmptyFolder()
     [[ $_count -eq 0 ]] && return 0 || return 1
 }
 
+getOsVersion()
+{
+    if [ -f /etc/os-release ]; then
+        # freedesktop.org and systemd
+        . /etc/os-release
+        _OS=$NAME
+        _VER=$VERSION_ID
+    elif type lsb_release >/dev/null 2>&1; then
+        # linuxbase.org
+        _OS=$(lsb_release -si)
+        _VER=$(lsb_release -sr)
+    elif [ -f /etc/lsb-release ]; then
+        # For some versions of Debian/Ubuntu without lsb_release command
+        . /etc/lsb-release
+        _OS=$DISTRIB_ID
+        _VER=$DISTRIB_RELEASE
+    else
+        # Fall back to uname, e.g. "Linux <version>", also works for BSD, etc.
+        _OS=$(uname -s)
+        _VER=$(uname -r)
+    fi
+}
+
 MakeConfig()
 {
     sudo make $KSRC clean
     cp $CFG_FILE .config
-    if [[ $(uname -v) == *Ubuntu* ]]; then
+    getOsVersion
+    if [[ $_OS == Ubuntu ]]; then
         cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
     else
         cp /usr/src/kernels/$(uname -r)/Module.symvers .
@@ -68,7 +92,8 @@ removeKernel()
     locate -b -e $KVER
     echo
     locate -b -e $KVER | xargs -p sudo rm -r
-    if [[ $(uname -v) == *Ubuntu* ]]; then
+    getOsVersion
+    if [[ $_OS == *Ubuntu* ]]; then
         sudo update-grub
     else
         sudo grub2-mkconfig -o /boot/grub2/grub.cfg
