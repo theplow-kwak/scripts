@@ -1,34 +1,5 @@
 #!/bin/bash
 
-UNLOAD=0
-CHROOT=0
-FORMAT=0
-MKROOT=0
-UNAME=${SUDO_USER:-$USER}
-TARGETDIR="$PWD/rootfs"
-
-while getopts ":ucfmn:d:s:t:" opt; do
-    case $opt in
-        u)  UNLOAD=1 ;;	
-        c)  CHROOT=1 ;;
-        f)  FORMAT=1 ;;
-        m)  MKROOT=1 ;;
-        n)  UNAME=$OPTARG ;;
-        d)  DESTRO=$OPTARG ;;
-        s)  SIZE=$OPTARG ;;
-        t)  TARGETDIR=$OPTARG ;;
-        \?) echo "Invalid option: -$OPTARG" >&2 
-            exit 1 ;;
-        :)  echo "Option -$OPTARG requires an argument." >&2 
-            exit 1 ;;
-    esac
-done 
-
-shift $(($OPTIND-1)) 
-
-IMGFILE=${1:-"/dev/nvme1n1p1"}
-IMGSIZE=${SIZE:-"16g"}
-TARGETDIR=${2:-"$TARGETDIR"}
 
 isEmptyFolder() 
 {
@@ -149,6 +120,36 @@ ChRoot() {
     
     LANG=C.UTF-8 sudo chroot $_TARGETDIR /bin/bash
 }
+
+UNLOAD=0
+CHROOT=0
+FORMAT=0
+MKROOT=0
+UNAME=${SUDO_USER:-$USER}
+TARGETDIR="$PWD/rootfs"
+
+while getopts ":ucfmn:d:s:t:" opt; do
+    case $opt in
+        u)  UNLOAD=1 ;;	
+        c)  CHROOT=1 ;;
+        f)  FORMAT=1 ;;
+        m)  MKROOT=1 ;;
+        n)  UNAME=$OPTARG ;;
+        d)  DESTRO=$OPTARG ;;
+        s)  SIZE=$OPTARG ;;
+        t)  TARGETDIR=$OPTARG ;;
+        \?) echo "Invalid option: -$OPTARG" >&2 
+            exit 1 ;;
+        :)  echo "Option -$OPTARG requires an argument." >&2 
+            exit 1 ;;
+    esac
+done 
+
+shift $(($OPTIND-1)) 
+
+IMGFILE=${1:-"/dev/nvme1n1p1"}
+IMGSIZE=${SIZE:-"16g"}
+TARGETDIR=${2:-"$TARGETDIR"}
 
 echo source $IMGFILE
 echo target $TARGETDIR

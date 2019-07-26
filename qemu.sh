@@ -111,7 +111,7 @@ set_uefi()
 
 set_ocssd()
 {
-	if [[ $C_QEMU -eq 1 ]]; then
+	if [[ $CUSTOM_QEMU -eq 1 ]]; then
 		OCSSD=${OCSSD-"\
 		  -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
 		  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"}
@@ -120,13 +120,15 @@ set_ocssd()
 		  -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
 		  -device nvme,drive=myocssd,serial=deadbeef"}
 	fi
-	
-	[[ -f ./events ]] && OCSSD+=${OCSSD:+" --trace events=./events"}
-	if (sudo lsof $OCSSD_BACKEND >& /dev/null); then
-		echo "$OCSSD_BACKEND was locked !!"
-	else
-	    CMD+=($OCSSD)
-	fi
+    
+    if [[ -e $OCSSD_BACKEND ]]; then
+	    [[ -f ./events ]] && OCSSD+=${OCSSD:+" --trace events=./events"}
+	    if (sudo lsof $OCSSD_BACKEND >& /dev/null); then
+		    echo "$OCSSD_BACKEND was locked !!"
+	    else
+	        CMD+=($OCSSD)
+	    fi
+    fi
 }
 
 set_usb3()
@@ -161,7 +163,7 @@ set_usb2()
 set_M_Q35()
 {
     OPT+=" \
-      -machine type=q35,accel=kvm -device intel-iommu"
+      -machine type=q35,accel=kvm,usb=on -device intel-iommu"
     RNGRANDOM="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"
     CMD+=($RNGRANDOM)   
 }

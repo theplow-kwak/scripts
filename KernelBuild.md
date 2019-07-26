@@ -145,3 +145,24 @@ sudo nvme smart-log /dev/nvme0
 
 
 
+# RHEL/CentOS kernel build
+
+## 1. Build preparations
+
+```bash
+sudo yum groupinstall "Development Tools"
+sudo yum install ncurses-devel
+sudo yum install hmaccalc zlib-devel binutils-devel elfutils-libelf-devel
+sudo yum install xmlto asciidoc python-devel newt-devel perl perl-ExtUtils-Embed pesign elfutils-devel audit-libs-devel java-devel numactl-devel pciutils-devel python-docutils
+```
+
+
+
+```bash
+cd ~/rpmbuild/SPECS
+rpmbuild -bp --without debug --without debuginfo --target=$(uname -m) kernel.spec
+rpmbuild -bb --without debug --without debuginfo --target=$(uname -m) kernel.spec
+```
+
+
+

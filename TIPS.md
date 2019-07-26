@@ -357,3 +357,11 @@ for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*
 tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 ```
 
+
+
+# samba mount
+
+```bash
+sudo mount -t cifs -o username=dhkwak //10.0.2.4/qemu ./host
+```
+
