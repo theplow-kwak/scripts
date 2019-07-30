@@ -16,7 +16,7 @@ PREFIX=${PREFIX:-$HOME/$TARGET}
 
 config()
 {
-    TRACE=${1:-"nop"}
+    TRACE=${1:-"log"}
     
     CFG=" --enable-kvm --target-list=x86_64-softmmu --enable-linux-aio \
         --disable-werror --disable-xen --prefix=$PREFIX --enable-gtk --enable-spice \

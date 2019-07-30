@@ -79,10 +79,13 @@ set_net()
 	  -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
 	SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
 	CMD+=($NET $SPICE $SHARE0)
+	echo $SSHPORT > /tmp/${VMPROCID}_SSH
+	echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
 }
 
 set_kernel() 
 {
+	[[ -n $KERNEL_IMAGE ]] || return
     KERNEL="-kernel ${KERNEL_IMAGE:="$HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage"}"
     [[ $KERNEL_IMAGE == *vmlinuz* ]] && INITRD="-initrd ${KERNEL_IMAGE/"vmlinuz"/"initrd.img"}"
 
@@ -101,6 +104,7 @@ set_kernel()
 
 set_uefi()
 {
+	[[ $USE_UEFI -eq 1 ]] || return
 	if [[ ! -f ${OVMF_VARS:="OVMF_VARS.fd"} ]]; then
 	    cp $VMHOME/bios/OVMF_VARS.fd $OVMF_VARS
 	fi
@@ -111,7 +115,7 @@ set_uefi()
 
 set_ocssd()
 {
-	if [[ $CUSTOM_QEMU -eq 1 ]]; then
+	if [[ $CUSTOM_QEMU -eq 1 ]] && [[ $USE_LNVM -eq 1 ]]; then
 		OCSSD=${OCSSD-"\
 		  -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
 		  -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"}
@@ -133,6 +137,7 @@ set_ocssd()
 
 set_usb3()
 {
+	[[ $USE_USB2 -eq 1 ]] || return
     USB="\
       -device nec-usb-xhci,id=usb3 \
       -chardev spicevmc,name=usbredir,id=usbredirchardev1 \
@@ -146,6 +151,7 @@ set_usb3()
 
 set_usb2()
 {
+	[[ $USE_USB3 -eq 1 ]] || return
     USB="\
       -device ich9-usb-ehci1,id=usb \
       -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
@@ -162,7 +168,8 @@ set_usb2()
 
 set_M_Q35()
 {
-    OPT+=" \
+	[[ $M_Q35 -eq 1 ]] || return 
+	OPT+=" \
       -machine type=q35,accel=kvm,usb=on -device intel-iommu"
     RNGRANDOM="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"
     CMD+=($RNGRANDOM)   
@@ -180,13 +187,12 @@ windows()
 
 RemoveSSH()
 {
-    sudo ssh-keygen -f "/root/.ssh/known_hosts" -R "[localhost]:$SSHPORT"
+    ssh-keygen -R "[localhost]:$SSHPORT"
 }
 
 # main
 
 UNAME=${SUDO_USER:-$USER}
-USE_SSH=0
 RMSSH=0
 GDB=0
 
@@ -226,37 +232,46 @@ VMHOME=${VMHOME:-"$HOME/vm"}
 CFGFILE=${CFGFILE:-${PWD##*/}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
 VMNAME=${VMNAME:-${CFGFILE%%.*}}
-echo Virtual machine name: $VMNAME
-
-[[ $CUSTOM_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
-QEMU=${QEMU:-"qemu-system-x86_64"};
-QEMU+=" -name $VMNAME,process=${VMPROCID:=VM_$VMNAME}"
-CMD=($QEMU)
-
-NUM_CORE=${NCORE:-$(($(nproc)/2))}
-MEM_SIZE=${MEM_SIZE:-"8G"}
-OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE --enable-kvm -monitor stdio"
-
-USE_USB3=${USE_USB3-1}
-M_Q35=${M_Q35-1}
+VMPROCID=${VMPROCID:-VM_$VMNAME}
 G_TERM=${G_TERM-"gnome-terminal --"}
+echo Virtual machine name: $VMNAME
+[ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
+[ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
 
-[[ $M_Q35 -eq 1 ]] && set_M_Q35
-[[ $USE_UEFI -eq 1 ]] && set_uefi
-[[ -n $KERNEL_IMAGE ]] && set_kernel
-set_disks
-set_cdrom
-set_ocssd
-set_net
-[[ $USE_USB2 -eq 1 ]] && set_usb2
-[[ $USE_USB3 -eq 1 ]] && set_usb3
+if ! (waitUntil $VMPROCID 0); then
+	[[ $CUSTOM_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
+	QEMU=${QEMU:-"qemu-system-x86_64"};
+	QEMU+=" -name $VMNAME,process=$VMPROCID"
+	CMD=($QEMU)
 
-CMD+=($OPT $@)
+	NUM_CORE=${NCORE:-$(($(nproc)/2))}
+	MEM_SIZE=${MEM_SIZE:-"8G"}
+	OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE --enable-kvm -monitor stdio"
+
+	USE_USB3=${USE_USB3-1}
+	M_Q35=${M_Q35-1}
+
+	set_M_Q35
+	set_uefi
+	set_kernel
+	set_disks
+	set_cdrom
+	set_ocssd
+	set_net
+	set_usb2
+	set_usb3
+	CMD+=($OPT $@)
+fi
+
 [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 [[ $RMSSH -eq 1 ]] && RemoveSSH
 
 echo "${CMD[@]}" 
 echo "${CONNECT[@]}" 
-(waitUntil $VMPROCID 0) || ($G_TERM sudo "${CMD[@]}")
-(waitUntil $VMPROCID) && ("${CONNECT[@]}")&
+if [[ $GDB -eq 1 ]]; then
+	sudo gdb -q --args "${CMD[@]}"
+else
+	(waitUntil $VMPROCID 0) || ($G_TERM sudo "${CMD[@]}")
+	(waitUntil $VMPROCID) && ("${CONNECT[@]}")&
+fi
 
