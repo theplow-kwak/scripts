@@ -61,8 +61,12 @@ Install()
             sudo make $INSTALL
         fi
     else
+        read -n 1 -p "Do you want to install a new kernel to the \"$TARGETDIR\"? [y|n] " ans
+        echo ""
+        [[ "$ans" != "y" ]] && return   
         if ( isEmptyFolder $TARGETDIR ); then
             echo empty folder $TARGETDIR
+            echo please verify target folder \"$TARGETDIR\"
         else
             local _CMD="make $KSRC INSTALL_PATH=$TARGETDIR/boot INSTALL_MOD_PATH=$TARGETDIR INSTALL_HDR_PATH=$TARGETDIR/usr/src/$KVER $INSTALL"
             echo $_CMD
@@ -134,6 +138,8 @@ LOCALVERSION=${LOCALVERSION:-"custom"}
 KVER=$(make kernelversion)-$LOCALVERSION
 # KSRC="-C $PWD"
 # export KBUILD_OUTPUT=$TARGETDIR/usr/src/$KVER
+
+echo $KVER
 
 [[ $RMKERNEL -eq 1 ]] && removeKernel
 [[ $MKCONFIG -eq 1 ]] && MakeConfig

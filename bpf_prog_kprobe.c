@@ -15,17 +15,17 @@ struct val_t {
     char taskid[TASK_COMM_LEN];
 };
 
-struct data_t {
+struct cmd_data_t {
     u64 io_start_time_ns;
     char taskid[TASK_COMM_LEN];
     char disk_name[DISK_NAME_LEN];
     u8 opcode;
     u8 cmnd;
     u64 slba;
-    u64 len;
+    u32 len;
     u64 latency_ns;
-	u16 major;
-	u16 minor;
+    u16 major;
+    u16 minor;
 };
 
 struct nvme_request {
@@ -66,13 +66,9 @@ static inline u64 get_unaligned_be64(const u8 *p)
 #define SERVICE_ACTION16(cdb) (cdb[1] & 0x1f)
 #define SERVICE_ACTION32(cdb) ((cdb[8] << 8) | cdb[9])
 
-typedef struct {
-	unsigned long slba;
-	unsigned long len;
-} cdb_params_t;
 
 static inline void
-scsi_trace_rw6(unsigned char* cdb, struct data_t  *param)
+scsi_trace_rw6(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = ((cdb[1] & 0x1F) << 16);
 	param->slba |= (cdb[2] << 8);
@@ -83,7 +79,7 @@ scsi_trace_rw6(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_rw10(unsigned char* cdb, struct data_t  *param)
+scsi_trace_rw10(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = (cdb[2] << 24);
 	param->slba |= (cdb[3] << 16);
@@ -100,7 +96,7 @@ scsi_trace_rw10(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_rw12(unsigned char* cdb, struct data_t  *param)
+scsi_trace_rw12(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = (cdb[2] << 24);
 	param->slba |= (cdb[3] << 16);
@@ -115,7 +111,7 @@ scsi_trace_rw12(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_rw16(unsigned char* cdb, struct data_t  *param)
+scsi_trace_rw16(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = ((u64)cdb[2] << 56);
 	param->slba |= ((u64)cdb[3] << 48);
@@ -139,7 +135,7 @@ scsi_trace_rw16(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_rw32(unsigned char* cdb, struct data_t  *param)
+scsi_trace_rw32(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = ((u64)cdb[12] << 56);
 	param->slba |= ((u64)cdb[13] << 48);
@@ -163,7 +159,7 @@ scsi_trace_rw32(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_unmap(unsigned char* cdb, struct data_t  *param)
+scsi_trace_unmap(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = cdb[7] << 8 | cdb[8];
 
@@ -171,7 +167,7 @@ scsi_trace_unmap(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_service_action_in(unsigned char* cdb, struct data_t  *param)
+scsi_trace_service_action_in(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = ((u64)cdb[2] << 56);
 	param->slba |= ((u64)cdb[3] << 48);
@@ -190,7 +186,7 @@ scsi_trace_service_action_in(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_maintenance_in(unsigned char* cdb, struct data_t  *param)
+scsi_trace_maintenance_in(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->len = get_unaligned_be32(&cdb[6]);
 
@@ -198,7 +194,7 @@ scsi_trace_maintenance_in(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_maintenance_out(unsigned char* cdb, struct data_t  *param)
+scsi_trace_maintenance_out(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->len = get_unaligned_be32(&cdb[6]);
 
@@ -207,7 +203,7 @@ scsi_trace_maintenance_out(unsigned char* cdb, struct data_t  *param)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
 static inline void
-scsi_trace_zbc_in(unsigned char* cdb, struct data_t  *param)
+scsi_trace_zbc_in(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = get_unaligned_be64(&cdb[2]);
 	param->len = get_unaligned_be32(&cdb[10]);
@@ -216,7 +212,7 @@ scsi_trace_zbc_in(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_zbc_out(unsigned char* cdb, struct data_t  *param)
+scsi_trace_zbc_out(unsigned char* cdb, struct cmd_data_t *param)
 {
 	param->slba = get_unaligned_be64(&cdb[2]);
 
@@ -225,7 +221,7 @@ scsi_trace_zbc_out(unsigned char* cdb, struct data_t  *param)
 #endif
 
 static inline void
-scsi_trace_varlen(unsigned char* cdb, struct data_t  *param)
+scsi_trace_varlen(unsigned char* cdb, struct cmd_data_t *param)
 {
 	switch (SERVICE_ACTION32(cdb)) {
 	case READ_32:
@@ -239,7 +235,7 @@ scsi_trace_varlen(unsigned char* cdb, struct data_t  *param)
 }
 
 static inline void
-scsi_trace_parse_cdb(unsigned char* cdb, struct data_t  *param)
+scsi_trace_parse_cdb(unsigned char* cdb, struct cmd_data_t *param)
 {
 	switch (cdb[0]) {
 	case READ_6:
@@ -287,6 +283,8 @@ scsi_trace_parse_cdb(unsigned char* cdb, struct data_t  *param)
 		break;
 #endif
 	default:
+		param->slba = 0;
+		param->len = 0;
 		break;
 	}
 }
@@ -331,7 +329,7 @@ int blk_req_completion(struct pt_regs *ctx, struct request *req)
 {
     struct val_t *valp;
     struct gendisk *rq_disk;
-    struct data_t data = {};
+    struct cmd_data_t data = {};
 
     valp = start.lookup(&req);
     if (valp == 0) {

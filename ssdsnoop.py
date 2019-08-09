@@ -18,6 +18,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 from bcc import BPF
+from datetime import date, datetime
 import ctypes as ct
 import time
 import argparse
@@ -53,7 +54,7 @@ class Data(ct.Structure):
         ("opcode", ct.c_uint8),
         ("cmnd", ct.c_uint8),
         ("slba", ct.c_ulonglong),
-        ("len", ct.c_ulonglong),
+        ("len", ct.c_ulong),
         ("latency_ns", ct.c_ulonglong),
         ("major", ct.c_uint16),
         ("minor", ct.c_uint16),        
@@ -83,6 +84,8 @@ class CollectsWorkload:
         self.data.clear()
 
     def update(self, ts, disk, cmd, slen):
+        if self.TimeTag == 0.0:
+            self.TimeTag = ts
         if ((ts - self.TimeTag) > self.TimeInterval):
             self.saveStatistics(self.LastTimeTag)
             self.TimeTag = ts
@@ -111,7 +114,7 @@ class CollectsWorkload:
             self.fd.write(str("\ntotal")+', '+str(self.total)+'\n')
 
 
-class myFilter():
+class devFilter():
     def __init__(self, filters='*'):
         self.filters = None
         self.setfilter(filters)
@@ -169,9 +172,8 @@ class logInfo():
             
 
 class CaptureSSD:
-    defaultFileName = time.strftime("ssd-%m%d-%H%M")
     interval = 1
-    logformat = '{ts:>14.6f} {taskid:^16s} {major:>3d}:{minor:<3d} {disk:^10s} {opcode:^10s} {cmnd:^7x} {slba:>14d} {len:>7d} {latency:>14.3f}'
+    logformat = '{ts:>18.6f} {taskid:^16s} {major:>3d}:{minor:<3d} {disk:^10s} {opcode:^10s} {cmnd:^7x} {slba:>14d} {len:>7d} {latency:>14.3f}'
     fieldnames = ['ts', 'taskid', 'major', 'minor', 'disk', 'opcode', 'cmnd', 'slba', 'len', 'latency']
     header = ['TimeStamp', 'TaskID', 'Major', 'Minor', 'Disk', 'Opcode', 'cmnd', 'slba', 'len', 'Latency']
     pagecount=2048 * 64
@@ -179,11 +181,13 @@ class CaptureSSD:
     def __init__(self, dev=None, filename=None, verbose='f', interval=1):
         self.count = 0
         self.start_ts = 0
-        self.diskfilter = myFilter('*')
+        self.diskfilter = devFilter('*')
         self.filename = filename
         self.verbose = verbose
         self.log = logInfo(self.logformat, verbose, interval)
-        self.cmdCount = CollectsWorkload(interval=interval, verbose=verbose)
+        self.CmdCounter = CollectsWorkload(interval=interval, verbose=verbose)
+        self.start_time = time.time()
+        self.today = date.today()
         self.bcc = BPF(src_file="bpf_prog_kprobe.c", cflags=['-w','-O3', '-I'+os.path.split(os.path.realpath(__file__))[0], '-include', 'asm_goto_workaround.h'])
 
     def fileopen(self):
@@ -191,20 +195,22 @@ class CaptureSSD:
             return 
             
         if self.filename is None:
-            self.filename = self.defaultFileName
+            self.filename = 'ssd'
 
-        self.__workload_fd = open(self.filename + '-workload.csv', 'w')
+        self.WorkloadFileName = self.filename + '-' + self.today.strftime("%Y%m%d") + '-workload.csv'
+        self.StatisticFileName = self.filename + '-' + self.today.strftime("%Y%m%d") + '-statistics.csv'
+        self.__workload_fd = open(self.WorkloadFileName, 'w')
         self.workloadfile = csv.writer(self.__workload_fd, quoting=csv.QUOTE_NONNUMERIC)
-        self.__statistic_fd = open(self.filename + '-statistics.csv', 'w')
+        self.__statistic_fd = open(self.StatisticFileName, 'w')
         self.statisticfile = csv.writer(self.__statistic_fd, quoting=csv.QUOTE_NONNUMERIC)
 
         __uid = os.environ.get('SUDO_UID')
         __gid = os.environ.get('SUDO_GID')
         if __uid is not None:
-            os.chown(self.filename + '-workload.csv', int(__uid), int(__gid))
-            os.chown(self.filename + '-statistics.csv', int(__uid), int(__gid))
+            os.chown(self.WorkloadFileName, int(__uid), int(__gid))
+            os.chown(self.StatisticFileName, int(__uid), int(__gid))
         self.workloadfile.writerow(self.header)
-        self.cmdCount.setFile(self.__statistic_fd)
+        self.CmdCounter.setFile(self.__statistic_fd)
        
     def start(self):
         # loop with callback to print_event
@@ -220,11 +226,17 @@ class CaptureSSD:
         while 1:
             try:
                 self.bcc.kprobe_poll(1000)
+                if date.today() > self.today:
+                    self.__workload_fd.close()
+                    self.__statistic_fd.close()
+                    self.today = date.today()
+                    self.fileopen()
+                    
             except KeyboardInterrupt:
                 break
 
         try:
-            self.cmdCount.close()
+            self.CmdCounter.close()
             self.__workload_fd.close()
             self.__statistic_fd.close()
         except:
@@ -237,10 +249,11 @@ class CaptureSSD:
         if self.start_ts == 0:
             self.start_ts = self.event.io_start_time_ns
             self.current_ts = 0.0
-            print(self.start_ts, time.time())
 
         self.current_ts = (self.event.io_start_time_ns - self.start_ts) / 1000000000
-        self.__values = [self.current_ts, self.event.taskid,
+        # self.current_time = int(datetime.fromtimestamp(self.current_ts+self.start_time).strftime("%Y%m%d%H%M%S%f"))
+        self.current_time = self.current_ts+self.start_time
+        self.__values = [self.current_time, self.event.taskid,
                        self.event.major, self.event.minor, self.event.disk_name,
                        str(cmd_opcode.get(self.event.opcode, (self.event.opcode & 0xff))), self.event.cmnd,
                        self.event.slba, self.event.len, (self.event.latency_ns / 1000)]
@@ -254,8 +267,11 @@ class CaptureSSD:
                 self.workloadfile.writerow(self.__values)
             except:
                 pass
+        if self.__values[9] > 10000000:
+            print("error!! ", self.count, self.event.io_start_time_ns, self.start_ts, self.current_ts, self.event.latency_ns, self.__values[9])  
+		   
         self.count += 1
-        self.cmdCount.update(self.result['ts'], self.result['disk'], (self.result['opcode'], self.result['cmnd']), self.result['len'])
+        self.CmdCounter.update(self.result['ts'], self.result['disk'], (self.result['opcode'], self.result['cmnd']), self.result['len'])
         self.log.log(self.result)
 
     def summary(self):
@@ -272,19 +288,19 @@ def readWorkloadFile(filename, verbose='f', interval=1, filters='*', outfile=Non
     outfile = 'statistics' if outfile is None else 'statistics.' + str(outfile)
     statisticFile = open(filename.replace('workload', outfile), 'w')
     header = csvReader.next()
-    cmdCount = CollectsWorkload(interval=interval, verbose=verbose, fd=statisticFile)
+    CmdCounter = CollectsWorkload(interval=interval, verbose=verbose, fd=statisticFile)
     logformat = '{ts:>14.6f} {taskid:^16s} {major:>3}:{minor:<3} {disk:^10s} {opcode:^10s} {cmnd:^7} {slba:>14} {len:>7} {latency:>14.3f}'
     fieldnames = ['ts', 'taskid', 'major', 'minor', 'disk', 'opcode', 'cmnd', 'slba', 'len', 'latency']
-    diskfilter = myFilter(filters)
+    diskfilter = devFilter(filters)
     log = logInfo(logformat, verbose, interval)
 
     for row in csvReader:
         result = dict(zip(fieldnames, row))
 
         if diskfilter.match(result['disk']):
-            cmdCount.update(result['ts'], result['disk'], (result['opcode'], result['cmnd']), result['len'])
+            CmdCounter.update(result['ts'], result['disk'], (result['opcode'], result['cmnd']), result['len'])
             log.log(result)
-    cmdCount.close()    
+    CmdCounter.close()    
 
 
 class UpdateFilter(argparse.Action):
