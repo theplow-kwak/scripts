@@ -104,7 +104,7 @@ class CollectsWorkload:
         self.fd = fd
 
     def get(self):
-        return self.data
+        return self.total
 
     def close(self):
         self.saveStatistics(self.LastTimeTag)

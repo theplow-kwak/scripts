@@ -68,19 +68,31 @@ set_cdrom()
 
 set_net()
 {
-    SSHPORT=${SSHPORT:-5900}
-    SPICEPORT=$(($SSHPORT+1))
-    while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
-    NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic"
-    SPICE="\
-      -vga qxl -spice port=$SPICEPORT,disable-ticketing \
-      -device virtio-serial \
-      -chardev spicevmc,id=vdagent,name=vdagent \
-      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
-    SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
-    CMD+=($NET $SPICE $SHARE0)
-    echo $SSHPORT > /tmp/${VMPROCID}_SSH
-    echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
+	local _set=$1
+    [[ $RMSSH -eq 1 ]] && { rm /tmp/${VMPROCID}*; _set=1; }
+	[ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
+	[ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
+	
+	if [[ $_set -eq 1 ]]; then
+	    SSHPORT=${SSHPORT:-5900}
+	    while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
+	    NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic"
+	    
+	    SPICEPORT=$(($SSHPORT+1))
+	    SPICE="\
+	      -vga qxl -spice port=$SPICEPORT,disable-ticketing \
+	      -soundhw hda \
+	      -device virtio-serial \
+	      -chardev spicevmc,id=vdagent,name=vdagent \
+	      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
+	    SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
+	    CMD+=($NET $SPICE $SHARE0)
+	    echo $SSHPORT > /tmp/${VMPROCID}_SSH
+	    echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
+    fi
+    
+	[[ $RMSSH -eq 1 ]] && RemoveSSH
+	[[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 }
 
 set_kernel() 
@@ -189,7 +201,6 @@ windows()
 RemoveSSH()
 {
     ssh-keygen -R "[localhost]:$SSHPORT"
-    rm /tmp/${VMPROCID}*
 }
 
 # main
@@ -224,6 +235,7 @@ while (($#)); do
         *.img*)     IMG+="$1 ";;
         *.qcow2*)   IMG+="$1 ";;
         */dev/*)    IMG+="$1 ";;
+        *.iso*)     CDIMG+="$1 ";;
         * )         break;;
     esac
     shift
@@ -237,8 +249,6 @@ VMNAME=${VMNAME:-${CFGFILE%%.*}}
 VMPROCID=${VMPROCID:-VM_$VMNAME}
 G_TERM=${G_TERM-"gnome-terminal --"}
 echo Virtual machine name: $VMNAME
-[ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
-[ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
 
 if ! (waitUntil $VMPROCID 0); then
     [[ $CUSTOM_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
@@ -259,14 +269,13 @@ if ! (waitUntil $VMPROCID 0); then
     set_disks
     set_cdrom
     set_ocssd
-    set_net
+    set_net 1
     set_usb2
     set_usb3
     CMD+=($OPT $EXT_PARAMS $@)
+else
+	set_net
 fi
-
-[[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
-[[ $RMSSH -eq 1 ]] && RemoveSSH
 
 echo "${CMD[@]}" 
 echo "${CONNECT[@]}" 

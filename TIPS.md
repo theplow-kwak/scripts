@@ -232,37 +232,6 @@ Say we want to remove commits 2 & 4 from the repo.
 
 
 
-# Windows 10에서 samba server 인증 안되는 경우 해결 방안
-
-Windows 10에서 samba server에 연결이 안되고 계속 인증 에러가 나는 경우 발생. ubuntu에서 `sudo smbstatus`로 확인 결과 user name이 ***nobody***로 바뀌어 있다.
-
-```
-Samba version 4.8.4-Ubuntu
-PID     Username     Group        Machine                                   Protocol Version  Encryption           Signing              
-----------------------------------------------------------------------------------------------------------------------------------------
-3406    nobody       nogroup      10.152.126.210 (ipv4:10.152.126.210:61267) SMB3_11           -                    -                    
-```
-
-
-
-- Ubuntu samba에서 설정하는 방법:
-
-You can also fix this on the server (Ubuntu 18.04.1 LTS) side: In `/etc/samba/smb.conf`, put:
-
-```
-ntlm auth = true
-```
-
-
-
-- Windows에서 설정하는 방법:
-
-if anyone else runs into this problem, my solution was to adjust the security policies on the Windows client.
-
-`Run > Secpol.msc`
-
-then I set Local Policies > Security Options > Network Security: LAN Manager authentication level to 'Send NTLMv2 response only. Refuse LM & NTLM'
-
 
 
 # 레드햇에서 YUM 사용하는 방법
@@ -302,29 +271,6 @@ then I set Local Policies > Security Options > Network Security: LAN Manager aut
 
 
 
-# CentOS / RHEL 7 : Eable To Start The Samba Service
-
-**Configure SELinux to allow SAMBA services**
-In case if you do not want to disable SELinux, you can review the SELinux policy allowing the SAMBA subsystem to run. To check the current SELinux policies, use the below commands.
-
-```
-# getsebool -a | grep samba
-# getsebool -a | grep nmb
-```
-
-This should give a list of options and whether these are on or off. They should be on. The settings can be changed using the commands given below.
-Syntax :
-
-```
-# setsebool -P [boolean] on
-```
-
-For example:
-
-```
-# setsebool -P bacula_use_samba on
-```
-
 
 
 # ftrace를 이용한 디버깅 방법
@@ -359,9 +305,100 @@ tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 
 
 
-# samba mount
+# Fix Time Differences in Ubuntu & Windows 10 Dual Boot
+
+**Disable UTC and use Local Time in Ubuntu**
+
+```bash
+timedatectl set-local-rtc 1 --adjust-system-clock
+```
+
+
+
+# How to Change MAC Address on Ubuntu
+
+https://www.wikihow.com/Change-MAC-Address-on-Ubuntu
+
+```
+ip link show
+sudo ip link set dev xxxx down 
+sudo ip link set dev xxxx address xx:xx:xx:xx:xx:xx 
+sudo ip link set dev xxxx up
+```
+
+
+
+# Samba
+
+## CentOS / RHEL 7 : Eable To Start The Samba Service
+
+**Configure SELinux to allow SAMBA services**
+In case if you do not want to disable SELinux, you can review the SELinux policy allowing the SAMBA subsystem to run. To check the current SELinux policies, use the below commands.
+
+```
+# getsebool -a | grep samba
+# getsebool -a | grep nmb
+```
+
+This should give a list of options and whether these are on or off. They should be on. The settings can be changed using the commands given below.
+Syntax :
+
+```
+# setsebool -P [boolean] on
+```
+
+For example:
+
+```
+# setsebool -P bacula_use_samba on
+```
+
+
+
+## Samba mount
 
 ```bash
 sudo mount -t cifs -o username=dhkwak //10.0.2.4/qemu ./host
 ```
+
+
+
+## Windows 10에서 samba server 인증 안되는 경우 해결 방안
+
+Windows 10에서 samba server에 연결이 안되고 계속 인증 에러가 나는 경우 발생. ubuntu에서 `sudo smbstatus`로 확인 결과 user name이 ***nobody***로 바뀌어 있다.
+
+```
+Samba version 4.8.4-Ubuntu
+PID     Username     Group        Machine                                   Protocol Version  Encryption           Signing              
+----------------------------------------------------------------------------------------------------------------------------------------
+3406    nobody       nogroup      10.152.126.210 (ipv4:10.152.126.210:61267) SMB3_11           -                    -                    
+```
+
+
+
+- Ubuntu samba에서 설정하는 방법:
+
+You can also fix this on the server (Ubuntu 18.04.1 LTS) side: In `/etc/samba/smb.conf`, put:
+
+```
+ntlm auth = true
+```
+
+
+
+- Windows에서 설정하는 방법:
+
+if anyone else runs into this problem, my solution was to adjust the security policies on the Windows client.
+
+`Run > Secpol.msc`
+
+then I set Local Policies > Security Options > Network Security: LAN Manager authentication level to 'Send NTLMv2 response only. Refuse LM & NTLM'
+
+
+
+- 조직의 보안 정책에서 인증되지 않은 게스트 액세스를 차단하므로 이 공유 폴더에 액세스할 수 없습니다.
+
+https://vhrms.tistory.com/772
+
+
 
