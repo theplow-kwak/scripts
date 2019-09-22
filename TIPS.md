@@ -361,6 +361,10 @@ For example:
 sudo mount -t cifs -o username=dhkwak //10.0.2.4/qemu ./host
 ```
 
+```bash
+gio mount smb://10.0.2.2/home/
+```
+
 
 
 ## Windows 10에서 samba server 인증 안되는 경우 해결 방안

@@ -68,31 +68,31 @@ set_cdrom()
 
 set_net()
 {
-	local _set=$1
+    local _set=$1
     [[ $RMSSH -eq 1 ]] && { rm /tmp/${VMPROCID}*; _set=1; }
-	[ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
-	[ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
-	
-	if [[ $_set -eq 1 ]]; then
-	    SSHPORT=${SSHPORT:-5900}
-	    while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
-	    NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic"
-	    
-	    SPICEPORT=$(($SSHPORT+1))
-	    SPICE="\
-	      -vga qxl -spice port=$SPICEPORT,disable-ticketing \
-	      -soundhw hda \
-	      -device virtio-serial \
-	      -chardev spicevmc,id=vdagent,name=vdagent \
-	      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
-	    SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
-	    CMD+=($NET $SPICE $SHARE0)
-	    echo $SSHPORT > /tmp/${VMPROCID}_SSH
-	    echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
+    [ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
+    [ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
+
+    if [[ $_set -eq 1 ]]; then
+        SSHPORT=${SSHPORT:-5900}
+        while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
+        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic"
+        
+        SPICEPORT=$(($SSHPORT+1))
+        SPICE="\
+          -vga qxl -spice port=$SPICEPORT,disable-ticketing \
+          -soundhw hda \
+          -device virtio-serial \
+          -chardev spicevmc,id=vdagent,name=vdagent \
+          -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
+        SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
+        CMD+=($NET $SPICE $SHARE0)
+        echo $SSHPORT > /tmp/${VMPROCID}_SSH
+        echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
     fi
-    
-	[[ $RMSSH -eq 1 ]] && RemoveSSH
-	[[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+
+    [[ $RMSSH -eq 1 ]] && RemoveSSH
+    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 }
 
 set_kernel() 
@@ -135,7 +135,7 @@ set_ocssd()
     else
         OCSSD=${OCSSD-"\
           -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-          -device nvme,drive=myocssd,serial=deadbeef"}
+          -device nvme,drive=myocssd,serial=deadbeef,namespaces=${NUM_NS:-4}"}
     fi
     
     if [[ -e $OCSSD_BACKEND ]]; then
@@ -208,6 +208,7 @@ RemoveSSH()
 UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 GDB=0
+USE_UEFI=1
 
 while getopts ":sSv:n:dk:q:ri:c:u" opt; do
     case $opt in
@@ -256,9 +257,9 @@ if ! (waitUntil $VMPROCID 0); then
     QEMU+=" -name $VMNAME,process=$VMPROCID"
     CMD=($QEMU)
 
-    NUM_CORE=${NCORE:-$(($(nproc)/2))}
+    NUM_CORE=${NUM_CORE:-$(($(nproc)/2))}
     MEM_SIZE=${MEM_SIZE:-"8G"}
-    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE --enable-kvm -monitor stdio"
+    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio"
 
     USE_USB3=${USE_USB3-1}
     M_Q35=${M_Q35-1}

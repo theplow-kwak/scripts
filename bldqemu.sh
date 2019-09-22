@@ -38,5 +38,10 @@ clean()
     make clean
 }
 
+distclean()
+{
+    make distclean && rm -rf *-linux-user *-softmmu
+}
+
 $1 $2
 
