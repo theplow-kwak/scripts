@@ -76,7 +76,8 @@ set_net()
     if [[ $_set -eq 1 ]]; then
         SSHPORT=${SSHPORT:-5900}
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
-        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic"
+        macaddr=$(echo $VMNAME|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
+        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
         
         SPICEPORT=$(($SSHPORT+1))
         SPICE="\
@@ -208,22 +209,24 @@ RemoveSSH()
 UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 GDB=0
-USE_UEFI=1
 
-while getopts ":sSv:n:dk:q:ri:c:u" opt; do
+options=":sSv:n:dk:q:ri:c:u:o:"
+while getopts $options opt; do
     case $opt in
         s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
         S)  USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
             RMSSH=1 ;;
         r)  RMSSH=1 ;;          # Remove existing SSH keys 
         n)  UNAME=$OPTARG ;;    # set login user name
-        v)  VMNAME=$OPTARG ;;
+        v)  VMNAME=${OPTARG%%.*} ;;
         i)  IMG+=$OPTARG ;;
         d)  GDB=1 ;;
-        q)  QEMU=$OPTARG ;;
+        q)  CUSTOM_QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
-        c)  CFGFILE=$OPTARG ;;
-        u)  USE_UEFI=1 ;;
+        c)  VMNAME=${OPTARG%%.*} ;;
+        u)  USE_UEFI=$OPTARG ;;
+        o)  USE_OCSSD=1; [[ $OPTARG -gt 1 ]] && NUM_NS=$OPTARG ;;
+        h)  usage; exit;;
         *)  usage ;;
     esac
 done 
@@ -232,11 +235,12 @@ shift $(($OPTIND-1))
 
 while (($#)); do
     case $1 in 
-        *vmlinuz*)  KERNEL_IMAGE=$1;;
-        *.img*)     IMG+="$1 ";;
-        *.qcow2*)   IMG+="$1 ";;
-        */dev/*)    IMG+="$1 ";;
-        *.iso*)     CDIMG+="$1 ";;
+        *vmlinuz*)  KERNEL_IMAGE=$1 ;;
+        *.img*)     IMG+="$1 " ;;
+        *.qcow2*)   IMG+="$1 " ;;
+        */dev/*)    IMG+="$1 " ;;
+        *.iso*)     CDIMG+="$1 " ;;
+        *.cfg*)     VMNAME=${1%%.*} ;;
         * )         break;;
     esac
     shift
@@ -244,9 +248,9 @@ done
 
 VMHOME=${VMHOME:-"$HOME/vm"}
 
-CFGFILE=${CFGFILE:-${PWD##*/}.cfg}
+VMNAME=${VMNAME:-${PWD##*/}}
+CFGFILE=${CFGFILE:-${VMNAME}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
-VMNAME=${VMNAME:-${CFGFILE%%.*}}
 VMPROCID=${VMPROCID:-VM_$VMNAME}
 G_TERM=${G_TERM-"gnome-terminal --"}
 echo Virtual machine name: $VMNAME

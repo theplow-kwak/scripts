@@ -130,14 +130,6 @@ dnvme.ko build시에 gcc version이 맞지 않으면 insmod에서 error 발생 (
 
 
 
-# vmdk to vhdx
-
-```
-ConvertTo-MvmcVirtualHardDisk -SourceLiteralPath "D:\VMPC\Ubuntu 1804 64-bit\Ubuntu 1804 64-bit.vmdk" -DestinationLiteralPath u1804 -VhdType DynamicHarddisk -VhdFormat vhdx
-```
-
-
-
 # wine 설치
 
 ```
@@ -255,21 +247,33 @@ Say we want to remove commits 2 & 4 from the repo.
    ```
    [base]
    name=CentOS-$releasever - Base
-   baseurl=http://mirror.kakao.com/centos/7/os/$basearch/
+   baseurl=http://mirror.kakao.com/centos/$releasever/os/$basearch/
    gpgcheck=1
    
    #released updates
    [update]
    name=CentOS-$releasever - Updates
-   baseurl=http://mirror.kakao.com/centos/7/updates/$basearch/
+   baseurl=http://mirror.kakao.com/centos/$releasever/updates/$basearch/
    gpgcheck=1
    ```
 
-   rpm --import http://mirror.centos.org/centos/7/os/x86_64/RPM-GPG-KEY-CentOS-7 
+   ```bash
+   sudo rpm --import http://mirror.kakao.com/centos/7/os/x86_64/RPM-GPG-KEY-CentOS-7 
+   ```
+   
+   이후 yum repolist all 로 확인
+   
+   
+   
+3. CentOS 7.2: Yum repo configuration fails
+   yum update 실행시 '[Errno 14] HTTP Error 404 - Not Found Trying other mirror.'  발생
 
-이후 yum repolist all 로 확인
+   ```
+   sudo mkdir -p /etc/yum/vars
+   sudo sh -c 'echo 7.7.1908 > /etc/yum/vars/releasever'
+   ```
 
-
+   Replace "7.7.1908" with your own release version if you are having this problem and nothing else has worked. (7.6.1810)
 
 
 
@@ -362,7 +366,7 @@ sudo mount -t cifs -o username=dhkwak //10.0.2.4/qemu ./host
 ```
 
 ```bash
-gio mount smb://10.0.2.2/home/
+gio mount "smb://WORKGROUP;dhkwak@10.0.2.2/home/"
 ```
 
 
