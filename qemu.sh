@@ -2,8 +2,23 @@
 
 usage()
 {
-    echo "Usage: $0 [-p <SSH port number>] [-n <Guest login name>] [Guest image file]" 1>&2
-    exit 1
+cat << EOM
+Usage: $0 [OPTIONS] [cfg file] [Guest image files] [CD image files]
+
+Options:
+    -s          make SSH connection to the running QEMU
+    -S          Remove existing SSH keys and make SSH connection to the running QEMU
+    -r          Remove existing SSH keys 
+    -n NAME     set login user name
+    -v VMNAME   set virtual machin name
+    -i IMG      disk images
+    -d          debug mode
+    -q          use custom qemu
+    -k KERNEL   kernel image
+    -c cfg_file read configurations from cfg_file
+    -u 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
+    -o n        0 - do not use ocssd, gt 1 - set numbers of multi name space
+EOM
 }
 
 # wait until process start: process name, [timeout]
@@ -93,7 +108,7 @@ set_net()
     fi
 
     [[ $RMSSH -eq 1 ]] && RemoveSSH
-    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 }
 
 set_kernel() 
@@ -118,10 +133,12 @@ set_kernel()
 set_uefi()
 {
     [[ $USE_UEFI -eq 1 ]] || return
+    OVMF_CODE="$VMHOME/bios/OVMF_CODE.fd"
+    # OVMF_CODE="/usr/share/ovmf/OVMF.fd"
     if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
         (cp $VMHOME/bios/OVMF_VARS.fd $OVMF_VARS) || return
     fi
-    UEFI=${UEFI-"-drive file=$VMHOME/bios/OVMF_CODE.fd,if=pflash,format=raw,readonly,unit=0 \
+    UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly,unit=0 \
           -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
     CMD+=($UEFI)
 }
@@ -129,14 +146,21 @@ set_uefi()
 set_ocssd()
 {
     [[ $USE_OCSSD -eq 1 ]] || return
-    if [[ $CUSTOM_QEMU -eq 1 ]] && [[ $USE_LNVM -eq 1 ]]; then
-        OCSSD=${OCSSD-"\
-          -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-          -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"}
+    OCSSD_BACKEND=${OCSSD_BACKEND:-"ocssd_backend.img"}
+    if [[ $CUSTOM_QEMU -eq 1 ]]; then
+        if [[ $USE_LNVM -eq 1 ]]; then
+            OCSSD=${OCSSD-"\
+              -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
+              -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"}
+        else
+            OCSSD=${OCSSD-"\
+              -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
+              -device nvme,drive=myocssd,serial=deadbeef,namespaces=${NUM_NS:-4}"}
+        fi
     else
         OCSSD=${OCSSD-"\
-          -drive file=${OCSSD_BACKEND:="/dev/nvme0n1p1"},id=myocssd,format=raw,if=none,cache=none \
-          -device nvme,drive=myocssd,serial=deadbeef,namespaces=${NUM_NS:-4}"}
+          -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
+          -device nvme,drive=myocssd,serial=deadbeef"}
     fi
     
     if [[ -e $OCSSD_BACKEND ]]; then
@@ -151,21 +175,22 @@ set_ocssd()
 
 set_usb3()
 {
-    [[ $USE_USB2 -eq 1 ]] || return
+    [[ $USE_USB3 -eq 1 ]] || return
     USB="\
-      -device nec-usb-xhci,id=usb3 \
+      -device qemu-xhci,id=usb3 \
       -chardev spicevmc,name=usbredir,id=usbredirchardev1 \
       -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1 \
       -chardev spicevmc,name=usbredir,id=usbredirchardev2 \
       -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2 \
       -chardev spicevmc,name=usbredir,id=usbredirchardev3 \
       -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
+    USB_PT="-device usb-host,hostbus=3,hostport=1"
     CMD+=($USB)
 }
 
 set_usb2()
 {
-    [[ $USE_USB3 -eq 1 ]] || return
+    [[ $USE_USB2 -eq 1 ]] || return
     USB="\
       -device ich9-usb-ehci1,id=usb \
       -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
@@ -220,14 +245,14 @@ while getopts $options opt; do
         n)  UNAME=$OPTARG ;;    # set login user name
         v)  VMNAME=${OPTARG%%.*} ;;
         i)  IMG+=$OPTARG ;;
-        d)  GDB=1 ;;
+        d)  G_TERM= ;;
         q)  CUSTOM_QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
         c)  VMNAME=${OPTARG%%.*} ;;
         u)  USE_UEFI=$OPTARG ;;
         o)  USE_OCSSD=1; [[ $OPTARG -gt 1 ]] && NUM_NS=$OPTARG ;;
         h)  usage; exit;;
-        *)  usage ;;
+        *)  usage; exit;;
     esac
 done 
 

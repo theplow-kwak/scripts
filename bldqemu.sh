@@ -14,6 +14,11 @@ shift $(($OPTIND-1))
 
 PREFIX=${PREFIX:-$HOME/$TARGET}
 
+bldenv()
+{
+    sudo apt install libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libsnappy-dev
+}
+
 config()
 {
     TRACE=${1:-"log"}

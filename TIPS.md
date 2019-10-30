@@ -263,6 +263,10 @@ Say we want to remove commits 2 & 4 from the repo.
    
    이후 yum repolist all 로 확인
    
+   ```bash
+   sudo yum --enablerepo=update clean metadata
+   ```
+   
    
    
 3. CentOS 7.2: Yum repo configuration fails
@@ -304,6 +308,9 @@ stacktrace
 
 ```bash
 for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
+```
+
+```bash
 tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 ```
 

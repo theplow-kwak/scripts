@@ -7,23 +7,26 @@ case $1 in
     *)      REL_VER=$1 ;;
 esac
 
-REL_VER=${REL_VER:-"7.6.1810"}
+REL_VER=${REL_VER:-"7"}
+MIRROR='http://mirror.navercorp.com/centos/'
 echo $REL_VER
+echo $MIRROR
 
-sudo sh -c 'cat > /etc/yum.repos.d/centos.repo <<EOL
-[base]
+printf "%s\n" \
+"[base]
 name=CentOS-\$releasever - Base
-baseurl=http://mirror.kakao.com/centos/\$releasever/os/\$basearch/
+baseurl=$MIRROR\$releasever/os/\$basearch/
 gpgcheck=1
 
 #released updates
 [update]
 name=CentOS-\$releasever - Updates
-baseurl=http://mirror.kakao.com/centos/\$releasever/updates/\$basearch/
-gpgcheck=1
-EOL'
+baseurl=$MIRROR\$releasever/updates/\$basearch/
+gpgcheck=1" \
+| sudo dd of=/etc/yum.repos.d/centos.repo
 
-sudo rpm --import http://mirror.kakao.com/centos/7/os/x86_64/RPM-GPG-KEY-CentOS-7
+sudo rpm --import $MIRROR/7/os/x86_64/RPM-GPG-KEY-CentOS-7
+sudo yum clean all
 sudo sh -c "echo $REL_VER > /etc/yum/vars/releasever"
 sudo yum repolist all
 
