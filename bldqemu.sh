@@ -14,9 +14,9 @@ shift $(($OPTIND-1))
 
 PREFIX=${PREFIX:-$HOME/$TARGET}
 
-bldenv()
+setup_env()
 {
-    sudo apt install libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libsnappy-dev
+    sudo apt install -y libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libsnappy-dev libgtk-3-dev
 }
 
 config()

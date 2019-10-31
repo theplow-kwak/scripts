@@ -10,7 +10,7 @@ Options:
     -S          Remove existing SSH keys and make SSH connection to the running QEMU
     -r          Remove existing SSH keys 
     -n NAME     set login user name
-    -v VMNAME   set virtual machin name
+    -v VMNAME   set virtual machine name
     -i IMG      disk images
     -d          debug mode
     -q          use custom qemu
@@ -19,6 +19,12 @@ Options:
     -u 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n        0 - do not use ocssd, gt 1 - set numbers of multi name space
 EOM
+}
+
+setup_qemu()
+{
+    sudo apt install -y qemu-kvm
+    sudo apt install -y virt-viewer    
 }
 
 # wait until process start: process name, [timeout]
@@ -266,6 +272,7 @@ while (($#)); do
         */dev/*)    IMG+="$1 " ;;
         *.iso*)     CDIMG+="$1 " ;;
         *.cfg*)     VMNAME=${1%%.*} ;;
+        setup)      setup_qemu; exit 0;;
         * )         break;;
     esac
     shift
@@ -283,6 +290,7 @@ echo Virtual machine name: $VMNAME
 if ! (waitUntil $VMPROCID 0); then
     [[ $CUSTOM_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
     QEMU=${QEMU:-"qemu-system-x86_64"};
+    (which $QEMU >& /dev/null) || { echo $QEMU was not installed!! ; exit 1; }
     QEMU+=" -name $VMNAME,process=$VMPROCID"
     CMD=($QEMU)
 
@@ -304,7 +312,7 @@ if ! (waitUntil $VMPROCID 0); then
     set_usb3
     CMD+=($OPT $EXT_PARAMS $@)
 else
-	set_net
+    set_net
 fi
 
 echo "${CMD[@]}" 
