@@ -256,7 +256,7 @@ while getopts $options opt; do
         k)  KERNEL_IMAGE=$OPTARG ;;
         c)  VMNAME=${OPTARG%%.*} ;;
         u)  USE_UEFI=$OPTARG ;;
-        o)  USE_OCSSD=1; [[ $OPTARG -gt 1 ]] && NUM_NS=$OPTARG ;;
+        o)  [[ $OPTARG -eq 0 ]] && { USE_OCSSD=0; } || { USE_OCSSD=1; [[ $OPTARG -gt 1 ]] && { NUM_NS=$OPTARG; echo "OCSSD NUM_NS=$NUM_NS"; } } ;;
         h)  usage; exit;;
         *)  usage; exit;;
     esac

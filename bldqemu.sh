@@ -16,7 +16,16 @@ PREFIX=${PREFIX:-$HOME/$TARGET}
 
 setup_env()
 {
-    sudo apt install -y libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libsnappy-dev libgtk-3-dev
+    sudo apt install -y flex bison
+    sudo apt install -y libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev
+    sudo apt install -y libspice-server-dev libspice-server1 libudev-dev libusb-dev libusbredirparser-dev
+    sudo apt install -y libaio-dev libbluetooth-dev libbrlapi-dev libbz2-dev
+    sudo apt install -y libcap-dev libcap-ng-dev libcurl4-gnutls-dev libgtk-3-dev
+    sudo apt install -y libibverbs-dev libjpeg8-dev libncurses5-dev libnuma-dev
+    sudo apt install -y librbd-dev librdmacm-dev
+    sudo apt install -y libsasl2-dev libsdl1.2-dev libseccomp-dev libsnappy-dev libssh2-1-dev
+    sudo apt install -y libvde-dev libvdeplug-dev libvte-2.90-dev libxen-dev liblzo2-dev
+    sudo apt install -y valgrind xfslibs-dev 
 }
 
 config()
