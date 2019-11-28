@@ -2,9 +2,9 @@
 
 TARGET=${PWD##*/}
 
-while getopts ":p:P:" opt; do
+while getopts ":p:t:" opt; do
     case $opt in
-        p)  TARGET=$OPTARG ;;
+        t)  TARGET=$OPTARG ;;
         P)  PREFIX=$OPTARG ;;
         *)  usage ;;
     esac
@@ -39,7 +39,11 @@ config()
         --enable-trace-backends=$TRACE"
 
     echo $CFG
-    ./configure $CFG
+    if [[ -e ./configure ]]; then
+        ./configure $CFG
+    else
+        ../configure $CFG
+    fi
 }
 
 bld()
