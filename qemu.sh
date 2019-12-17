@@ -1,26 +1,5 @@
 #!/bin/bash
 
-usage()
-{
-cat << EOM
-Usage: $0 [OPTIONS] [cfg file] [Guest image files] [CD image files]
-
-Options:
-    -s          make SSH connection to the running QEMU
-    -S          Remove existing SSH keys and make SSH connection to the running QEMU
-    -r          Remove existing SSH keys 
-    -n NAME     set login user name
-    -v VMNAME   set virtual machine name
-    -i IMG      disk images
-    -d          debug mode
-    -q          use custom qemu
-    -k KERNEL   kernel image
-    -c cfg_file read configurations from cfg_file
-    -u 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
-    -o n        0 - do not use ocssd, gt 1 - set numbers of multi name space
-EOM
-}
-
 setup_qemu()
 {
     sudo apt install -y qemu-kvm
@@ -51,7 +30,7 @@ set_disks()
       -object iothread,id=iothread0 \
       -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
 
-    for _IMG in ${IMG};
+    for _IMG in ${IMG[@]};
     do
       if [[ -e $_IMG ]]; then
           if (sudo lsof $_IMG >& /dev/null); then continue; fi
@@ -76,7 +55,7 @@ set_disks()
 
 set_cdrom()
 {
-    for _IMG in ${CDIMG};
+    for _IMG in ${CDIMG[@]};
     do
         if [[ -e $_IMG ]]; then
             CDROMS+=" \
@@ -97,8 +76,9 @@ set_net()
     if [[ $_set -eq 1 ]]; then
         SSHPORT=${SSHPORT:-5900}
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
-        macaddr=$(echo $VMNAME|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
+        macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
         NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
+        NET="-netdev tap,id=vmnic,script=./qemu-ifup -device virtio-net,netdev=vmnic,mac=$macaddr"
         
         SPICEPORT=$(($SSHPORT+1))
         SPICE="\
@@ -153,15 +133,17 @@ set_ocssd()
 {
     [[ $USE_OCSSD -eq 1 ]] || return
     OCSSD_BACKEND=${OCSSD_BACKEND:-"ocssd_backend.img"}
-    if [[ $CUSTOM_QEMU -eq 1 ]]; then
+    NUM_NS=${NUM_NS:-4}
+    if [[ -n $CUSTOM_QEMU ]]; then
         if [[ $USE_LNVM -eq 1 ]]; then
             OCSSD=${OCSSD-"\
               -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
-              -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=${NUM_NS:-4}"}
+              -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"}
         else
             OCSSD=${OCSSD-"\
               -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
-              -device nvme,drive=myocssd,serial=deadbeef,namespaces=${NUM_NS:-4}"}
+              -device nvme,serial=deadbeef,id=nvme0 \
+              -device nvme-ns,drive=myocssd,bus=nvme0,nsid=1"}
         fi
     else
         OCSSD=${OCSSD-"\
@@ -194,23 +176,6 @@ set_usb3()
     CMD+=($USB)
 }
 
-set_usb2()
-{
-    [[ $USE_USB2 -eq 1 ]] || return
-    USB="\
-      -device ich9-usb-ehci1,id=usb \
-      -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
-      -device ich9-usb-uhci2,masterbus=usb.0,firstport=2 \
-      -device ich9-usb-uhci3,masterbus=usb.0,firstport=4 \
-      -chardev spicevmc,name=usbredir,id=usbredirchardev1 \
-      -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1 \
-      -chardev spicevmc,name=usbredir,id=usbredirchardev2 \
-      -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2 \
-      -chardev spicevmc,name=usbredir,id=usbredirchardev3 \
-      -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
-    CMD+=($USB)
-}
-
 set_M_Q35()
 {
     [[ $M_Q35 -eq 1 ]] || return 
@@ -220,19 +185,30 @@ set_M_Q35()
     CMD+=($RNGRANDOM)   
 }
 
-windows() 
-{
-    OPT+=" -machine q35,accel=kvm -device intel-iommu"
-
-    IMG=${IMG:-"win10_1809.img /dev/sdb"}
-    CDIMG="$VMHOME/cd/Win10_1809Oct_Korean_x64.iso $VMHOME/cd/virtio-win-0.1.171.iso"
-
-    USB="-device piix4-usb-uhci"
-}
-
 RemoveSSH()
 {
     ssh-keygen -R "[localhost]:$SSHPORT"
+}
+
+usage()
+{
+cat << EOM
+Usage: $0 [OPTIONS] [cfg file] [Guest image files] [CD image files]
+
+Options:
+    -s          make SSH connection to the running QEMU
+    -S          Remove existing SSH keys and make SSH connection to the running QEMU
+    -r          Remove existing SSH keys 
+    -n NAME     set login user name
+    -v VMNAME   set virtual machine name
+    -i IMG      disk images
+    -d          debug mode
+    -q          use custom qemu
+    -k KERNEL   kernel image
+    -c cfg_file read configurations from cfg_file
+    -u 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
+    -o n        0 - do not use ocssd, gt 1 - set numbers of multi name space
+EOM
 }
 
 # main
@@ -250,7 +226,7 @@ while getopts $options opt; do
         r)  RMSSH=1 ;;          # Remove existing SSH keys 
         n)  UNAME=$OPTARG ;;    # set login user name
         v)  VMNAME=${OPTARG%%.*} ;;
-        i)  IMG+=$OPTARG ;;
+        i)  IMG+=($OPTARG) ;;
         d)  G_TERM= ;;
         q)  CUSTOM_QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
@@ -267,10 +243,10 @@ shift $(($OPTIND-1))
 while (($#)); do
     case $1 in 
         *vmlinuz*)  KERNEL_IMAGE=$1 ;;
-        *.img*)     IMG+="$1 " ;;
-        *.qcow2*)   IMG+="$1 " ;;
-        */dev/*)    IMG+="$1 " ;;
-        *.iso*)     CDIMG+="$1 " ;;
+        *.img*)     IMG+=($1) ;;
+        *.qcow2*)   IMG+=($1) ;;
+        */dev/*)    IMG+=($1) ;;
+        *.iso*)     CDIMG+=($1) ;;
         *.cfg*)     VMNAME=${1%%.*} ;;
         setup)      setup_qemu; exit 0;;
         * )         break;;
@@ -283,12 +259,14 @@ VMHOME=${VMHOME:-"$HOME/vm"}
 VMNAME=${VMNAME:-${PWD##*/}}
 CFGFILE=${CFGFILE:-${VMNAME}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
-VMPROCID=${VMPROCID:-VM_$VMNAME}
+TMP=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
+VMPROCID=${VMPROCID:-VM_${VMNAME}_${TMP}}
+
 G_TERM=${G_TERM-"gnome-terminal --"}
 echo Virtual machine name: $VMNAME
 
 if ! (waitUntil $VMPROCID 0); then
-    [[ $CUSTOM_QEMU -eq 1 ]] && QEMU=${QEMU:-"$HOME/qemu/bin/qemu-system-x86_64"}
+    [[ -n $CUSTOM_QEMU ]] && QEMU=${QEMU:-"$HOME/$CUSTOM_QEMU/bin/qemu-system-x86_64"}
     QEMU=${QEMU:-"qemu-system-x86_64"};
     (which $QEMU >& /dev/null) || { echo $QEMU was not installed!! ; exit 1; }
     QEMU+=" -name $VMNAME,process=$VMPROCID"
@@ -298,7 +276,6 @@ if ! (waitUntil $VMPROCID 0); then
     MEM_SIZE=${MEM_SIZE:-"8G"}
     OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio"
 
-    USE_USB3=${USE_USB3-1}
     M_Q35=${M_Q35-1}
 
     set_M_Q35
@@ -308,7 +285,6 @@ if ! (waitUntil $VMPROCID 0); then
     set_cdrom
     set_ocssd
     set_net 1
-    set_usb2
     set_usb3
     CMD+=($OPT $EXT_PARAMS $@)
 else

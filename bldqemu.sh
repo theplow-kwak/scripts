@@ -1,6 +1,7 @@
 #!/bin/bash
 
-TARGET=${PWD##*/}
+TMP=${PWD%/*}
+TARGET=${TMP##*/}
 
 while getopts ":p:t:" opt; do
     case $opt in
