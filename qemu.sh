@@ -69,6 +69,8 @@ set_cdrom()
 set_net()
 {
     local _set=$1
+    local _backend=${NET_T-"user"}
+echo $NET_T    
     [[ $RMSSH -eq 1 ]] && { rm /tmp/${VMPROCID}*; _set=1; }
     [ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
     [ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
@@ -77,8 +79,11 @@ set_net()
         SSHPORT=${SSHPORT:-5900}
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
         macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
-        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
-        NET="-netdev tap,id=vmnic,script=./qemu-ifup -device virtio-net,netdev=vmnic,mac=$macaddr"
+		if [[ $_backend == "user" ]]; then
+	        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
+	    else
+	        NET="-netdev tap,id=vmnic,script=$VMHOME/share/qemu-ifup -device virtio-net,netdev=vmnic,mac=$macaddr"
+	    fi
         
         SPICEPORT=$(($SSHPORT+1))
         SPICE="\
@@ -199,14 +204,14 @@ Options:
     -s          make SSH connection to the running QEMU
     -S          Remove existing SSH keys and make SSH connection to the running QEMU
     -r          Remove existing SSH keys 
-    -n NAME     set login user name
+    -u UNAME    set login user name
     -v VMNAME   set virtual machine name
     -i IMG      disk images
     -d          debug mode
     -q          use custom qemu
     -k KERNEL   kernel image
     -c cfg_file read configurations from cfg_file
-    -u 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
+    -b 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n        0 - do not use ocssd, gt 1 - set numbers of multi name space
 EOM
 }
@@ -217,22 +222,23 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 GDB=0
 
-options=":sSv:n:dk:q:ri:c:u:o:"
+options=":sSv:u:dk:q:ri:c:b:o:n:"
 while getopts $options opt; do
     case $opt in
         s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
         S)  USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
             RMSSH=1 ;;
         r)  RMSSH=1 ;;          # Remove existing SSH keys 
-        n)  UNAME=$OPTARG ;;    # set login user name
+        u)  UNAME=$OPTARG ;;    # set login user name
         v)  VMNAME=${OPTARG%%.*} ;;
         i)  IMG+=($OPTARG) ;;
         d)  G_TERM= ;;
         q)  CUSTOM_QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
         c)  VMNAME=${OPTARG%%.*} ;;
-        u)  USE_UEFI=$OPTARG ;;
+        b)  USE_UEFI=$OPTARG ;;
         o)  [[ $OPTARG -eq 0 ]] && { USE_OCSSD=0; } || { USE_OCSSD=1; [[ $OPTARG -gt 1 ]] && { NUM_NS=$OPTARG; echo "OCSSD NUM_NS=$NUM_NS"; } } ;;
+		n)  NET_T=$OPTARG ;;
         h)  usage; exit;;
         *)  usage; exit;;
     esac
