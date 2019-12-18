@@ -146,17 +146,17 @@ set_nvme()
 #              -drive file=${NVME_BACKEND},id=mynvme,format=raw,if=none,cache=none \
 #              -device nvme,drive=mynvme,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"}
 
-    if [[ -e $NVME_BACKEND ]]; then
-	    if ! (sudo lsof $NVME_BACKEND >& /dev/null); then
-	        NVME="-drive file=${NVME_BACKEND},id=mynvme,format=raw,if=none,cache=none"
-	    fi
-	fi
+    [[ -e $NVME_BACKEND ]] || qemu-img create -f raw ${NVME_BACKEND} 40G
+    if ! (sudo lsof $NVME_BACKEND >& /dev/null); then
+        NVME="-drive file=${NVME_BACKEND},id=nvme0,format=raw,if=none,cache=none"
+    fi
     
     case $CUSTOM_QEMU in
         "qemu-nvme" )   
             NVME="-device nvme,serial=deadbeef,id=nvme0"
             for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
             do
+                [[ -e nvme0n${_nsid}.img ]] || qemu-img create -f raw nvme0n${_nsid}.img 20G
                 NVME+=" \
                   -drive file=nvme0n${_nsid}.img,id=nsid${_nsid},format=raw,if=none,cache=none \
                   -device nvme-ns,drive=nsid${_nsid},bus=nvme0,nsid=${_nsid}"
@@ -164,11 +164,11 @@ set_nvme()
             ;;
 
         "qemu" )
-            NVME+=${NVME:+" -device nvme,drive=mynvme,serial=deadbeef,namespaces=$NUM_NS"}
+            NVME+=${NVME:+" -device nvme,drive=nvme0,serial=deadbeef,namespaces=$NUM_NS"}
             ;;
             
         * )             
-            NVME+=${NVME:+" -device nvme,drive=mynvme,serial=deadbeef"} 
+            NVME+=${NVME:+" -device nvme,drive=nvme0,serial=deadbeef"} 
             ;;
     esac
 
@@ -247,7 +247,7 @@ while getopts $options opt; do
         k)  KERNEL_IMAGE=$OPTARG ;;
         c)  VMNAME=${OPTARG%%.*} ;;
         b)  USE_UEFI=$OPTARG ;;
-        o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -gt 1 ]] && NUM_NS=$OPTARG; } ;;
+        o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -ge 1 ]] && NUM_NS=$OPTARG; } ;;
 		n)  NET_T=$OPTARG ;;
         h)  usage; exit;;
         *)  usage; exit;;
