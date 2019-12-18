@@ -46,6 +46,7 @@ set_disks()
           ((_index++))
       fi
     done
+
     if [[ -z $DISKS ]]; then
         echo "error!! There is no disks."
         (waitUntil $VMPROCID 0) || exit 1
@@ -70,7 +71,7 @@ set_net()
 {
     local _set=$1
     local _backend=${NET_T-"user"}
-echo $NET_T    
+
     [[ $RMSSH -eq 1 ]] && { rm /tmp/${VMPROCID}*; _set=1; }
     [ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
     [ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
@@ -78,7 +79,7 @@ echo $NET_T
     if [[ $_set -eq 1 ]]; then
         SSHPORT=${SSHPORT:-5900}
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
-        macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
+        macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
 		if [[ $_backend == "user" ]]; then
 	        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
 	    else
@@ -134,36 +135,45 @@ set_uefi()
     CMD+=($UEFI)
 }
 
-set_ocssd()
-{
-    [[ $USE_OCSSD -eq 1 ]] || return
-    OCSSD_BACKEND=${OCSSD_BACKEND:-"ocssd_backend.img"}
+set_nvme()
+{   
+    [[ $USE_NVME -eq 1 ]] || return
     NUM_NS=${NUM_NS:-4}
-    if [[ -n $CUSTOM_QEMU ]]; then
-        if [[ $USE_LNVM -eq 1 ]]; then
-            OCSSD=${OCSSD-"\
-              -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
-              -device nvme,drive=myocssd,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"}
-        else
-            OCSSD=${OCSSD-"\
-              -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
-              -device nvme,serial=deadbeef,id=nvme0 \
-              -device nvme-ns,drive=myocssd,bus=nvme0,nsid=1"}
-        fi
-    else
-        OCSSD=${OCSSD-"\
-          -drive file=${OCSSD_BACKEND},id=myocssd,format=raw,if=none,cache=none \
-          -device nvme,drive=myocssd,serial=deadbeef"}
-    fi
+    NVME_BACKEND=${NVME_BACKEND:-"nvme_backend.img"}
+
+#        if [[ $USE_LNVM -eq 1 ]]; then
+#            NVME=${NVME-"\
+#              -drive file=${NVME_BACKEND},id=mynvme,format=raw,if=none,cache=none \
+#              -device nvme,drive=mynvme,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"}
+
+    if [[ -e $NVME_BACKEND ]]; then
+	    if ! (sudo lsof $NVME_BACKEND >& /dev/null); then
+	        NVME="-drive file=${NVME_BACKEND},id=mynvme,format=raw,if=none,cache=none"
+	    fi
+	fi
     
-    if [[ -e $OCSSD_BACKEND ]]; then
-        [[ -f ./events ]] && OCSSD+=${OCSSD:+" --trace events=./events"}
-        if (sudo lsof $OCSSD_BACKEND >& /dev/null); then
-            echo "$OCSSD_BACKEND was locked !!"
-        else
-            CMD+=($OCSSD)
-        fi
-    fi
+    case $CUSTOM_QEMU in
+        "qemu-nvme" )   
+            NVME="-device nvme,serial=deadbeef,id=nvme0"
+            for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
+            do
+                NVME+=" \
+                  -drive file=nvme0n${_nsid}.img,id=nsid${_nsid},format=raw,if=none,cache=none \
+                  -device nvme-ns,drive=nsid${_nsid},bus=nvme0,nsid=${_nsid}"
+            done 
+            ;;
+
+        "qemu" )
+            NVME+=${NVME:+" -device nvme,drive=mynvme,serial=deadbeef,namespaces=$NUM_NS"}
+            ;;
+            
+        * )             
+            NVME+=${NVME:+" -device nvme,drive=mynvme,serial=deadbeef"} 
+            ;;
+    esac
+
+    [[ -f ./events ]] && NVME+=${NVME:+" --trace events=./events"}
+    [[ -n $NVME ]] && CMD+=($NVME)
 }
 
 set_usb3()
@@ -208,11 +218,11 @@ Options:
     -v VMNAME   set virtual machine name
     -i IMG      disk images
     -d          debug mode
-    -q          use custom qemu
+    -q QEMU     use custom qemu
     -k KERNEL   kernel image
     -c cfg_file read configurations from cfg_file
     -b 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
-    -o n        0 - do not use ocssd, gt 1 - set numbers of multi name space
+    -o n        0 - do not use nvme, gt 1 - set numbers of multi name space
 EOM
 }
 
@@ -237,7 +247,7 @@ while getopts $options opt; do
         k)  KERNEL_IMAGE=$OPTARG ;;
         c)  VMNAME=${OPTARG%%.*} ;;
         b)  USE_UEFI=$OPTARG ;;
-        o)  [[ $OPTARG -eq 0 ]] && { USE_OCSSD=0; } || { USE_OCSSD=1; [[ $OPTARG -gt 1 ]] && { NUM_NS=$OPTARG; echo "OCSSD NUM_NS=$NUM_NS"; } } ;;
+        o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -gt 1 ]] && NUM_NS=$OPTARG; } ;;
 		n)  NET_T=$OPTARG ;;
         h)  usage; exit;;
         *)  usage; exit;;
@@ -289,7 +299,7 @@ if ! (waitUntil $VMPROCID 0); then
     set_kernel
     set_disks
     set_cdrom
-    set_ocssd
+    set_nvme
     set_net 1
     set_usb3
     CMD+=($OPT $EXT_PARAMS $@)
