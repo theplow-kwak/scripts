@@ -80,11 +80,19 @@ set_net()
         SSHPORT=${SSHPORT:-5900}
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
         macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
-		if [[ $_backend == "user" ]]; then
-	        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
-	    else
-	        NET="-netdev tap,id=vmnic,script=$VMHOME/share/qemu-ifup -device virtio-net,netdev=vmnic,mac=$macaddr"
-	    fi
+		case $_backend in 
+		    "user" )
+#    	        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
+    	        NET="-nic user,model=virtio-net-pci,mac=$macaddr,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22"
+    	        ;;
+	        "tap" )
+#    	        NET="-netdev tap,id=vmnic,script=$VMHOME/share/qemu-ifup,vhost=on -device virtio-net,netdev=vmnic,mac=$macaddr"
+    	        NET="-nic tap,model=virtio-net-pci,mac=$macaddr,script=$VMHOME/share/qemu-ifup"
+    	        ;;
+	        "bridge" )
+    	        NET="-netdev bridge,id=vmnic,br=br0 -device virtio-net,netdev=vmnic,mac=$macaddr"
+    	        ;;
+	    esac
         
         SPICEPORT=$(($SSHPORT+1))
         SPICE="\
@@ -139,7 +147,7 @@ set_nvme()
 {   
     [[ $USE_NVME -eq 1 ]] || return
     NUM_NS=${NUM_NS:-4}
-    NVME_BACKEND=${NVME_BACKEND:-"nvme_backend.img"}
+    NVME_BACKEND=${NVME_BACKEND:-"nvme${V_UID}.img"}
 
 #        if [[ $USE_LNVM -eq 1 ]]; then
 #            NVME=${NVME-"\
@@ -156,9 +164,10 @@ set_nvme()
             NVME="-device nvme,serial=deadbeef,id=nvme0"
             for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
             do
-                [[ -e nvme0n${_nsid}.img ]] || qemu-img create -f raw nvme0n${_nsid}.img 20G
+                ns_backend=nvme${V_UID}n${_nsid}.img
+                [[ -e $ns_backend ]] || qemu-img create -f raw $ns_backend 20G
                 NVME+=" \
-                  -drive file=nvme0n${_nsid}.img,id=nsid${_nsid},format=raw,if=none,cache=none \
+                  -drive file=$ns_backend,id=nsid${_nsid},format=raw,if=none,cache=none \
                   -device nvme-ns,drive=nsid${_nsid},bus=nvme0,nsid=${_nsid}"
             done 
             ;;
@@ -200,6 +209,24 @@ set_M_Q35()
     CMD+=($RNGRANDOM)   
 }
 
+set_ipmi()
+{
+    case $USE_IPMI in
+        "internal" )
+            IPMI="-device ipmi-bmc-sim,id=bmc0"
+            ;;
+            
+        "external" )
+            IPMI="\
+              -chardev socket,id=ipmi0,host=localhost,port=9002,reconnect=10 \
+              -device ipmi-bmc-extern,chardev=ipmi0,id=bmc1 \
+              -device isa-ipmi-kcs,bmc=bmc1"
+            ;;
+    esac
+
+    [[ -n $IPMI ]] && CMD+=($IPMI)   
+}
+
 RemoveSSH()
 {
     ssh-keygen -R "[localhost]:$SSHPORT"
@@ -221,6 +248,8 @@ Options:
     -q QEMU     use custom qemu
     -k KERNEL   kernel image
     -c cfg_file read configurations from cfg_file
+    -n NET      Network card model - 'user', 'tap'
+    -m IPMI     IPMI model - 'external', 'internal'
     -b 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n        0 - do not use nvme, gt 1 - set numbers of multi name space
 EOM
@@ -232,7 +261,7 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 GDB=0
 
-options=":sSv:u:dk:q:ri:c:b:o:n:"
+options=":sSv:u:dk:q:ri:c:b:o:n:m:"
 while getopts $options opt; do
     case $opt in
         s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
@@ -249,6 +278,7 @@ while getopts $options opt; do
         b)  USE_UEFI=$OPTARG ;;
         o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -ge 1 ]] && NUM_NS=$OPTARG; } ;;
 		n)  NET_T=$OPTARG ;;
+		m)  USE_IPMI=$OPTARG ;;
         h)  usage; exit;;
         *)  usage; exit;;
     esac
@@ -275,8 +305,8 @@ VMHOME=${VMHOME:-"$HOME/vm"}
 VMNAME=${VMNAME:-${PWD##*/}}
 CFGFILE=${CFGFILE:-${VMNAME}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
-TMP=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
-VMPROCID=${VMPROCID:-VM_${VMNAME}_${TMP}}
+V_UID=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
+VMPROCID=${VMPROCID:-VM_${VMNAME}_${V_UID}}
 
 G_TERM=${G_TERM-"gnome-terminal --"}
 echo Virtual machine name: $VMNAME
@@ -290,7 +320,7 @@ if ! (waitUntil $VMPROCID 0); then
 
     NUM_CORE=${NUM_CORE:-$(($(nproc)/2))}
     MEM_SIZE=${MEM_SIZE:-"8G"}
-    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio"
+    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio -nodefaults"
 
     M_Q35=${M_Q35-1}
 
@@ -301,6 +331,7 @@ if ! (waitUntil $VMPROCID 0); then
     set_cdrom
     set_nvme
     set_net 1
+    set_ipmi
     set_usb3
     CMD+=($OPT $EXT_PARAMS $@)
 else
