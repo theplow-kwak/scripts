@@ -102,7 +102,7 @@ set_net()
           -chardev spicevmc,id=vdagent,name=vdagent \
           -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
         SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
-        CMD+=($NET $SPICE $SHARE0)
+        CMD+=($NET $SPICE)
         echo $SSHPORT > /tmp/${VMPROCID}_SSH
         echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
     fi
@@ -133,10 +133,10 @@ set_kernel()
 set_uefi()
 {
     [[ $USE_UEFI -eq 1 ]] || return
-    OVMF_CODE="$VMHOME/bios/OVMF_CODE.fd"
-    # OVMF_CODE="/usr/share/ovmf/OVMF.fd"
+    OVMF_PATH="$VMHOME/bios"
+    OVMF_CODE="$OVMF_PATH/OVMF_CODE.fd"
     if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
-        (cp $VMHOME/bios/OVMF_VARS.fd $OVMF_VARS) || return
+        (cp $OVMF_PATH/OVMF_VARS.fd $OVMF_VARS) || return
     fi
     UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly,unit=0 \
           -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
@@ -164,7 +164,7 @@ set_nvme()
             NVME="-device nvme,serial=deadbeef,id=nvme0"
             for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
             do
-                ns_backend=nvme${V_UID}n${_nsid}.img
+                ns_backend=${NVME_BACKEND/.img/n${_nsid}.img}
                 [[ -e $ns_backend ]] || qemu-img create -f raw $ns_backend 20G
                 NVME+=" \
                   -drive file=$ns_backend,id=nsid${_nsid},format=raw,if=none,cache=none \
@@ -238,20 +238,21 @@ cat << EOM
 Usage: $0 [OPTIONS] [cfg file] [Guest image files] [CD image files]
 
 Options:
-    -s          make SSH connection to the running QEMU
-    -S          Remove existing SSH keys and make SSH connection to the running QEMU
-    -r          Remove existing SSH keys 
-    -u UNAME    set login user name
-    -v VMNAME   set virtual machine name
-    -i IMG      disk images
-    -d          debug mode
-    -q QEMU     use custom qemu
-    -k KERNEL   kernel image
-    -c cfg_file read configurations from cfg_file
-    -n NET      Network card model - 'user', 'tap'
-    -m IPMI     IPMI model - 'external', 'internal'
-    -b 0|1      0 - boot from MBR BIOS, 1 - boot from UEFI
-    -o n        0 - do not use nvme, gt 1 - set numbers of multi name space
+    -s              make SSH connection to the running QEMU
+    -S              Remove existing SSH keys and make SSH connection to the running QEMU
+    -r              Remove existing SSH keys 
+    -u UNAME        set login user name
+    -v VMNAME       set virtual machine name
+    -i IMG          disk images
+    -d              debug mode
+    -q QEMU         use custom qemu
+    -k KERNEL       kernel image
+    -c cfg_file     read configurations from cfg_file
+    -n NET          Network card model - 'user', 'tap'
+    -m IPMI         IPMI model - 'external', 'internal'
+    -b 0|1          0 - boot from MBR BIOS, 1 - boot from UEFI
+    -o n            0 - do not use nvme, gt 1 - set numbers of multi name space
+    -e NVME_BACKEND set NVME_BACKEND
 EOM
 }
 
@@ -261,7 +262,7 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 GDB=0
 
-options=":sSv:u:dk:q:ri:c:b:o:n:m:"
+options=":sSv:u:dk:q:ri:c:b:o:n:m:e:"
 while getopts $options opt; do
     case $opt in
         s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
@@ -279,6 +280,7 @@ while getopts $options opt; do
         o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -ge 1 ]] && NUM_NS=$OPTARG; } ;;
 		n)  NET_T=$OPTARG ;;
 		m)  USE_IPMI=$OPTARG ;;
+		e)  NVME_BACKEND=$OPTARG ;;
         h)  usage; exit;;
         *)  usage; exit;;
     esac
@@ -306,7 +308,8 @@ VMNAME=${VMNAME:-${PWD##*/}}
 CFGFILE=${CFGFILE:-${VMNAME}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
 V_UID=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
-VMPROCID=${VMPROCID:-VM_${VMNAME}_${V_UID}}
+_TMP=$(echo ${VMNAME}|sed 's/^\(..........\).*$/\1/')
+VMPROCID=${VMPROCID:-V_${_TMP}_${V_UID}}
 
 G_TERM=${G_TERM-"gnome-terminal --"}
 echo Virtual machine name: $VMNAME
