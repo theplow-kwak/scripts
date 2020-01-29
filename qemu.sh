@@ -261,6 +261,7 @@ EOM
 UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 GDB=0
+USE_UEFI=1
 
 options=":sSv:u:dk:q:ri:c:b:o:n:m:e:"
 while getopts $options opt; do
