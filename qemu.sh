@@ -94,9 +94,10 @@ set_net()
     	        ;;
 	    esac
         
+        GRAPHIC=${GRAPHIC-"virtio"}
         SPICEPORT=$(($SSHPORT+1))
         SPICE="\
-          -vga qxl -spice port=$SPICEPORT,disable-ticketing \
+          -vga $GRAPHIC -spice port=$SPICEPORT,disable-ticketing \
           -soundhw hda \
           -device virtio-serial \
           -chardev spicevmc,id=vdagent,name=vdagent \
@@ -252,6 +253,7 @@ Options:
     -m IPMI         IPMI model - 'external', 'internal'
     -b 0|1          0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n            0 - do not use nvme, gt 1 - set numbers of multi name space
+    -g GRAPHIC      set the type of VGA graphic card
     -e NVME_BACKEND set NVME_BACKEND
 EOM
 }
@@ -263,7 +265,7 @@ RMSSH=0
 GDB=0
 USE_UEFI=1
 
-options=":sSv:u:dk:q:ri:c:b:o:n:m:e:"
+options=":sSv:u:dk:q:ri:c:b:o:n:m:e:g:"
 while getopts $options opt; do
     case $opt in
         s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
@@ -282,6 +284,7 @@ while getopts $options opt; do
 		n)  NET_T=$OPTARG ;;
 		m)  USE_IPMI=$OPTARG ;;
 		e)  NVME_BACKEND=$OPTARG ;;
+        g)  GRAPHIC=$OPTARG ;;
         h)  usage; exit;;
         *)  usage; exit;;
     esac
