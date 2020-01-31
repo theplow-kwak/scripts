@@ -144,44 +144,60 @@ set_uefi()
     CMD+=($UEFI)
 }
 
+check_file()
+{
+    local _fname=$1
+    local _size="${2}G"
+    
+    [[ -e $_fname ]] || qemu-img create -f raw $_fname $_size
+    if ! (sudo lsof $_fname >& /dev/null); then
+        exit 0
+    fi
+    exit 1
+}
+
 set_nvme()
 {   
     [[ $USE_NVME -eq 1 ]] || return
     NUM_NS=${NUM_NS:-4}
-    NVME_BACKEND=${NVME_BACKEND:-"nvme${V_UID}.img"}
+    NVME_BACKEND=${NVME_BACKEND:-"nvme${V_UID}"}
 
-#        if [[ $USE_LNVM -eq 1 ]]; then
-#            NVME=${NVME-"\
-#              -drive file=${NVME_BACKEND},id=mynvme,format=raw,if=none,cache=none \
-#              -device nvme,drive=mynvme,serial=deadbeef,lnum_pu=64,lstrict=1,meta=16,mc=3,namespaces=$NUM_NS"}
-
-    [[ -e $NVME_BACKEND ]] || qemu-img create -f raw ${NVME_BACKEND} 40G
-    if ! (sudo lsof $NVME_BACKEND >& /dev/null); then
-        NVME="-drive file=${NVME_BACKEND},id=nvme0,format=raw,if=none,cache=none"
-    fi
-    
-    case $CUSTOM_QEMU in
-        "qemu-nvme" )   
-            NVME="-device nvme,serial=deadbeef,id=nvme0"
-            for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
-            do
-                ns_backend=${NVME_BACKEND/.img/n${_nsid}.img}
-                [[ -e $ns_backend ]] || qemu-img create -f raw $ns_backend 20G
+    for _NVME in ${NVME_BACKEND[@]};
+    do
+        case $CUSTOM_QEMU in
+            "qemu-nvme" )   
                 NVME+=" \
-                  -drive file=$ns_backend,id=nsid${_nsid},format=raw,if=none,cache=none \
-                  -device nvme-ns,drive=nsid${_nsid},bus=nvme0,nsid=${_nsid}"
-            done 
-            ;;
+                    -device nvme,serial=beef${_NVME},id=${_NVME}"
+                for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
+                do
+                    ns_backend=${_NVME}n${_nsid}.img
+                    if (check_file $ns_backend 20); then
+                        NVME+=" \
+                          -drive file=$ns_backend,id=${_NVME}${_nsid},format=raw,if=none,cache=none \
+                          -device nvme-ns,drive=${_NVME}${_nsid},bus=${_NVME},nsid=${_nsid}"
+                    fi
+                done 
+                ;;
 
-        "qemu" )
-            NVME+=${NVME:+" -device nvme,drive=nvme0,serial=deadbeef,namespaces=$NUM_NS"}
-            ;;
-            
-        * )             
-            NVME+=${NVME:+" -device nvme,drive=nvme0,serial=deadbeef"} 
-            ;;
-    esac
-
+            "qemu" )
+                if (check_file ${_NVME}.img 40); then
+                    NVME+=" \
+                        -drive file=${_NVME}.img,id=${_NVME},format=raw,if=none,cache=none"
+                    NVME+=" \
+                        -device nvme,drive=${_NVME},serial=beef${_NVME},namespaces=$NUM_NS"
+                fi
+                ;;
+                
+            * )             
+                if (check_file ${_NVME}.img 40); then
+                    NVME+=" \
+                        -drive file=${_NVME}.img,id=${_NVME},format=raw,if=none,cache=none"
+                    NVME+=" \
+                        -device nvme,drive=${_NVME},serial=beef${_NVME}" 
+                fi
+                ;;
+        esac
+    done
     [[ -f ./events ]] && NVME+=${NVME:+" --trace events=./events"}
     [[ -n $NVME ]] && CMD+=($NVME)
 }
@@ -236,7 +252,7 @@ RemoveSSH()
 usage()
 {
 cat << EOM
-Usage: $0 [OPTIONS] [cfg file] [Guest image files] [CD image files]
+Usage: $0 [OPTIONS] [cfg file] [Guest image files..] [CD image files..]
 
 Options:
     -s              make SSH connection to the running QEMU
@@ -249,12 +265,12 @@ Options:
     -q QEMU         use custom qemu
     -k KERNEL       kernel image
     -c cfg_file     read configurations from cfg_file
-    -n NET          Network card model - 'user', 'tap'
+    -n NET          Network card model - 'user'(default), 'tap'
     -m IPMI         IPMI model - 'external', 'internal'
     -b 0|1          0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n            0 - do not use nvme, gt 1 - set numbers of multi name space
-    -g GRAPHIC      set the type of VGA graphic card
-    -e NVME_BACKEND set NVME_BACKEND
+    -g GRAPHIC      set the type of VGA graphic card. 'virtio'(default), 'qxl'
+    -e NVME_BACKEND set NVME_BACKEND. ex) 'nvme0'
 EOM
 }
 
@@ -300,6 +316,7 @@ while (($#)); do
         */dev/*)    IMG+=($1) ;;
         *.iso*)     CDIMG+=($1) ;;
         *.cfg*)     VMNAME=${1%%.*} ;;
+        nvme*)      NVME_BACKEND+=($1) ;;
         setup)      setup_qemu; exit 0;;
         * )         break;;
     esac
