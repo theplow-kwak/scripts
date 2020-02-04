@@ -1,0 +1,25 @@
+#!/bin/sh
+set -x
+
+br_name=br0
+
+if ! [ -n "$1" ];then
+    echo "Error: no interface specified"
+    exit 1
+fi
+
+ip link set $1 down
+ip link delete $1
+
+if ! (ip link show | grep tap > /dev/null); then 
+    ip link set $br_name down
+    ip link delete $br_name
+    sleep 0.5s
+    # eth_name=$(ip addr show | awk '/inet.*brd/{print $NF}')
+    # ip link set $eth_name nomaster
+    # ip addr flush $eth_name
+    dhclient # $eth_name
+fi
+
+exit 0
+
