@@ -8,7 +8,7 @@ if ! [ -d /sys/class/net/$br_name ]; then
     ip_addr=$(ip addr show $eth_name | grep 'inet ' | awk '{print $2}')
     
     ip link add $br_name type bridge && ip link set $br_name address 52:54:00:01:02:03 && ip link set $br_name up 
-    ip addr delete $ip_addr dev $eth_name && ip link set $eth_name master $br_name 
+    ip link set $eth_name master $br_name # ip addr delete $ip_addr dev $eth_name && 
     dhclient $br_name
 fi
 
@@ -16,8 +16,6 @@ if [ -n "$1" ];then
     ip tuntap add $1 mode tap user `whoami`
     ip link set $1 up # promisc on
     sleep 0.5s
-    # NUMBER=1$(echo "$1" | sed 's/[^0-9]*//g') 
-    # ip addr add 10.0.1.$NUMBER/24 dev $1        
     ip link set $1 master $br_name
     exit 0
 else

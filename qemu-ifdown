@@ -15,10 +15,7 @@ if ! (ip link show | grep tap > /dev/null); then
     ip link set $br_name down
     ip link delete $br_name
     sleep 0.5s
-    # eth_name=$(ip addr show | awk '/inet.*brd/{print $NF}')
-    # ip link set $eth_name nomaster
-    # ip addr flush $eth_name
-    dhclient # $eth_name
+    sudo systemctl restart NetworkManager.service
 fi
 
 exit 0
