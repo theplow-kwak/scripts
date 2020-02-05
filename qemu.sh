@@ -87,7 +87,7 @@ set_net()
     	        ;;
 	        "tap" )
 #    	        NET="-netdev tap,id=vmnic,script=$VMHOME/share/qemu-ifup,vhost=on -device virtio-net,netdev=vmnic,mac=$macaddr"
-    	        NET="-nic tap,model=virtio-net-pci,mac=$macaddr,script=$VMHOME/share/qemu-ifup,downscript=$VMHOME/share/qemu-ifdown"
+    	        NET="-nic tap,model=virtio-net-pci,mac=$macaddr,script=$VMHOME/share/qemu-ifup" # ,downscript=$VMHOME/share/qemu-ifdown
     	        ;;
 	        "bridge" )
     	        NET="-netdev bridge,id=vmnic,br=br0 -device virtio-net,netdev=vmnic,mac=$macaddr"
