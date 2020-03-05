@@ -417,3 +417,142 @@ https://vhrms.tistory.com/772
 
 
 
+# QEMU
+
+qemu를 사용하는데 유용한 tip
+
+
+
+## How to create a bridge, named br0
+
+The procedure to add a bridge interface on Linux is as follows when you want to use Network Manager.
+
+```bash
+_eth_device=$(nmcli -t -f DEVICE c show --active)
+_eth_name=$(nmcli -t -f NAME c show --active)
+_br_name="br0"
+sudo nmcli con add ifname ${_br_name} type bridge con-name ${_br_name}
+sudo nmcli con add type bridge-slave ifname ${_eth_device} master ${_br_name}
+sudo nmcli con modify ${_br_name} bridge.stp no
+sudo nmcli con down "${_eth_name}"
+sudo nmcli con up ${_br_name}
+```
+
+https://www.cyberciti.biz/faq/how-to-add-network-bridge-with-nmcli-networkmanager-on-linux/
+
+To view the bridge settings, issue the following command:
+
+```bash
+nmcli -f bridge con show br0
+```
+
+
+
+##  Bridged networking using qemu-bridge-helper
+
+This method does not require a start-up script and readily accommodates multiple taps and multiple bridges. It uses `/usr/lib/qemu/qemu-bridge-helper` binary, which allows creating tap devices on an existing bridge.
+
+First, create a configuration file containing the names of all bridges to be used by QEMU:
+
+```
+/etc/qemu/bridge.conf
+--------------------------------------------
+allow bridge0
+```
+
+```
+qemu ... NET="-nic bridge,br=br0,model=virtio-net-pci,mac=$macaddr" ...
+```
+
+https://wiki.archlinux.org/index.php/QEMU#Bridged_networking_using_qemu-bridge-helper
+
+
+
+# Jenkins
+
+## Jenkins docker 설치
+
+```bash
+docker pull jenkins
+```
+
+
+
+## Jenkins 실행
+
+```bash
+docker run -d -p 8080:8080 -v /jenkins:/var/jenkins_home --network host --name jenkins -u root jenkins
+```
+
+- ***/jenkins*** folder를 생성 후  docker에 binding  
+- initial password 위치:  ***/jenkins/secrets/initialAdminPassword***
+
+첫번째 실행 종료 후 재 실행시에는 ```docker start jenkins```를 사용한다.
+
+
+
+## Jenkins shell 연결
+
+```bash
+docker exec -it -u 0 jenkins /bin/bash
+```
+
+
+
+## Jenkins Backup
+
+
+
+# SQL Server 설치
+
+아래 site를 참고하여 SQL Server를 설치 및 실행 한다.
+
+> [Install SQL Server 2019 on Ubuntu Docker](https://www.sqlshack.com/sql-server-2019-on-linux-with-a-docker-container-on-ubuntu/)
+>
+> [Official images for Microsoft SQL Server on Linux for Docker Engine](https://hub.docker.com/_/microsoft-mssql-server)
+
+
+
+In the first step, we will pull the SQL Server 2019 container image from the Microsoft syndicates container catalog (mcr.microsfoft.com)
+
+```bash
+docker pull mcr.microsoft.com/mssql/server:2017-latest
+```
+
+
+
+Run the below command with some configuration options:
+
+
+```bash
+docker run -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=skhynix!1' --network host --name mssql -v /home/dhkwak/vm/docker/mssql:/var/opt/mssql mcr.microsoft.com/mssql/server:2017-latest
+```
+- -e ‘SA_PASSWORD : Specify the sa password
+- -p: Specify the port address in the format of 1433:1433 which means TCP 1433 port on both the container and the host
+- –name: name for the container
+- –V: mount a volume for the installation
+
+
+
+Connect to Microsoft SQL Server You can connect to the SQL Server using the sqlcmd tool inside of the container by using the following command on the host
+
+```bash
+docker exec -it mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'skhynix!1'
+```
+
+
+
+select * FROM INFORMATION_SCHEMA.TABLES
+
+
+
+# Windows 10 WSL 2 설치
+
+Command line으로 Windows 10 WSL 2 설치하기
+
+> [Manually download Windows Subsystem for Linux distro packages](https://docs.microsoft.com/en-us/windows/wsl/install-manual)
+
+
+
+
+
