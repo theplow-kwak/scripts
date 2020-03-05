@@ -40,8 +40,8 @@ set_disks()
                 -drive file=$_IMG,id=drive-$_index,if=ide,cache=writeback"
           else
               DISKS+=" \
-                -drive file=$_IMG,id=drive-scsi$_index,if=none,format=raw,discard=unmap,aio=native,cache=none \
-                -device $_disk_type,scsi-id=$_index,drive=drive-scsi$_index,id=scsi0-$_index"
+                -drive file=$_IMG,id=drive-$_index,if=none,format=raw,discard=unmap,aio=native,cache=none \
+                -device $_disk_type,scsi-id=$_index,drive=drive-$_index,id=scsi0-$_index"
           fi
           ((_index++))
       fi
@@ -81,16 +81,14 @@ set_net()
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
         macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
 		case $_backend in 
-		    "user" )
-#    	        NET="-netdev user,id=vmnic,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22 -device virtio-net,netdev=vmnic,mac=$macaddr"
+		    "user"|"u" )
     	        NET="-nic user,model=virtio-net-pci,mac=$macaddr,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22"
     	        ;;
-	        "tap" )
-#    	        NET="-netdev tap,id=vmnic,script=$VMHOME/share/qemu-ifup,vhost=on -device virtio-net,netdev=vmnic,mac=$macaddr"
+	        "tap"|"t" )
     	        NET="-nic tap,model=virtio-net-pci,mac=$macaddr,script=$VMHOME/share/qemu-ifup" # ,downscript=$VMHOME/share/qemu-ifdown
     	        ;;
-	        "bridge" )
-    	        NET="-netdev bridge,id=vmnic,br=br0 -device virtio-net,netdev=vmnic,mac=$macaddr"
+	        "bridge"|"b" )
+    	        NET="-nic bridge,br=br0,model=virtio-net-pci,mac=$macaddr"
     	        ;;
 	    esac
         
@@ -347,6 +345,7 @@ if ! (waitUntil $VMPROCID 0); then
     OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio -nodefaults"
 
     M_Q35=${M_Q35-1}
+    USE_USB3=${USE_USB3-1}
 
     set_M_Q35
     set_uefi
@@ -367,7 +366,7 @@ echo "${CONNECT[@]}"
 if [[ $GDB -eq 1 ]]; then
     sudo gdb -q --args "${CMD[@]}"
 else
-    (waitUntil $VMPROCID 0) || ($G_TERM sudo "${CMD[@]}") &> /dev/stdout 
+    (waitUntil $VMPROCID 0) || ($G_TERM sudo "${CMD[@]}")
     (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
 fi
 
