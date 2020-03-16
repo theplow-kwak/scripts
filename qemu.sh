@@ -107,7 +107,7 @@ set_net()
     fi
 
     [[ $RMSSH -eq 1 ]] && RemoveSSH
-    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer -t ${VMNAME} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 }
 
 set_kernel() 
@@ -132,7 +132,7 @@ set_kernel()
 set_uefi()
 {
     [[ $USE_UEFI -eq 1 ]] || return
-    OVMF_PATH="$VMHOME/bios"
+    OVMF_PATH=${OVMF_PATH:-"/usr/share/OVMF"}
     OVMF_CODE="$OVMF_PATH/OVMF_CODE.fd"
     if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
         (cp $OVMF_PATH/OVMF_VARS.fd $OVMF_VARS) || return
@@ -257,7 +257,6 @@ Options:
     -S              Remove existing SSH keys and make SSH connection to the running QEMU
     -r              Remove existing SSH keys 
     -u UNAME        set login user name
-    -v VMNAME       set virtual machine name
     -i IMG          disk images
     -d              debug mode
     -q QEMU         use custom qemu
@@ -279,7 +278,7 @@ RMSSH=0
 GDB=0
 USE_UEFI=1
 
-options=":sSv:u:dk:q:ri:c:b:o:n:m:e:g:"
+options=":sSu:dk:q:ri:c:b:o:n:m:e:g:"
 while getopts $options opt; do
     case $opt in
         s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
@@ -287,12 +286,11 @@ while getopts $options opt; do
             RMSSH=1 ;;
         r)  RMSSH=1 ;;          # Remove existing SSH keys 
         u)  UNAME=$OPTARG ;;    # set login user name
-        v)  VMNAME=${OPTARG%%.*} ;;
         i)  IMG+=($OPTARG) ;;
         d)  G_TERM= ;;
         q)  CUSTOM_QEMU=$OPTARG ;;
         k)  KERNEL_IMAGE=$OPTARG ;;
-        c)  VMNAME=${OPTARG%%.*} ;;
+        c)  CFGFILE=$OPTARG ;;
         b)  USE_UEFI=$OPTARG ;;
         o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -ge 1 ]] && NUM_NS=$OPTARG; } ;;
 		n)  NET_T=$OPTARG ;;
@@ -313,7 +311,7 @@ while (($#)); do
         *.qcow2*)   IMG+=($1) ;;
         */dev/*)    IMG+=($1) ;;
         *.iso*)     CDIMG+=($1) ;;
-        *.cfg*)     VMNAME=${1%%.*} ;;
+        *.cfg*)     CFGFILE=$1 ;;
         nvme*)      NVME_BACKEND+=($1) ;;
         setup)      setup_qemu; exit 0;;
         * )         break;;
@@ -322,13 +320,14 @@ while (($#)); do
 done
 
 VMHOME=${VMHOME:-"$HOME/vm"}
-
-VMNAME=${VMNAME:-${PWD##*/}}
-CFGFILE=${CFGFILE:-${VMNAME}.cfg}
+CFGFILE=${CFGFILE:-${PWD##*/}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
+
+VMNAME=${VMNAME:-${IMG##*/}}
+VMNAME=${VMNAME%%.*}
 V_UID=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
-_TMP=$(echo ${VMNAME}|sed 's/^\(..........\).*$/\1/')
-VMPROCID=${VMPROCID:-V_${_TMP}_${V_UID}}
+_TMP=$(echo ${VMNAME}|sed 's/^\(............\).*$/\1/')
+VMPROCID=${VMPROCID:-${_TMP}_${V_UID}}
 
 G_TERM=${G_TERM-"gnome-terminal --"}
 echo Virtual machine name: $VMNAME
