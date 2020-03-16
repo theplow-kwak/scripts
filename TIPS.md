@@ -484,8 +484,9 @@ docker pull jenkins
 docker run -d -p 8080:8080 -v /jenkins:/var/jenkins_home --network host --name jenkins -u root jenkins
 ```
 
-- ***/jenkins*** folder를 생성 후  docker에 binding  
-- initial password 위치:  ***/jenkins/secrets/initialAdminPassword***
+- host에 ***/jenkins*** folder를 생성하고 이를 docker의 ***jenkins_home***으로 binding한다  
+- Jenkins를 처음 시작시 필요한 initial password는 다음 파일에서 찾을 수 있다 : 
+  ***/jenkins/secrets/initialAdminPassword*** 
 
 첫번째 실행 종료 후 재 실행시에는 ```docker start jenkins```를 사용한다.
 
@@ -499,17 +500,19 @@ docker exec -it -u 0 jenkins /bin/bash
 
 
 
-## Jenkins Backup
+## Jenkins and python
 
-
-
-# SQL Server 설치
-
-아래 site를 참고하여 SQL Server를 설치 및 실행 한다.
-
-> [Install SQL Server 2019 on Ubuntu Docker](https://www.sqlshack.com/sql-server-2019-on-linux-with-a-docker-container-on-ubuntu/)
+> [Jenkins에서 파이썬 출력을 실시간으로 보고싶다면?](https://taetaetae.github.io/2018/12/02/python-buffer/)
 >
-> [Official images for Microsoft SQL Server on Linux for Docker Engine](https://hub.docker.com/_/microsoft-mssql-server)
+> [Python + Jenkins 연동](https://tomining.tistory.com/147)
+
+
+
+
+
+# SQL Server 
+
+## Docker를 이용한 SQL server 설치
 
 
 
@@ -542,7 +545,46 @@ docker exec -it mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'skhynix
 
 
 
+SQL command를 사용하여 test는 방법
+
+```
+tsql -H 127.0.0.1 -p 1433 -U sa -P 'skhynix!1'
+tsql -H 10.92.63.114 -p 1433 -U sa -P 'ssd!23'
+```
+
+
+
+CREATE DATABASE 'sse_db'
+
 select * FROM INFORMATION_SCHEMA.TABLES
+
+select * from information_schema.columns where table_name = 'ovt'
+
+
+
+참고:
+
+> [Install SQL Server 2019 on Ubuntu Docker](https://www.sqlshack.com/sql-server-2019-on-linux-with-a-docker-container-on-ubuntu/)
+>
+> [Official images for Microsoft SQL Server on Linux for Docker Engine](https://hub.docker.com/_/microsoft-mssql-server)
+
+
+
+## DB 사용법
+
+### DB 생성
+
+
+
+
+
+### Table 생성
+
+
+
+## Azure Data Studio 설치
+
+> [Azure Data Studio 다운로드 및 설치](https://docs.microsoft.com/ko-kr/sql/azure-data-studio/download-azure-data-studio?view=sql-server-ver15)
 
 
 
@@ -554,5 +596,77 @@ Command line으로 Windows 10 WSL 2 설치하기
 
 
 
+# Python 참고
 
+## PIP Certification 
+
+### Using a certificate as parameter
+
+```py
+$ pip install --cert /path/to/mycertificate.crt linkchecker
+```
+
+### Using a certificate in a `pip.conf`
+
+Create this file:
+
+```py
+$HOME/.pip/pip.conf (Linux)
+
+%HOME%\pip\pip.ini (Windows)
+```
+
+and add these lines:
+
+```py
+[global]
+cert = /path/to/mycertificate.crt
+```
+
+### Ignoring certificate and using HTTP
+
+```py
+$ pip install --trusted-host pypi.python.org linkchecker
+```
+
+### Ignoring certificate and using HTTP in a pip.conf
+
+Create this file:
+
+```py
+$HOME/.pip/pip.conf (Linux)
+
+%HOME%\pip\pip.ini (Windows)
+```
+
+and add these lines:
+
+```py
+[global]
+trusted-host = pypi.python.org
+```
+
+### 
+
+## PIP upgrade 
+
+PIP upgrade all packages
+
+```bash
+pip freeze | cut -d'=' -f1 | xargs pip install --upgrade
+```
+
+or
+
+```bash
+pip list -o --format columns | cut -d' ' -f1 | xargs -n1 pip install --upgrade
+```
+
+
+
+PIP upgrade pip itself
+
+```bash
+pip install --upgrade pip
+```
 
