@@ -17,7 +17,7 @@ sudo apt install libglib2.0-dev libpixman-1-dev libxen-dev libgtk-3-dev
 
 
 
-# kernel tracing on ubuntu
+# Kernel tracing on ubuntu
 
 > https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel#Obtaining_the_source_for_an_Ubuntu_release
 
@@ -492,6 +492,15 @@ docker run -d -p 8080:8080 -v /jenkins:/var/jenkins_home --network host --name j
 
 
 
+jenkins.war를 직접 실행하는 방법
+
+```bash
+cd /home/qa-tools/jenkins/apache-tomcat-8/webapps/
+java -jar jenkins.war &
+```
+
+
+
 ## Jenkins shell 연결
 
 ```bash
@@ -505,6 +514,16 @@ docker exec -it -u 0 jenkins /bin/bash
 > [Jenkins에서 파이썬 출력을 실시간으로 보고싶다면?](https://taetaetae.github.io/2018/12/02/python-buffer/)
 >
 > [Python + Jenkins 연동](https://tomining.tistory.com/147)
+
+
+
+## Jenkins plugin
+
+
+
+```bash
+mvn -DdownloadSources=true -DdownloadJavadocs=true -DoutputDirectory=target/eclipse-classes -Declipse.workspace=${HOME}/eclipse-workspace eclipse:eclipse eclipse:configure-workspace
+```
 
 
 
@@ -588,11 +607,133 @@ select * from information_schema.columns where table_name = 'ovt'
 
 
 
-# Windows 10 WSL 2 설치
+# Windows 관련
+
+## Windows server 설정
+
+- Network static IP setting:
+
+  ```powershell
+  netsh -c interface ip set address name='Embedded LOM 1 Port 1' source=static addr=$ipaddr mask=255.255.255.0 gateway=10.92.168.1 gwmetric=0
+  sleep 5
+  netsh -c interface ip set dns name='Embedded LOM 1 Port 1' source=static addr=10.156.25.61 register=PRIMARY
+  netsh -c interface ip add dns name='Embedded LOM 1 Port 1' addr=10.156.25.64 index=2
+  netsh interface ip show config
+  ```
+
+
+
+- samba mount
+
+  ```powershell
+  New-SmbMapping -LocalPath 'X:' -RemotePath '\\remote_server\shared_folder' -UserName 'username' -Password 'password'
+  ```
+
+
+
+- 인증서 import
+
+  ```powershell
+  Import-Certificate -FilePath 'x:\vm\share\yourCertificate.crt' -CertStoreLocation Cert:\LocalMachine\Root
+  ```
+
+  
+
+- Install OpenSSH using PowerShell
+
+  ```powershell
+  Get-WindowsCapability -Online -Name 'OpenSSH*' | Add-WindowsCapability -Online
+  ```
+
+  
+
+- Download  latest OpenSSH from github
+
+  ```powershell
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  $url = 'https://github.com/PowerShell/Win32-OpenSSH/releases/latest/'
+  $request = [System.Net.WebRequest]::Create($url)
+  $request.AllowAutoRedirect=$false
+  $response=$request.GetResponse()
+  $openssh_url = $([String]$response.GetResponseHeader("Location")).Replace('tag','download') + '/OpenSSH-Win64.zip'  
+  
+  wget $openssh_url
+  ```
+
+  
+
+- Using PowerShell to Unzip Files
+
+  ```powershell
+  if ( -not (Test-Path -Path 'C:\Program Files\OpenSSH-Win64\' -PathType Container ) ) 
+  {
+      Expand-Archive -LiteralPath '.\OpenSSH-Win64.zip' -DestinationPath 'C:\Program Files\' InvoicesUnzipped
+  }
+  ```
+
+
+
+- start SSH service 
+
+  ```powershell
+  Set-Service -Name sshd -StartupType 'Automatic'
+  Set-Service -Name ssh-agent -StartupType 'Automatic'
+  Start-Service sshd
+  Start-Service ssh-agent
+  Get-Service -Name *ssh* | select DisplayName, Status, StartType
+  ```
+
+
+
+- SSH connection을 받을 수 있도록 Firewall rule 설정
+
+  ```powershell
+  New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+  New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
+  ```
+
+
+
+- 자동 로그인 설정
+
+  netplwiz를 실행하여 
+
+
+
+
+
+## Windows 10 WSL 2 설치
 
 Command line으로 Windows 10 WSL 2 설치하기
 
 > [Manually download Windows Subsystem for Linux distro packages](https://docs.microsoft.com/en-us/windows/wsl/install-manual)
+
+
+
+Manually download Windows Subsystem for Linux distro packages 
+
+```powershell
+curl.exe -L -o ubuntu-1804.appx https://aka.ms/wsl-ubuntu-1804
+```
+
+
+
+Installing your distro
+
+```powershell
+Add-AppxPackage .\ubuntu-1804.appx
+```
+
+
+
+check Locate the VHD file fullpath used by your WSL 2 installation
+
+```powershell
+$PackageFamilyName = (Get-AppxPackage -Name "*ubuntu*").PackageFamilyName
+dir $env:LOCALAPPDATA\Packages\$PackageFamilyName\LocalState\
+```
+
+
 
 
 
@@ -669,4 +810,127 @@ PIP upgrade pip itself
 ```bash
 pip install --upgrade pip
 ```
+
+
+
+# Perforce 
+
+## p4v 설치 방법
+
+Perforce's package repositories allow simplified installation of Perforce products and product updates on popular Linux platforms. 
+
+### 1. Ubuntu
+
+```bash
+wget -qO - https://package.perforce.com/perforce.pubkey | sudo apt-key add -
+
+printf "deb http://package.perforce.com/apt/ubuntu $(lsb_release -sc) release\n" \
+    | sudo tee /etc/apt/sources.list.d/perforce.list
+
+sudo apt update && sudo apt install helix-cli
+```
+
+### 2. RHEL
+
+1. Add Perforce's repository to your YUM configuration.
+
+Create a file called `/etc/yum.repos.d/perforce.repo` with the following content:
+
+```
+[perforce]
+name=Perforce
+baseurl=http://package.perforce.com/yum/rhel/7/x86_64/
+enabled=1
+gpgcheck=1
+```
+
+2. Add Perforce's packaging key to your RPM keyring:
+
+```bash
+sudo rpm --import https://package.perforce.com/perforce.pubkey
+```
+
+3. install 
+
+```bash
+sudo yum install helix-cli
+```
+
+
+
+> [Perforce Packages](https://www.perforce.com/perforce-packages)
+
+
+
+## P4 client 설정
+
+1. `.p4config` 파일을 아래 내용으로 생성 : 
+
+```
+P4CLIENT=jskwak_test_sqa
+P4USER=jeongsoon.kwak
+P4PASSWD=rjfjrjfj4$
+P4PORT=p4.skhynix.com:1666
+```
+
+
+
+2. '`P4CONFIG`' 환경 변수 설정
+
+```bash
+export P4CONFIG=~/.p4config
+export P4CLIENT=jskwak_qa-tools
+```
+
+
+
+3. '`p4 client`' 설정
+
+```bash
+p4 client -i << _EOF
+Client:     ${P4CLIENT}
+Root:       ${HOME}/
+Options:  allwrite clobber nocompress unlocked nomodtime normdir
+View:       //SQA/... //${P4CLIENT}/SQA/...
+_EOF
+```
+
+
+
+4. client 확인: 
+
+```bash
+p4 client -o ${P4CLIENT}
+```
+
+
+
+5. '`p4 sync`'  실행.  or '`p4 sync -f`'
+
+
+
+# ca-certification
+
+- 'git clone' 시 fail 회피 방안
+
+  - fatal: unable to access 'https://example.com/path/to/git': SSL certificate problem: EE certificate key too weak
+
+  - `-c http.sslVerify=false`  사용
+
+    ```bash
+    git -c http.sslVerify=false clone https://example.com/path/to/git
+    ```
+
+- 'wget' 사용시 fail 회피 방안
+
+  - WARNING: The certificate of ‘dl.google.com’ is not trusted.
+    WARNING: The certificate of ‘dl.google.com’ was signed using an insecure algorithm.
+
+  - `--no-check-certificate` 사용
+
+    ```bash
+    wget --no-check-certificate https://dl.google.com/linux/direct/google-chrome-stable_current_`uname -m`.rpm
+    ```
+
+    
 
