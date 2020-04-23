@@ -10,8 +10,6 @@ if ! [ -d /sys/class/net/$_br ]; then
     nmcli connection add type bridge-slave ifname $_eth master $_br
     nmcli connection down "$_eth_name"
     nmcli connection up $_br
-#    nmcli connection add type tun ifname $_tap con-name $_tap mod tap owner `id -u`
-#    nmcli connection add type bridge-slave ifname $_tap master $_br
 else
     _br_slave=$(nmcli -t -f NAME,TYPE,DEVICE con show | awk -F: '$1 ~ /bridge.*/ {print $1}')
     nmcli connection down $_br_slave
@@ -23,3 +21,7 @@ else
     _eth_name=$(nmcli -t -f NAME,TYPE,DEVICE con show | awk -F: '$2 ~ /.*ethernet/ {print $1}')
     nmcli con up "$_eth_name"
 fi
+
+#    nmcli connection add type tun ifname $_tap con-name $_tap mod tap owner `id -u`
+#    nmcli connection add type bridge-slave ifname $_tap master $_br
+

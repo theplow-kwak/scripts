@@ -242,6 +242,19 @@ set_ipmi()
     [[ -n $IPMI ]] && CMD+=($IPMI)   
 }
 
+set_QEMU()
+{
+    [[ -n $CUSTOM_QEMU ]] && QEMU=${QEMU:-"$HOME/$CUSTOM_QEMU/bin/qemu-system-x86_64"}
+    QEMU=${QEMU:-"qemu-system-x86_64"};
+    (which $QEMU >& /dev/null) || { echo $QEMU was not installed!! ; exit 1; }
+    QEMU+=" -name $VMNAME,process=$VMPROCID"
+    CMD=($QEMU)
+
+    NUM_CORE=${NUM_CORE:-$(($(nproc)/2))}
+    MEM_SIZE=${MEM_SIZE:-"8G"}
+    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio -nodefaults"
+}
+
 RemoveSSH()
 {
     ssh-keygen -R "[localhost]:$SSHPORT"
@@ -329,23 +342,14 @@ V_UID=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
 _TMP=$(echo ${VMNAME}|sed 's/^\(............\).*$/\1/')
 VMPROCID=${VMPROCID:-${_TMP}_${V_UID}}
 
-G_TERM=${G_TERM-"gnome-terminal --"}
-echo Virtual machine name: $VMNAME
+M_Q35=${M_Q35-1}
+USE_USB3=${USE_USB3-1}
+
+G_TERM=${G_TERM-"gnome-terminal --title=$VMNAME --"}
+printf "Virtual machine name: $VMNAME \n\n"
 
 if ! (waitUntil $VMPROCID 0); then
-    [[ -n $CUSTOM_QEMU ]] && QEMU=${QEMU:-"$HOME/$CUSTOM_QEMU/bin/qemu-system-x86_64"}
-    QEMU=${QEMU:-"qemu-system-x86_64"};
-    (which $QEMU >& /dev/null) || { echo $QEMU was not installed!! ; exit 1; }
-    QEMU+=" -name $VMNAME,process=$VMPROCID"
-    CMD=($QEMU)
-
-    NUM_CORE=${NUM_CORE:-$(($(nproc)/2))}
-    MEM_SIZE=${MEM_SIZE:-"8G"}
-    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio -nodefaults"
-
-    M_Q35=${M_Q35-1}
-    USE_USB3=${USE_USB3-1}
-
+    set_QEMU
     set_M_Q35
     set_uefi
     set_kernel
@@ -360,12 +364,12 @@ else
     set_net
 fi
 
-echo "${CMD[@]}" 
-echo "${CONNECT[@]}" 
+printf '%s\n\n' "${CMD[*]}" 
+printf '%s\n\n' "${CONNECT[*]}" 
 if [[ $GDB -eq 1 ]]; then
     sudo gdb -q --args "${CMD[@]}"
 else
-    (waitUntil $VMPROCID 0) || ($G_TERM sudo "${CMD[@]}")
+    (waitUntil $VMPROCID 0) || (sudo $G_TERM "${CMD[@]}")
     (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
 fi
 
