@@ -21,6 +21,20 @@ waitUntil()
     exit 0
 }
 
+checkConn()
+{
+    local _NETPORT=$1
+    local _timeout=${2:-10}
+    
+    until (lsof -i :$_NETPORT > /dev/null);  
+    do
+        ((_timeout--))
+        [[ $_timeout < 0 ]] && exit 1
+        sleep 1
+    done 
+    exit 0
+}
+
 set_disks()
 {
     _index=0
@@ -78,7 +92,8 @@ set_net()
 
     if [[ $_set -eq 1 ]]; then
         SSHPORT=${SSHPORT:-5900}
-        while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$(($SSHPORT+1)) > /dev/null); do SSHPORT=$(($SSHPORT+2)); done 
+        SPICEPORT=${SPICEPORT:-5901}
+        while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$SPICEPORT > /dev/null); do SSHPORT=$(($SSHPORT+2)); SPICEPORT=$(($SPICEPORT+2)); done 
         macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
 		case $_backend in 
 		    "user"|"u" )
@@ -88,7 +103,7 @@ set_net()
     	        NET="-nic tap,model=virtio-net-pci,mac=$macaddr,script=$VMHOME/share/qemu-ifup" # ,downscript=$VMHOME/share/qemu-ifdown
     	        ;;
 	        "bridge"|"b" )
-    	        NET="-nic bridge,br=br0,model=virtio-net-pci,mac=$macaddr"
+    	        NET="-nic bridge,br=virbr0,model=virtio-net-pci,mac=$macaddr"
     	        ;;
 	    esac
         
@@ -108,6 +123,7 @@ set_net()
 
     [[ $RMSSH -eq 1 ]] && RemoveSSH
     [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer -t ${VMNAME} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+    [[ $USE_SSH -eq 1 ]] && CHKPORT=$SSHPORT || CHKPORT=$SPICEPORT 
 }
 
 set_kernel() 
@@ -371,5 +387,6 @@ if [[ $GDB -eq 1 ]]; then
 else
     (waitUntil $VMPROCID 0) || (sudo $G_TERM "${CMD[@]}")
     (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
+    (checkConn $CHKPORT 5) 
 fi
 

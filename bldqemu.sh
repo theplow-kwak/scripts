@@ -37,7 +37,7 @@ config()
         --disable-werror --disable-xen --prefix=$PREFIX --enable-gtk --enable-spice \
         --enable-virtfs --enable-vhost-net --enable-modules --enable-snappy \
         --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" --disable-stack-protector \
-        --enable-trace-backends=$TRACE"
+        --enable-trace-backends=$TRACE --sysconfdir=/etc"
 
     echo $CFG
     if [[ -e ./configure ]]; then
