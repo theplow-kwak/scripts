@@ -448,6 +448,18 @@ nmcli -f bridge con show br0
 
 
 
+## libvirt network bridge 설정
+
+아래 site를 참고하여 `libvirt-daemon-system`을 설치
+
+> [Installation of KVM](https://help.ubuntu.com/community/KVM/Installation)
+
+```bash
+sudo apt-get install libvirt-daemon-system
+```
+
+
+
 ##  Bridged networking using qemu-bridge-helper
 
 This method does not require a start-up script and readily accommodates multiple taps and multiple bridges. It uses `/usr/lib/qemu/qemu-bridge-helper` binary, which allows creating tap devices on an existing bridge.
@@ -457,7 +469,7 @@ First, create a configuration file containing the names of all bridges to be use
 ```
 /etc/qemu/bridge.conf
 --------------------------------------------
-allow bridge0
+allow all
 ```
 
 ```
