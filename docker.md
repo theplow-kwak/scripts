@@ -37,6 +37,25 @@ $ docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix ubunt
 
 
 
+## Docker에서 'virbr0"에 연결하는 방법
+
+First create the configuration file /etc/docker/daemon.json as suggested in the Docker documentation with the following content (the iptables line may not even be needed):
+
+```
+{
+"bridge": "virbr0",
+"iptables": false
+}
+```
+
+Than you stop the containers and restart the docker daemon service:
+
+```bash
+systemctl restart docker
+```
+
+
+
 # docker 실행 예시
 
 ```bash
