@@ -291,7 +291,7 @@ Options:
     -q QEMU         use custom qemu
     -k KERNEL       kernel image
     -c cfg_file     read configurations from cfg_file
-    -n NET          Network card model - 'user'(default), 'tap'
+    -n NET          Network card model - 'user'(default), 'tap', 'bridge'
     -m IPMI         IPMI model - 'external', 'internal'
     -b 0|1          0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n            0 - do not use nvme, gt 1 - set numbers of multi name space

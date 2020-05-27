@@ -458,6 +458,24 @@ nmcli -f bridge con show br0
 sudo apt-get install libvirt-daemon-system
 ```
 
+The proper way fo changing address is using virsh. You can stop network (e.g. ifdown):
+
+```bash
+virsh net-destroy default
+```
+
+And you can start it with:
+
+```bash
+virsh net-start default
+```
+
+As you edited default.xml file this should be enough. But for editing you can use:
+
+```bash
+virsh net-edit default
+```
+
 
 
 ##  Bridged networking using qemu-bridge-helper
@@ -477,6 +495,27 @@ qemu ... NET="-nic bridge,br=br0,model=virtio-net-pci,mac=$macaddr" ...
 ```
 
 https://wiki.archlinux.org/index.php/QEMU#Bridged_networking_using_qemu-bridge-helper
+
+
+
+## Docker에서 'virbr0"에 연결하는 방법
+
+First create the configuration file /etc/docker/daemon.json as suggested in the Docker documentation with the following content (the iptables line may not even be needed):
+
+```
+{
+"bridge": "virbr0",
+"iptables": false
+}
+```
+
+Than you stop the containers and restart the docker daemon service:
+
+```bash
+systemctl restart docker
+```
+
+
 
 
 
@@ -945,4 +984,44 @@ p4 client -o ${P4CLIENT}
     ```
 
     
+
+# mvn 개발 환경 설정
+
+
+
+```bash
+export VER="3.6.3"
+wget http://www-eu.apache.org/dist/maven/maven-3/${VER}/binaries/apache-maven-${VER}-bin.tar.gz
+tar xvf apache-maven-${VER}-bin.tar.gz  
+sudo mv apache-maven-${VER} /opt/maven
+cat <<EOF | sudo tee /etc/profile.d/maven.sh
+export MAVEN_HOME=/opt/maven
+export PATH=\$PATH:\$MAVEN_HOME/bin
+EOF
+source /etc/profile.d/maven.sh
+```
+
+
+
+```bash
+cd hello-plugin/
+mvn -U archetype:generate -Dfilter="io.jenkins.archetypes:"
+cd hello/
+mvn verify
+cd target/
+sudo cp -rf hello hello.hpi /jenkins/plugins/
+```
+
+
+
+```bash
+mvn -DdownloadSources=true -DdownloadJavadocs=true -Declipse.workspace=$HOME/eclipse-workspace eclipse:eclipse eclipse:configure-workspace
+echo $JAVA_HOME
+which java
+export JAVA_HOME=$(dirname $(dirname $(readlink -f /usr/bin/java)))
+echo $JAVA_HOME
+mvn hpi:run
+mvn verify
+mvn clean
+```
 
