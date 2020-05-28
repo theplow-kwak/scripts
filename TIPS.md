@@ -1025,3 +1025,21 @@ mvn verify
 mvn clean
 ```
 
+
+
+# Ubuntu
+
+apt repository를 'mirror.kakao.com'으로 변경
+
+```bash
+sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
+```
+
+
+
+disco repository는 old-releases.ubuntu.com로 변경
+
+```bash
+sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
+```
+
