@@ -61,10 +61,10 @@ set_disks()
       fi
     done
 
-    if [[ -z $DISKS ]]; then
-        echo "error!! There is no disks."
-        (waitUntil $VMPROCID 0) || exit 1
-    fi 
+    # if [[ -z $DISKS ]]; then
+    #     echo "error!! There is no disks."
+    #     (waitUntil $VMPROCID 0) || exit 1
+    # fi 
     CMD+=($SCSI $DISKS)
 }
 
@@ -341,7 +341,8 @@ while (($#)); do
         */dev/*)    IMG+=($1) ;;
         *.iso*)     CDIMG+=($1) ;;
         *.cfg*)     CFGFILE=$1 ;;
-        nvme*)      NVME_BACKEND+=($1) ;;
+        nvme*)      USE_NVME=1
+                    NVME_BACKEND+=($1) ;;
         setup)      setup_qemu; exit 0;;
         * )         break;;
     esac
@@ -352,7 +353,9 @@ VMHOME=${VMHOME:-"$HOME/vm"}
 CFGFILE=${CFGFILE:-${PWD##*/}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
 
-VMNAME=${VMNAME:-${IMG##*/}}
+BOOT_DEV=(${IMG[@]} ${NVME_BACKEND[@]} ${CDIMG[@]})
+
+VMNAME=${VMNAME:-${BOOT_DEV##*/}}
 VMNAME=${VMNAME%%.*}
 V_UID=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
 _TMP=$(echo ${VMNAME}|sed 's/^\(............\).*$/\1/')
