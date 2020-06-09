@@ -598,7 +598,7 @@ Run the below command with some configuration options:
 
 
 ```bash
-docker run -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=skhynix!1' --network host --name mssql -v /home/dhkwak/vm/docker/mssql:/var/opt/mssql mcr.microsoft.com/mssql/server:2017-latest
+docker run -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=password' --network host --name mssql -v /home/dhkwak/vm/docker/mssql:/var/opt/mssql mcr.microsoft.com/mssql/server:2017-latest
 ```
 - -e ‘SA_PASSWORD : Specify the sa password
 - -p: Specify the port address in the format of 1433:1433 which means TCP 1433 port on both the container and the host
@@ -610,7 +610,7 @@ docker run -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=skhynix!1' --network host --nam
 Connect to Microsoft SQL Server You can connect to the SQL Server using the sqlcmd tool inside of the container by using the following command on the host
 
 ```bash
-docker exec -it mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'skhynix!1'
+docker exec -it mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'password'
 ```
 
 
@@ -618,8 +618,8 @@ docker exec -it mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'skhynix
 SQL command를 사용하여 test는 방법
 
 ```
-tsql -H 127.0.0.1 -p 1433 -U sa -P 'skhynix!1'
-tsql -H 10.92.63.114 -p 1433 -U sa -P 'ssd!23'
+tsql -H 127.0.0.1 -p 1433 -U sa -P 'password'
+tsql -H 10.92.63.114 -p 1433 -U sa -P 'password'
 ```
 
 
@@ -811,8 +811,10 @@ $HOME/.pip/pip.conf (Linux)
 and add these lines:
 
 ```py
+cat << _EOF_ | tee .pip/pip.conf
 [global]
 cert = /path/to/mycertificate.crt
+_EOF_
 ```
 
 ### Ignoring certificate and using HTTP
@@ -834,13 +836,24 @@ $HOME/.pip/pip.conf (Linux)
 and add these lines:
 
 ```py
+cat << _EOF_ | tee .pip/pip.conf
 [global]
 trusted-host = pypi.python.org
+               files.pythonhosted.org
+_EOF_
 ```
 
-### 
+
 
 ## PIP upgrade 
+
+PIP upgrade pip itself
+
+```bash
+pip install --upgrade pip
+```
+
+
 
 PIP upgrade all packages
 
@@ -848,18 +861,20 @@ PIP upgrade all packages
 pip freeze | cut -d'=' -f1 | xargs pip install --upgrade
 ```
 
-or
+
+
+pip upgrade 도중 library가 없어 에러가 발생하는 경우 아래 package 설치 필요
 
 ```bash
-pip list -o --format columns | cut -d' ' -f1 | xargs -n1 pip install --upgrade
+sudp apt install libgirepository1.0-dev libcairo2-dev librsync-dev libcups2-dev
 ```
 
 
 
-PIP upgrade pip itself
+## jupyter lab 설치
 
 ```bash
-pip install --upgrade pip
+pip install jupyterlab
 ```
 
 
