@@ -1,20 +1,30 @@
 #!/bin/bash
 
-ca_cert() {
-    echo setup ca-certfication
-    cp *.crt $HOME/temp
-    cp setcrt.sh $HOME/temp
-
-    pushd $HOME/temp
-    ./setcrt.sh
-}
-
 update() {
     echo update
     sudo apt -y update
     sudo apt -y upgrade
 
-    sudo apt -y install net-tools build-essential git krusader barrier qemu-kvm
+    sudo apt -y install build-essential git python3-pip
+}
+
+python() {
+    echo update
+    sudo apt -y update
+    sudo apt -y upgrade
+
+    sudo apt -y install python3-pip
+    pip3 install --upgrade pip
+    pip3 freeze | cut -d'=' -f1 | xargs pip3 install --upgrade
+    pip3 install jupyterlab
+}
+
+tools() {
+    echo update
+    sudo apt -y update
+    sudo apt -y upgrade
+
+    sudo apt -y install net-tools krusader barrier qemu-kvm
 }
 
 chrome() {
@@ -55,12 +65,12 @@ scripts() {
     sudo apt -y install git
     [[ -d $HOME/projects ]] || mkdir $HOME/projects
     pushd $HOME/projects
-    git clone http://10.92.159.125/jeongsoon.kwak/scripts.git
+    [[ -d scripts ]] || git clone https://github.com/jskwak/scripts.git
     popd
 }
 
 local_cmd() {
-	[[ -d $HOME/.local/bin ]] || mkdir $HOME/.local/bin
+	[[ -d $HOME/.local/bin ]] || mkdir -p $HOME/.local/bin
 	pushd $HOME/.local/bin
 	for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
 	popd
@@ -71,7 +81,7 @@ local_cmd() {
 if (($#)); then
     CMDS=$@
 else
-    CMDS="ca_cert update chrome bcompare typora docker scripts local_cmd"
+    CMDS="update docker"
 fi
 
 pushd $HOME/temp
