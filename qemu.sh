@@ -107,22 +107,28 @@ set_net()
     	        ;;
 	    esac
         
-        GRAPHIC=${GRAPHIC-"virtio"}
+        GRAPHIC=${GRAPHIC-"qxl"}
         SPICEPORT=$(($SSHPORT+1))
         SPICE="\
           -vga $GRAPHIC -spice port=$SPICEPORT,disable-ticketing \
-          -soundhw hda \
-          -device virtio-serial \
+          -device intel-hda -device hda-duplex"
+        SPICE_AGENT="\
           -chardev spicevmc,id=vdagent,name=vdagent \
+          -device virtio-serial \
           -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
+        GUEST_AGENT="\
+          -chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0 \
+          -device virtio-serial \
+          -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"
         SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
-        CMD+=($NET $SPICE)
+        CMD+=($NET $SPICE $SPICE_AGENT)
         echo $SSHPORT > /tmp/${VMPROCID}_SSH
         echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
     fi
 
+    T_TITLE="${VMNAME}:${SPICEPORT}"
     [[ $RMSSH -eq 1 ]] && RemoveSSH
-    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer -t ${VMNAME} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
     [[ $USE_SSH -eq 1 ]] && CHKPORT=$SSHPORT || CHKPORT=$SPICEPORT 
 }
 
@@ -295,7 +301,7 @@ Options:
     -m IPMI         IPMI model - 'external', 'internal'
     -b 0|1          0 - boot from MBR BIOS, 1 - boot from UEFI
     -o n            0 - do not use nvme, gt 1 - set numbers of multi name space
-    -g GRAPHIC      set the type of VGA graphic card. 'virtio'(default), 'qxl'
+    -g GRAPHIC      set the type of VGA graphic card. 'virtio', 'qxl'(default)
     -e NVME_BACKEND set NVME_BACKEND. ex) 'nvme0'
 EOM
 }
