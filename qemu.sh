@@ -182,12 +182,14 @@ set_nvme()
     NUM_NS=${NUM_NS:-4}
     NVME_BACKEND=${NVME_BACKEND:-"nvme${V_UID}"}
 
+    _CTRL_ID=1
     for _NVME in ${NVME_BACKEND[@]};
     do
         case $CUSTOM_QEMU in
-            "qemu-nvme" )   
+            "qemu-nvme"|"qemu" )   
                 NVME+=" \
                     -device nvme,serial=beef${_NVME},id=${_NVME}"
+                ((_CTRL_ID++))
                 for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
                 do
                     ns_backend=${_NVME}n${_nsid}.img
@@ -226,7 +228,8 @@ set_usb3()
 {
     [[ $USE_USB3 -eq 1 ]] || return
     USB="\
-      -device qemu-xhci,id=usb3 \
+      -device qemu-xhci,id=usb3"
+    USB_REDIR="\
       -chardev spicevmc,name=usbredir,id=usbredirchardev1 \
       -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1 \
       -chardev spicevmc,name=usbredir,id=usbredirchardev2 \
@@ -234,7 +237,7 @@ set_usb3()
       -chardev spicevmc,name=usbredir,id=usbredirchardev3 \
       -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
     USB_PT="-device usb-host,hostbus=3,hostport=1"
-    CMD+=($USB)
+    CMD+=($USB $USB_REDIR)
 }
 
 set_M_Q35()
@@ -310,7 +313,6 @@ EOM
 
 UNAME=${SUDO_USER:-$USER}
 RMSSH=0
-GDB=0
 USE_UEFI=1
 
 options=":sSu:dk:q:ri:c:b:o:n:m:e:g:"

@@ -1,14 +1,5 @@
 #!/bin/bash
 
-ca_cert() {
-    echo setup ca-certfication
-    cp *.crt $HOME/temp
-    cp setcrt.sh $HOME/temp
-
-    pushd $HOME/temp
-    ./setcrt.sh
-}
-
 update() {
     echo update
     sudo yum -y update
@@ -46,7 +37,7 @@ scripts() {
 }
 
 local_cmd() {
-	[[ -d $HOME/.local/bin ]] || mkdir $HOME/.local/bin
+	[[ -d $HOME/.local/bin ]] || mkdir -p $HOME/.local/bin
 	pushd $HOME/.local/bin
 	for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
 	popd
@@ -57,7 +48,7 @@ local_cmd() {
 if (($#)); then
     CMDS=$@
 else
-    CMDS="ca_cert update chrome scripts local_cmd"
+    CMDS="update chrome scripts local_cmd"
 fi
 
 pushd $HOME/temp

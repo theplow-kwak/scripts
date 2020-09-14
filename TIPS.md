@@ -517,6 +517,40 @@ systemctl restart docker
 
 
 
+## ENHANCING VIRTUALIZATION WITH THE QEMU GUEST AGENT AND SPICE AGENT
+
+### QEMU Guest Agent
+
+```bash
+sudo yum install qemu-guest-agent
+sudo systemctl start qemu-guest-agent
+```
+
+```bash
+GUEST_AGENT="\
+-chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0 \
+-device virtio-serial \
+-device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"          
+```
+
+
+
+### SPICE AGENT
+
+```bash
+sudo yum install spice-vdagent
+sudo systemctl start spice-vdagent
+```
+
+```bash
+SPICE_AGENT="\
+-chardev spicevmc,id=vdagent,name=vdagent \
+-device virtio-serial \
+-device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
+```
+
+
+
 
 
 # Jenkins
@@ -866,7 +900,7 @@ pip freeze | cut -d'=' -f1 | xargs pip install --upgrade
 pip upgrade 도중 library가 없어 에러가 발생하는 경우 아래 package 설치 필요
 
 ```bash
-sudp apt install libgirepository1.0-dev libcairo2-dev librsync-dev libcups2-dev
+sudo apt install libgirepository1.0-dev libcairo2-dev librsync-dev libcups2-dev libgpgme-dev swig
 ```
 
 
