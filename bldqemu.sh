@@ -25,7 +25,7 @@ setup_env()
     sudo apt install -y libibverbs-dev libjpeg8-dev libncurses5-dev libnuma-dev
     sudo apt install -y librbd-dev librdmacm-dev
     sudo apt install -y libsasl2-dev libsdl1.2-dev libseccomp-dev libsnappy-dev libssh2-1-dev
-    sudo apt install -y libvde-dev libvdeplug-dev libvte-2.90-dev libxen-dev liblzo2-dev
+    sudo apt install -y libvde-dev libvdeplug-dev libvte-2.91-dev libxen-dev liblzo2-dev
     sudo apt install -y valgrind xfslibs-dev 
 }
 
@@ -37,7 +37,7 @@ config()
         --disable-werror --disable-xen --prefix=$PREFIX --enable-gtk --enable-spice \
         --enable-virtfs --enable-vhost-net --enable-modules --enable-snappy \
         --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" --disable-stack-protector \
-        --enable-trace-backends=$TRACE --sysconfdir=/etc"
+        --enable-trace-backends=$TRACE --sysconfdir=/etc --enable-libusb --enable-usb-redir"
 
     echo $CFG
     if [[ -e ./configure ]]; then
