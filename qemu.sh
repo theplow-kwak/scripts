@@ -288,24 +288,25 @@ RemoveSSH()
 usage()
 {
 cat << EOM
-Usage: $0 [OPTIONS] [cfg file] [Guest image files..] [CD image files..]
+Usage:
+ qemu [OPTIONS] [cfg file] [Guest image files..] [CD image files..]
 
 Options:
-    -s              make SSH connection to the running QEMU
-    -S              Remove existing SSH keys and make SSH connection to the running QEMU
-    -r              Remove existing SSH keys 
-    -u UNAME        set login user name
-    -i IMG          disk images
-    -d              debug mode
-    -q QEMU         use custom qemu
-    -k KERNEL       kernel image
-    -c cfg_file     read configurations from cfg_file
-    -n NET          Network card model - 'user'(default), 'tap', 'bridge'
-    -m IPMI         IPMI model - 'external', 'internal'
-    -b 0|1          0 - boot from MBR BIOS, 1 - boot from UEFI
-    -o n            0 - do not use nvme, gt 1 - set numbers of multi name space
-    -g GRAPHIC      set the type of VGA graphic card. 'virtio', 'qxl'(default)
-    -e NVME_BACKEND set NVME_BACKEND. ex) 'nvme0'
+ -s                         make SSH connection to the running QEMU
+ -S                         Remove existing SSH keys and make SSH connection to the running QEMU
+ -r                         Remove existing SSH keys 
+ -u <UNAME>                 set login user name
+ -i <IMG>                   disk images
+ -d                         debug mode
+ -q <QEMU>                  use custom qemu
+ -k <KERNEL>                kernel image
+ -c <cfg_file>              read configurations from cfg_file
+ -n <NET>                   Network card model - 'user'(default), 'tap', 'bridge'
+ -m <IPMI>                  IPMI model - 'external', 'internal'
+ -b <0|1>                   0 - boot from MBR BIOS, 1 - boot from UEFI
+ -o <n>                     0 - do not use nvme, gt 1 - set numbers of multi name space
+ -g <GRAPHIC>               set the type of VGA graphic card. 'virtio', 'qxl'(default)
+ -e, --nvme <NVME_BACKEND>  set NVME_BACKEND. ex) 'nvme0'
 EOM
 }
 
@@ -315,32 +316,67 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 USE_UEFI=1
 
-options=":sSu:dk:q:ri:c:b:o:n:m:e:g:"
-while getopts $options opt; do
-    case $opt in
-        s)  USE_SSH=1 ;;         # make SSH connection to the running QEMU
-        S)  USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
+options=$(getopt -o sSu:dk:q:ri:c:b:o:n:m:e:g: --long nvme: -- "$@")
+[ $? -eq 0 ] || { 
+    usage
+    exit 1
+}
+eval set -- "$options"
+
+while true; do
+    case "$1" in
+        -s)  
+            USE_SSH=1 ;;         # make SSH connection to the running QEMU
+        -S)  
+            USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
             RMSSH=1 ;;
-        r)  RMSSH=1 ;;          # Remove existing SSH keys 
-        u)  UNAME=$OPTARG ;;    # set login user name
-        i)  IMG+=($OPTARG) ;;
-        d)  G_TERM= ;;
-        q)  CUSTOM_QEMU=$OPTARG ;;
-        k)  KERNEL_IMAGE=$OPTARG ;;
-        c)  CFGFILE=$OPTARG ;;
-        b)  USE_UEFI=$OPTARG ;;
-        o)  [[ $OPTARG -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $OPTARG -ge 1 ]] && NUM_NS=$OPTARG; } ;;
-		n)  NET_T=$OPTARG ;;
-		m)  USE_IPMI=$OPTARG ;;
-		e)  NVME_BACKEND=$OPTARG ;;
-        g)  GRAPHIC=$OPTARG ;;
-        h)  usage; exit;;
-        *)  usage; exit;;
+        -r)  
+            RMSSH=1 ;;          # Remove existing SSH keys 
+        -u)  
+            UNAME=$2
+            shift ;;    # set login user name
+        -i)  
+            IMG+=($2)
+            shift ;;
+        -d)  
+            G_TERM= ;;
+        -q)  
+            CUSTOM_QEMU=$2
+            shift ;;
+        -k)  
+            KERNEL_IMAGE=$2
+            shift ;;
+        -c)  
+            CFGFILE=$2
+            shift ;;
+        -b)  
+            USE_UEFI=$2
+            shift ;;
+        -o)  
+            [[ $1 -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $1 -ge 1 ]] && NUM_NS=$1; } ;;
+		-n)  
+		    NET_T=$2
+		    shift ;;
+		-m)  
+		    USE_IPMI=$2
+		    shift ;;
+		-e|--nvme)  
+		    NVME_BACKEND=$2
+		    shift ;;
+        -g)  
+            GRAPHIC=$2
+            shift ;;
+        -h)  
+            usage; exit;;
+        --)
+            shift
+            break
+            ;;
     esac
+    shift
 done 
 
-shift $(($OPTIND-1)) 
-
+#shift $(($OPTIND-1)) 
 while (($#)); do
     case $1 in 
         *vmlinuz*)  KERNEL_IMAGE=$1 ;;
