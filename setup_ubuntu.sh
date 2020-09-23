@@ -1,5 +1,9 @@
 #!/bin/bash
 
+set_mirror(){
+    sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
+}
+
 update() {
     echo update
     sudo apt -y update
@@ -35,8 +39,8 @@ chrome() {
 
 bcompare() {
     echo install byound compare
-    wget https://www.scootersoftware.com/bcompare-4.3.1.24438_amd64.deb && \
-    sudo dpkg -i bcompare-4.3.1.24438_amd64.deb
+    wget https://www.scootersoftware.com/bcompare-4.3.6.25063_amd64.deb && \
+    sudo dpkg -i bcompare-4.3.6.25063_amd64.deb
 }
 
 gitkraken() {
@@ -81,7 +85,7 @@ local_cmd() {
 if (($#)); then
     CMDS=$@
 else
-    CMDS="update docker"
+    CMDS="update"
 fi
 
 pushd $HOME/temp

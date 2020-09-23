@@ -530,7 +530,7 @@ sudo systemctl start qemu-guest-agent
 GUEST_AGENT="\
 -chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0 \
 -device virtio-serial \
--device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"          
+-device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"
 ```
 
 
