@@ -85,6 +85,7 @@ local_cmd() {
 if (($#)); then
     CMDS=$@
 else
+#    CMDS="set_mirror update chrome bcompare typora docker scripts local_cmd"
     CMDS="update"
 fi
 

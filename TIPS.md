@@ -967,10 +967,10 @@ sudo yum install helix-cli
 1. `.p4config` 파일을 아래 내용으로 생성 : 
 
 ```
-P4CLIENT=jskwak_test_sqa
-P4USER=jeongsoon.kwak
-P4PASSWD=rjfjrjfj4$
-P4PORT=p4.skhynix.com:1666
+P4CLIENT=p4client
+P4USER=p4user
+P4PASSWD=p4password
+P4PORT=p4.port.com:1666
 ```
 
 
@@ -979,7 +979,7 @@ P4PORT=p4.skhynix.com:1666
 
 ```bash
 export P4CONFIG=~/.p4config
-export P4CLIENT=jskwak_qa-tools
+export P4CLIENT=p4client
 ```
 
 

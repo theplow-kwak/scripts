@@ -295,18 +295,18 @@ Options:
  -s                         make SSH connection to the running QEMU
  -S                         Remove existing SSH keys and make SSH connection to the running QEMU
  -r                         Remove existing SSH keys 
- -u <UNAME>                 set login user name
- -i <IMG>                   disk images
- -d                         debug mode
- -q <QEMU>                  use custom qemu
- -k <KERNEL>                kernel image
- -c <cfg_file>              read configurations from cfg_file
- -n <NET>                   Network card model - 'user'(default), 'tap', 'bridge'
- -m <IPMI>                  IPMI model - 'external', 'internal'
- -b <0|1>                   0 - boot from MBR BIOS, 1 - boot from UEFI
- -o <n>                     0 - do not use nvme, gt 1 - set numbers of multi name space
- -g <GRAPHIC>               set the type of VGA graphic card. 'virtio', 'qxl'(default)
  -e, --nvme <NVME_BACKEND>  set NVME_BACKEND. ex) 'nvme0'
+ -n, --net <netmode>        Network card model - 'user'(default), 'tap', 'bridge'
+ -u, --uname <UNAME>        set login user name
+ -i, --image <imagename>    disk images
+ -q, --qemu <QEMU>          use custom qemu
+ -c, --config <cfg_file>    read configurations from cfg_file
+ -k, --kernel <KERNEL>      kernel image
+ -o, --num_ns <num_of_ns>   0 - do not use nvme, gt 1 - set numbers of multi name space
+ -g, --vga <GRAPHIC>        set the type of VGA graphic card. 'virtio', 'qxl'(default)
+ --bios <0|1>               0 - boot from MBR BIOS, 1 - boot from UEFI
+ --ipmi <ipmimodel>         IPMI model - 'external', 'internal'
+ --debug                    debug mode
 EOM
 }
 
@@ -316,7 +316,8 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 USE_UEFI=1
 
-options=$(getopt -o sSu:dk:q:ri:c:b:o:n:m:e:g: --long nvme: -- "$@")
+options=$(getopt -o sSu:k:q:ri:c:o:n:e:g:h \
+                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help -- "$@")
 [ $? -eq 0 ] || { 
     usage
     exit 1
@@ -325,48 +326,48 @@ eval set -- "$options"
 
 while true; do
     case "$1" in
-        -s)  
+        -s )  
             USE_SSH=1 ;;         # make SSH connection to the running QEMU
-        -S)  
+        -S )  
             USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
             RMSSH=1 ;;
-        -r)  
+        -r )  
             RMSSH=1 ;;          # Remove existing SSH keys 
-        -u)  
+        -u | --uname )  
             UNAME=$2
             shift ;;    # set login user name
-        -i)  
+        --ipmi )  
             IMG+=($2)
             shift ;;
-        -d)  
+        --debug )  
             G_TERM= ;;
-        -q)  
+        -q | --qemu )  
             CUSTOM_QEMU=$2
             shift ;;
-        -k)  
+        -k | --kernel )  
             KERNEL_IMAGE=$2
             shift ;;
-        -c)  
+        -c | --config )  
             CFGFILE=$2
             shift ;;
-        -b)  
+        --bios )  
             USE_UEFI=$2
             shift ;;
-        -o)  
-            [[ $1 -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $1 -ge 1 ]] && NUM_NS=$1; } ;;
-		-n)  
+        -o | --num_ns )  
+            [[ $2 -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $2 -ge 1 ]] && NUM_NS=$2; } ;;
+		-n | --net)  
 		    NET_T=$2
 		    shift ;;
-		-m)  
+		--ipmi)  
 		    USE_IPMI=$2
 		    shift ;;
-		-e|--nvme)  
+		-e | --nvme )  
 		    NVME_BACKEND=$2
 		    shift ;;
-        -g)  
+        -g | --vga )  
             GRAPHIC=$2
             shift ;;
-        -h)  
+        -h | --help )  
             usage; exit;;
         --)
             shift
