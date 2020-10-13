@@ -211,9 +211,10 @@ set_nvme()
                 ;;
                 
             * )             
-                if (check_file ${_NVME}.img 40); then
+                ns_backend=${_NVME}n1.img
+                if (check_file $ns_backend 40); then
                     NVME+=" \
-                        -drive file=${_NVME}.img,id=${_NVME},format=raw,if=none,cache=none"
+                        -drive file=$ns_backend,id=${_NVME},format=raw,if=none,cache=none"
                     NVME+=" \
                         -device nvme,drive=${_NVME},serial=beef${_NVME}" 
                 fi
