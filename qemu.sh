@@ -51,10 +51,10 @@ set_disks()
           if [[ -b $_IMG ]] && [[ $_IMG != *nvme* ]]; then _disk_type="scsi-block"; else _disk_type="scsi-hd"; fi
           if [[ $_IMG == *.qcow2* ]]; then 
               DISKS+=" \
-                -drive file=$_IMG,id=drive-$_index,if=ide,cache=writeback"
+                -drive file=$_IMG,cache=writeback,id=drive-$_index"
           else
               DISKS+=" \
-                -drive file=$_IMG,id=drive-$_index,if=none,format=raw,discard=unmap,aio=native,cache=none \
+                -drive file=$_IMG,if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-$_index \
                 -device $_disk_type,scsi-id=$_index,drive=drive-$_index,id=scsi0-$_index"
           fi
           ((_index++))
@@ -70,11 +70,13 @@ set_disks()
 
 set_cdrom()
 {
+    [[ $ARCH == "x86_64" ]] && _IF="ide" || _IF="none"
     for _IMG in ${CDIMG[@]};
     do
         if [[ -e $_IMG ]]; then
             CDROMS+=" \
-              -drive file=$_IMG,if=ide,index=$_index,media=cdrom,readonly"
+              -drive file=$_IMG,media=cdrom,readonly,if=$_IF,index=$_index,id=cdrom$_index"
+            [[ $ARCH == "x86_64" ]] || CDROMS+=" -device usb-storage,drive=cdrom$_index"
             ((_index++))
         fi
     done
@@ -86,14 +88,13 @@ set_net()
     local _set=$1
     local _backend=${NET_T-"user"}
 
-    [[ $RMSSH -eq 1 ]] && { rm /tmp/${VMPROCID}*; _set=1; }
+    [[ $RMSSH -eq 1 ]] && { rm /tmp/${VMPROCID}*; _set=1; RemoveSSH; }
     [ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
-    [ -f /tmp/${VMPROCID}_SPICE ] && read SPICEPORT < /tmp/${VMPROCID}_SPICE
+    SSHPORT=${SSHPORT:-5900}
+    SPICEPORT=$(($SSHPORT+1))
 
     if [[ $_set -eq 1 ]]; then
-        SSHPORT=${SSHPORT:-5900}
-        SPICEPORT=${SPICEPORT:-5901}
-        while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$SPICEPORT > /dev/null); do SSHPORT=$(($SSHPORT+2)); SPICEPORT=$(($SPICEPORT+2)); done 
+        while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$SPICEPORT > /dev/null); do SSHPORT=$(($SSHPORT+2)); SPICEPORT=$(($SSHPORT+1)); done 
         macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
 		case $_backend in 
 		    "user"|"u" )
@@ -107,29 +108,41 @@ set_net()
     	        ;;
 	    esac
         
-        GRAPHIC=${GRAPHIC-"qxl"}
-        SPICEPORT=$(($SSHPORT+1))
-        SPICE="\
-          -vga $GRAPHIC -spice port=$SPICEPORT,disable-ticketing \
-          -device intel-hda -device hda-duplex"
-        SPICE_AGENT="\
-          -chardev spicevmc,id=vdagent,name=vdagent \
-          -device virtio-serial \
-          -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
-        GUEST_AGENT="\
-          -chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0 \
-          -device virtio-serial \
-          -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"
-        SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
-        CMD+=($NET $SPICE $SPICE_AGENT)
+        CMD+=($NET)
         echo $SSHPORT > /tmp/${VMPROCID}_SSH
-        echo $SPICEPORT > /tmp/${VMPROCID}_SPICE
     fi
 
+}
+
+set_connect()
+{
     T_TITLE="${VMNAME}:${SPICEPORT}"
-    [[ $RMSSH -eq 1 ]] && RemoveSSH
-    [[ $USE_SSH -eq 1 ]] && CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT) || CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
-    [[ $USE_SSH -eq 1 ]] && CHKPORT=$SSHPORT || CHKPORT=$SPICEPORT 
+    
+    if [[ $USE_SSH -eq 1 ]]; then
+        CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT)
+        CHKPORT=$SSHPORT
+    fi
+    if [[ -n $SPICE ]]; then
+        CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+        CHKPORT=$SPICEPORT
+    fi
+}
+
+set_spice()
+{
+    SPICE="\
+      -spice port=$SPICEPORT,disable-ticketing \
+      -device intel-hda -device hda-duplex"
+    SPICE_AGENT="\
+      -chardev spicevmc,id=vdagent,name=vdagent \
+      -device virtio-serial \
+      -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
+    GUEST_AGENT="\
+      -chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0 \
+      -device virtio-serial \
+      -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"
+    SHARE0="-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host"
+    CMD+=($SPICE $SPICE_AGENT)
 }
 
 set_kernel() 
@@ -154,13 +167,20 @@ set_kernel()
 set_uefi()
 {
     [[ $USE_UEFI -eq 1 ]] || return
-    OVMF_PATH=${OVMF_PATH:-"/usr/share/OVMF"}
-    OVMF_CODE="$OVMF_PATH/OVMF_CODE.fd"
-    if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
-        (cp $OVMF_PATH/OVMF_VARS.fd $OVMF_VARS) || return
-    fi
-    UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly,unit=0 \
-          -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
+    case $ARCH in
+        "x86_64" )
+            OVMF_PATH=${OVMF_PATH:-"/usr/share/OVMF"}
+            OVMF_CODE="$OVMF_PATH/OVMF_CODE.fd"
+            if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
+                (cp $OVMF_PATH/OVMF_VARS.fd $OVMF_VARS) || return
+            fi
+            UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly,unit=0 \
+                  -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
+            ;;
+        "aarch64" )
+            UEFI=${UEFI-"-bios ../bios/QEMU_EFI.fd"}
+            ;;
+    esac
     CMD+=($UEFI)
 }
 
@@ -241,6 +261,14 @@ set_usb3()
     CMD+=($USB $USB_REDIR)
 }
 
+set_usb_arm()
+{
+    USB="\
+      -device qemu-xhci,id=usb3 \
+      -device usb-kbd -device usb-tablet"
+    CMD+=($USB)
+}
+
 set_M_Q35()
 {
     [[ $M_Q35 -eq 1 ]] || return 
@@ -270,15 +298,24 @@ set_ipmi()
 
 set_QEMU()
 {
-    [[ -n $CUSTOM_QEMU ]] && QEMU=${QEMU:-"$HOME/$CUSTOM_QEMU/bin/qemu-system-x86_64"}
-    QEMU=${QEMU:-"qemu-system-x86_64"};
+    [[ -n $CUSTOM_QEMU ]] && QEMU=${QEMU:-"$HOME/$CUSTOM_QEMU/bin/qemu-system-$ARCH"}
+    QEMU=${QEMU:-"qemu-system-$ARCH"};
     (which $QEMU >& /dev/null) || { echo $QEMU was not installed!! ; exit 1; }
+    
     QEMU+=" -name $VMNAME,process=$VMPROCID"
-    CMD=($QEMU)
-
+    case $ARCH in
+        "aarch64" )
+            QEMU+=" -M virt -cpu cortex-a53 -device ramfb"
+            ;;
+        "x86_64" )
+            QEMU+=" -cpu host --enable-kvm -vga $GRAPHIC"
+            ;;
+    esac
     NUM_CORE=${NUM_CORE:-$(($(nproc)/2))}
     MEM_SIZE=${MEM_SIZE:-"8G"}
-    OPT+=" -cpu host -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 --enable-kvm -monitor stdio -nodefaults"
+    QEMU+=" -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 -monitor stdio -nodefaults"
+
+    CMD=($QEMU)
 }
 
 RemoveSSH()
@@ -290,7 +327,7 @@ usage()
 {
 cat << EOM
 Usage:
- qemu [OPTIONS] [cfg file] [Guest image files..] [CD image files..]
+ ${0##*/} [OPTIONS] [cfg file] [Guest image files..] [CD image files..]
 
 Options:
  -s                         make SSH connection to the running QEMU
@@ -317,8 +354,8 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 USE_UEFI=1
 
-options=$(getopt -o sSu:k:q:ri:c:o:n:e:g:h \
-                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help -- "$@")
+options=$(getopt -n ${0##*/} -o sSu:k:q:ri:c:o:n:e:g:h \
+                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch: -- "$@")
 [ $? -eq 0 ] || { 
     usage
     exit 1
@@ -327,65 +364,36 @@ eval set -- "$options"
 
 while true; do
     case "$1" in
-        -s )  
-            USE_SSH=1 ;;         # make SSH connection to the running QEMU
-        -S )  
-            USE_SSH=1            # Remove existing SSH keys and make SSH connection to the running QEMU
-            RMSSH=1 ;;
-        -r )  
-            RMSSH=1 ;;          # Remove existing SSH keys 
-        -u | --uname )  
-            UNAME=$2
-            shift ;;    # set login user name
-        --ipmi )  
-            IMG+=($2)
-            shift ;;
-        --debug )  
-            G_TERM= ;;
-        -q | --qemu )  
-            CUSTOM_QEMU=$2
-            shift ;;
-        -k | --kernel )  
-            KERNEL_IMAGE=$2
-            shift ;;
-        -c | --config )  
-            CFGFILE=$2
-            shift ;;
-        --bios )  
-            USE_UEFI=$2
-            shift ;;
+        -s )            USE_SSH=1 ;;                    # make SSH connection to the running QEMU
+        -S )            USE_SSH=1 ; RMSSH=1 ;;          # Remove existing SSH keys and make SSH connection to the running QEMU
+        -r )            RMSSH=1 ;;                      # Remove existing SSH keys 
+        --debug )       G_TERM= ;;
+        --arch )        ARCH=$2 ;           shift ;;    
+        --bios )        USE_UEFI=$2 ;       shift ;;
+        --ipmi)         USE_IPMI=$2 ;       shift ;;
+        -u | --uname )  UNAME=$2 ;          shift ;;    # set login user name
+        -i | --image )  IMG+=($2) ;         shift ;;
+        -q | --qemu )   CUSTOM_QEMU=$2 ;    shift ;;
+        -k | --kernel ) KERNEL_IMAGE=$2 ;   shift ;;
+        -c | --config ) CFGFILE=$2 ;        shift ;;
+        -n | --net)     NET_T=$2 ;          shift ;;
+        -e | --nvme )   NVME_BACKEND=$2 ;   shift ;;
+        -g | --vga )    GRAPHIC=$2 ;        shift ;;
         -o | --num_ns )  
             [[ $2 -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $2 -ge 1 ]] && NUM_NS=$2; } ;;
-		-n | --net)  
-		    NET_T=$2
-		    shift ;;
-		--ipmi)  
-		    USE_IPMI=$2
-		    shift ;;
-		-e | --nvme )  
-		    NVME_BACKEND=$2
-		    shift ;;
-        -g | --vga )  
-            GRAPHIC=$2
-            shift ;;
-        -h | --help )  
-            usage; exit;;
-        --)
-            shift
-            break
-            ;;
+        -h | --help )   usage ;             exit;;
+        --)             shift ;             break ;;
     esac
     shift
 done 
 
-#shift $(($OPTIND-1)) 
 while (($#)); do
     case $1 in 
         *vmlinuz*)  KERNEL_IMAGE=$1 ;;
         *.img*)     IMG+=($1) ;;
         *.qcow2*)   IMG+=($1) ;;
         */dev/*)    IMG+=($1) ;;
-        *.iso*)     CDIMG+=($1) ;;
+        *.iso* | *.ISO*)     CDIMG+=($1) ;;
         *.cfg*)     CFGFILE=$1 ;;
         nvme*)      USE_NVME=1
                     NVME_BACKEND+=($1) ;;
@@ -409,24 +417,29 @@ VMPROCID=${VMPROCID:-${_TMP}_${V_UID}}
 
 M_Q35=${M_Q35-1}
 USE_USB3=${USE_USB3-1}
+ARCH=${ARCH:-"x86_64"}
+GRAPHIC=${GRAPHIC-"qxl"}
 
 G_TERM=${G_TERM-"gnome-terminal --title=$VMNAME --"}
 printf "Virtual machine name: $VMNAME \n\n"
 
 if ! (waitUntil $VMPROCID 0); then
     set_QEMU
-    set_M_Q35
+    [[ $ARCH == "x86_64" ]] && set_M_Q35
     set_uefi
     set_kernel
+    [[ $ARCH == "x86_64" ]] && set_usb3 || set_usb_arm
     set_disks
     set_cdrom
     set_nvme
     set_net 1
     set_ipmi
-    set_usb3
+    set_spice
+    set_connect
     CMD+=($OPT $EXT_PARAMS $@)
 else
     set_net
+    set_connect
 fi
 
 printf '%s\n\n' "${CMD[*]}" 
@@ -435,7 +448,7 @@ if [[ $GDB -eq 1 ]]; then
     sudo gdb -q --args "${CMD[@]}"
 else
     (waitUntil $VMPROCID 0) || (sudo $G_TERM "${CMD[@]}")
-    (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
-    (checkConn $CHKPORT 5) 
+    [[ -n $CONNECT ]] && (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
+    [[ -n $CONNECT ]] && (checkConn $CHKPORT 5) 
 fi
 
