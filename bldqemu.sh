@@ -1,19 +1,47 @@
 #!/bin/bash
 
 TMP=${PWD%/*}
-TARGET=${TMP##*/}
+NAME=${TMP##*/}
 
-while getopts ":p:t:" opt; do
-    case $opt in
-        t)  TARGET=$OPTARG ;;
-        P)  PREFIX=$OPTARG ;;
-        *)  usage ;;
+usage()
+{
+cat << EOM
+Usage:
+ ${0##*/} [OPTIONS] command
+
+Command:
+ cfg                        configuration
+ clean                      clean bluid
+ distclean                  distclean
+ bld                        build
+ 
+Options:
+ -n, --name <NAME>          set the executable name
+ -a, --arch <architecture>  supported architecture
+ -p, --path <PATH>          set the install PATH
+EOM
+}
+
+options=$(getopt -n ${0##*/} -o n:p:a:h \
+                --long name:,path:,arch:,help -- "$@")
+[ $? -eq 0 ] || { 
+    usage
+    exit 1
+}
+eval set -- "$options"
+
+while true; do
+    case "$1" in
+        -n | --name )   NAME=$2 ;       shift ;;    # set login user name
+        -a | --arch )   ARCH+=(${2//,/ }) ;    shift ;;    
+        -p | --path )   PREFIX=$2 ;     shift ;;
+        -h | --help )   usage ;         exit ;;
+        --)             shift ;         break ;;
     esac
+    shift
 done 
 
-shift $(($OPTIND-1)) 
-
-PREFIX=${PREFIX:-$HOME/$TARGET}
+PREFIX=${PREFIX:-$HOME/$NAME}
 
 setup_env()
 {
@@ -32,8 +60,15 @@ setup_env()
 config()
 {
     TRACE=${1:-"log"}
-    
-    CFG=" --enable-kvm --target-list=x86_64-softmmu --enable-linux-aio \
+
+    ARCH=${ARCH-"x86_64"}
+    for _ARCH in ${ARCH[@]};
+    do
+        [[ -n $TARGET ]] && TARGET+=","
+        TARGET+="${_ARCH}-softmmu"
+    done
+	
+    CFG=" --enable-kvm --target-list=$TARGET --enable-linux-aio \
         --disable-werror --disable-xen --prefix=$PREFIX --enable-gtk --enable-spice \
         --enable-virtfs --enable-vhost-net --enable-modules --enable-snappy \
         --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" --disable-stack-protector \
