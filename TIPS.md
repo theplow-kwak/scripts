@@ -476,6 +476,14 @@ As you edited default.xml file this should be enough. But for editing you can us
 virsh net-edit default
 ```
 
+Find the IP addresses of VMs in KVM with virsh
+
+```bash
+virsh net-list
+virsh net-info default
+virsh net-dhcp-leases default
+```
+
 
 
 ##  Bridged networking using qemu-bridge-helper
@@ -1090,5 +1098,117 @@ disco repository는 old-releases.ubuntu.com로 변경
 
 ```bash
 sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
+```
+
+
+
+# Cloud-image
+
+## Prepare Cloud Image
+
+Download CentOS Cloud Images from https://cloud.centos.org/centos/7/images/
+
+
+
+Create a snapshot so that we can branch from this disk image without affecting the parent.  We will also use this opportunity to increase the root filesystem from 8G to 10G.
+
+```bash
+qemu-img create -f qcow2 -b CentOS-7-aarch64-GenericCloud-2003.qcow2 centos-2003.qcow2
+```
+
+
+
+## Create ssh keypair
+
+```bash
+ssh-keygen -t rsa
+```
+
+
+
+## Install virt-customize on Linux
+
+```bash
+sudo apt -y install libguestfs-tools
+```
+
+
+
+## Setup/inject an ssh keys
+
+```bash
+sudo virt-customize -a centos-2003.qcow2 --ssh-inject centos:file:/home/dhkwak/.ssh/id_rsa.pub
+```
+
+
+
+## Create cloud-init configuration
+
+Create a file named “cloud_init.cfg” with the below content.
+
+```text
+#cloud-config
+hostname: <host_name>
+users:
+  - name: <your_user>
+    groups: wheel
+    lock_passwd: false
+    passwd: <your_passord_hash>
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh-authorized-keys:
+      - <your_public_ssh_key>
+ssh_pwauth: false
+disable_root: false
+package_upgrade: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - [ sh, -c, 'touch /etc/cloud/cloud-init.disabled' ]
+final_message: "The system is finally up, after $UPTIME seconds"
+```
+
+Now we generate a seed disk that has the cloud-config metadata.
+
+```text
+cloud-localds -v cloud_init.iso cloud_init.cfg 
+```
+
+
+
+## ssh key setting
+
+```bash
+ssh-copy-id user@server.com
+```
+
+
+
+## Correct SSH Permission denied
+
+The only real difference was some security context differences on files and directories between those that worked and those that didn't.
+
+```bash
+sudo ls -laZ <user-home>/.ssh
+```
+
+You should see some ssh_home_t and user_home_t attributes. If you don't, use the chcon command to add the missing attributes.
+
+```bash
+home="$(getent passwd <user> | cut -d: -f6)"
+sudo chcon -R unconfined_u:object_r:ssh_home_t:s0 "$home"/.ssh
+sudo chcon unconfined_u:object_r:user_home_t:s0 "$home"
+```
+
+```bash
+restorecon -r -v -F /home/centos/.ssh
+```
+
+
+
+## Install Centos aarch64 GPG key 
+
+```bash
+sudo rpm --import https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7-aarch64
 ```
 
