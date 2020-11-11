@@ -355,7 +355,7 @@ RMSSH=0
 USE_UEFI=1
 
 options=$(getopt -n ${0##*/} -o sSu:k:q:ri:c:o:n:e:g:h \
-                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch: -- "$@")
+                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch:,spice -- "$@")
 [ $? -eq 0 ] || { 
     usage
     exit 1
@@ -368,6 +368,7 @@ while true; do
         -S )            USE_SSH=1 ; RMSSH=1 ;;          # Remove existing SSH keys and make SSH connection to the running QEMU
         -r )            RMSSH=1 ;;                      # Remove existing SSH keys 
         --debug )       G_TERM= ;;
+        --spice )       USE_SPICE=1 ;;
         --arch )        ARCH=$2 ;           shift ;;    
         --bios )        USE_UEFI=$2 ;       shift ;;
         --ipmi)         USE_IPMI=$2 ;       shift ;;
@@ -434,7 +435,7 @@ if ! (waitUntil $VMPROCID 0); then
     set_nvme
     set_net 1
     set_ipmi
-    set_spice
+    [[ $USE_SPICE == "1" ]] || set_spice
     set_connect
     CMD+=($OPT $EXT_PARAMS $@)
 else
