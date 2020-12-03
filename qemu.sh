@@ -23,10 +23,10 @@ waitUntil()
 
 checkConn()
 {
-    local _NETPORT=$1
+    local _CHKPORT=$1
     local _timeout=${2:-10}
     
-    until (lsof -i :$_NETPORT > /dev/null);  
+    until (lsof -i :$_CHKPORT > /dev/null);  
     do
         ((_timeout--))
         [[ $_timeout < 0 ]] && exit 1
@@ -61,10 +61,6 @@ set_disks()
       fi
     done
 
-    # if [[ -z $DISKS ]]; then
-    #     echo "error!! There is no disks."
-    #     (waitUntil $VMPROCID 0) || exit 1
-    # fi 
     CMD+=($SCSI $DISKS)
 }
 
@@ -116,13 +112,17 @@ set_net()
 
 set_connect()
 {
-    T_TITLE="${VMNAME}:${SPICEPORT}"
+    T_TITLE="${VMNAME}:${CHKPORT}"
     
-    if [[ $USE_SSH -eq 1 ]]; then
-        CONNECT=($G_TERM ssh $UNAME@localhost -p $SSHPORT)
+    OPT+=" -vga $GRAPHIC"
+    if [[ $M_CONNECT == "ssh" ]]; then
+        OPT=${OPT/"-monitor stdio"/""}
+        OPT=${OPT/"-vga $GRAPHIC"/""}
+        OPT+=" -nographic -serial mon:stdio"
+        CONNECT=(gnome-terminal --title=$T_TITLE -- ssh $UNAME@localhost -p $SSHPORT)
         CHKPORT=$SSHPORT
     fi
-    if [[ -n $SPICE ]]; then
+    if [[ $M_CONNECT == "spice" ]]; then
         CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
         CHKPORT=$SPICEPORT
     fi
@@ -150,9 +150,9 @@ set_kernel()
     [[ -n $KERNEL_IMAGE ]] || return
     KERNEL="-kernel ${KERNEL_IMAGE:="$HOME/projects/linux-ocssd/arch/x86_64/boot/bzImage"}"
     [[ $KERNEL_IMAGE == *vmlinuz* ]] && INITRD="-initrd ${KERNEL_IMAGE/"vmlinuz"/"initrd.img"}"
-
+    
     if [[ $GUI_BOOT -eq 1 ]]; then
-        OPT+=" -vga qxl"
+        OPT+=" -vga $GRAPHIC"
         PARAM="root=/dev/sda vga=0x300"
     else
         OPT=${OPT/"-monitor stdio"/""}
@@ -304,16 +304,20 @@ set_QEMU()
     
     QEMU+=" -name $VMNAME,process=$VMPROCID"
     case $ARCH in
+        "arm" )
+            QEMU+=" -M virt -cpu cortex-a53 -device ramfb"
+            ;;
         "aarch64" )
             QEMU+=" -M virt -cpu cortex-a53 -device ramfb"
             ;;
         "x86_64" )
-            QEMU+=" -cpu host --enable-kvm -vga $GRAPHIC"
+            QEMU+=" -cpu host --enable-kvm"
             ;;
     esac
     NUM_CORE=${NUM_CORE:-$(($(nproc)/2))}
     MEM_SIZE=${MEM_SIZE:-"8G"}
-    QEMU+=" -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 -monitor stdio -nodefaults"
+    QEMU+=" -m $MEM_SIZE -smp $NUM_CORE,sockets=1,cores=$NUM_CORE,threads=1 -nodefaults"
+    OPT+=" -monitor stdio"
 
     CMD=($QEMU)
 }
@@ -355,7 +359,7 @@ RMSSH=0
 USE_UEFI=1
 
 options=$(getopt -n ${0##*/} -o sSu:k:q:ri:c:o:n:e:g:h \
-                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch:,spice -- "$@")
+                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch:,connect: -- "$@")
 [ $? -eq 0 ] || { 
     usage
     exit 1
@@ -368,7 +372,7 @@ while true; do
         -S )            USE_SSH=1 ; RMSSH=1 ;;          # Remove existing SSH keys and make SSH connection to the running QEMU
         -r )            RMSSH=1 ;;                      # Remove existing SSH keys 
         --debug )       G_TERM= ;;
-        --spice )       USE_SPICE=1 ;;
+        --connect )     M_CONNECT=$2 ;      shift ;;
         --arch )        ARCH=$2 ;           shift ;;    
         --bios )        USE_UEFI=$2 ;       shift ;;
         --ipmi)         USE_IPMI=$2 ;       shift ;;
@@ -381,7 +385,7 @@ while true; do
         -e | --nvme )   NVME_BACKEND=$2 ;   shift ;;
         -g | --vga )    GRAPHIC=$2 ;        shift ;;
         -o | --num_ns )  
-            [[ $2 -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $2 -ge 1 ]] && NUM_NS=$2; } ;;
+            [[ $2 -eq 0 ]] && { USE_NVME=0; } || { USE_NVME=1; [[ $2 -ge 1 ]] && NUM_NS=$2; } ; shift ;;
         -h | --help )   usage ;             exit;;
         --)             shift ;             break ;;
     esac
@@ -390,16 +394,16 @@ done
 
 while (($#)); do
     case $1 in 
-        *vmlinuz*)  KERNEL_IMAGE=$1 ;;
-        *.img*)     IMG+=($1) ;;
-        *.qcow2*)   IMG+=($1) ;;
-        */dev/*)    IMG+=($1) ;;
-        *.iso* | *.ISO*)     CDIMG+=($1) ;;
-        *.cfg*)     CFGFILE=$1 ;;
-        nvme*)      USE_NVME=1
-                    NVME_BACKEND+=($1) ;;
-        setup)      setup_qemu; exit 0;;
-        * )         break;;
+        *vmlinuz*)              KERNEL_IMAGE=$1 ;;
+        *.img* | *.IMG*)        IMG+=($1) ;;
+        *.qcow2* | *.QCOW2*)    IMG+=($1) ;;
+        */dev/*)                IMG+=($1) ;;
+        *.iso* | *.ISO*)        CDIMG+=($1) ;;
+        *.cfg*)                 CFGFILE=$1 ;;
+        nvme*)                  USE_NVME=1
+                                NVME_BACKEND+=($1) ;;
+        setup)                  setup_qemu; exit 0;;
+        * )                     break;;
     esac
     shift
 done
@@ -419,7 +423,8 @@ VMPROCID=${VMPROCID:-${_TMP}_${V_UID}}
 M_Q35=${M_Q35-1}
 USE_USB3=${USE_USB3-1}
 ARCH=${ARCH:-"x86_64"}
-GRAPHIC=${GRAPHIC-"qxl"}
+GRAPHIC=${GRAPHIC:-"qxl"}
+M_CONNECT=${M_CONNECT:-"spice"}
 
 G_TERM=${G_TERM-"gnome-terminal --title=$VMNAME --"}
 printf "Virtual machine name: $VMNAME \n\n"
@@ -435,7 +440,7 @@ if ! (waitUntil $VMPROCID 0); then
     set_nvme
     set_net 1
     set_ipmi
-    [[ $USE_SPICE == "1" ]] || set_spice
+    [[ $M_CONNECT == "spice" ]] && set_spice
     set_connect
     CMD+=($OPT $EXT_PARAMS $@)
 else
