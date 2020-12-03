@@ -415,6 +415,10 @@ then I set Local Policies > Security Options > Network Security: LAN Manager aut
 
 https://vhrms.tistory.com/772
 
+1. mmc 실행
+2. 파일 > 스냅인 추가/제거 클릭 > 그룹 정책 개체 편집기 > 추가
+3. 컴퓨터 구성 > 관리 템플릿 > 네트워크 > Lanman 워크스테이션 > 보안되지 않은 게스트 로그온 사용 > 사용
+
 
 
 # QEMU
@@ -1212,3 +1216,10 @@ restorecon -r -v -F /home/centos/.ssh
 sudo rpm --import https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7-aarch64
 ```
 
+
+
+## virbr dhcp 확인
+
+virsh net-list
+virsh net-info default
+virsh net-dhcp-leases default
