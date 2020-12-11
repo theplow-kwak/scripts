@@ -76,7 +76,7 @@ scripts() {
 local_cmd() {
 	[[ -d $HOME/.local/bin ]] || mkdir -p $HOME/.local/bin
 	pushd $HOME/.local/bin
-	for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
+	for file in ~/projects/scripts/*.sh; do name=${file##*/}; [[ -e ${name%%.*} ]] || ln -s $file ${name%%.*}; done
 	popd
 }
 
