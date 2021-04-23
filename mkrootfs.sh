@@ -16,7 +16,7 @@ FormatDisk()
         qemu-img create $_IMGFILE $IMGSIZE
         # dd if=/dev/zero of=$_IMGFILE bs=1M count=32768
     fi
-    if [ -u $_IMGFILE ]; then
+    if [ -O $_IMGFILE ]; then
         mkfs.ext4 $_IMGFILE
     else
         sudo mkfs.ext4 $_IMGFILE
