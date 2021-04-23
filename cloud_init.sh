@@ -12,19 +12,30 @@ users:
     groups: wheel
     lock_passwd: false
     shell: /bin/bash
-    sudo: ['ALL=(ALL) ALL']
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
 
 ssh_pwauth: false
 disable_root: false
 runcmd:
   - [ sh, -c, 'touch /etc/cloud/cloud-init.disabled' ]
 
+power_state:
+  delay: 'now'
+  mode: poweroff
+  message: Bye Bye
+  timeout: 30
+  condition: True
+  
 final_message: "The system is finally up, after \$UPTIME seconds" 
 EOL
 
 if [[ -e $HOME/.ssh/id_rsa.pub ]]; then
     read _SSH_KEY < $HOME/.ssh/id_rsa.pub
     sed -i "/sudo:/ a \    ssh-authorized-keys:\n      - \"${_SSH_KEY}\"" $_F_NAME
+fi
+if [[ -e $_CERT_FILE ]]; then
+    printf "\nca-certs:\n  trusted:\n  - |\n" >> $_F_NAME
+    cat $_CERT_FILE >> $_F_NAME
 fi
 }
 
@@ -41,8 +52,8 @@ Options:
 EOM
 }
 
-options=$(getopt -n ${0##*/} -o n:H:f:h \
-                --long name:,host:,fname:,help -- "$@")
+options=$(getopt -n ${0##*/} -o n:H:f:c:h \
+                --long name:,host:,fname:,cert:,help -- "$@")
 [ $? -eq 0 ] || { 
     usage
     exit 1
@@ -54,6 +65,7 @@ while true; do
         -n | --name )   _USER_NAME=$2 ;     shift ;;    # set login user name
         -H | --host )   _HOST_NAME=$2 ;     shift ;;    
         -f | --fname )  _F_NAME=$2 ;        shift ;;
+        -c | --cert )   _CERT_FILE=$2 ;     shift ;;
         -h | --help )   usage ;             exit ;;
         --)             shift ;             break ;;
     esac

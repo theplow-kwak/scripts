@@ -150,25 +150,6 @@ Exec=env LC_ALL=C BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/git
 
 
 
-# OS disk 이동
-
-Ubuntu 설치 디스크를 다른 디스크로 변경하려고 한다. 
-
- ```
-mkdir src dest
-sudo mkfs.ext4 /dev/nvme1n1p2
-sudo mount -o loop /dev/nvme0n1p2 src/
-sudo mount -o loop /dev/nvme1n1p2 dest/
-cd dest/
-sudo cp -av ../src/* .
-cd ..
-sudo umount src dest
- ```
-
-
-
-
-
 # Deleting a git commit
 
 Git server에 지저분하게 커밋된것들을 다 지우고 필요한 항목만 선정하여 깨끝하게 다시 커밋하고 싶을때 사용.
@@ -316,29 +297,6 @@ tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 
 
 
-# Fix Time Differences in Ubuntu & Windows 10 Dual Boot
-
-**Disable UTC and use Local Time in Ubuntu**
-
-```bash
-timedatectl set-local-rtc 1 --adjust-system-clock
-```
-
-
-
-# How to Change MAC Address on Ubuntu
-
-https://www.wikihow.com/Change-MAC-Address-on-Ubuntu
-
-```
-ip link show
-sudo ip link set dev xxxx down 
-sudo ip link set dev xxxx address xx:xx:xx:xx:xx:xx 
-sudo ip link set dev xxxx up
-```
-
-
-
 # Samba
 
 ## CentOS / RHEL 7 : Eable To Start The Samba Service
@@ -367,6 +325,25 @@ For example:
 
 
 ## Samba mount
+
+```bash
+cat << _EOF_ | sudo tee /etc/.smb.cred
+username=<username>
+password=<password>
+domain=WORKGROUP
+_EOF_
+sudo chmod 600 /etc/.smb.cred
+```
+
+```bash
+sudo apt install cifs-utils
+```
+
+```bash
+sudo mount -t cifs -o credentials=/etc/.smb.cred,uid=$(id -u `whoami`),gid=$(id -g `whoami`),vers=3.0 //192.168.100.1/path_from ~/path_to
+```
+
+
 
 ```bash
 sudo mount -t cifs -o username=dhkwak //10.0.2.4/qemu ./host
@@ -462,22 +439,22 @@ nmcli -f bridge con show br0
 sudo apt-get install libvirt-daemon-system
 ```
 
-The proper way fo changing address is using virsh. You can stop network (e.g. ifdown):
+The proper way fo changing address is using virsh. You can stop network (e.g. ifdown): (option)
 
 ```bash
-virsh net-destroy default
+sudo virsh net-destroy default
 ```
 
-And you can start it with:
+And you can start it with: (option)
 
 ```bash
-virsh net-start default
+sudo virsh net-start default
 ```
 
-As you edited default.xml file this should be enough. But for editing you can use:
+As you edited default.xml file this should be enough. But for editing you can use: 
 
 ```bash
-virsh net-edit default
+sudo virsh net-edit default
 ```
 
 Find the IP addresses of VMs in KVM with virsh
@@ -606,6 +583,19 @@ docker exec -it -u 0 jenkins /bin/bash
 
 
 
+## Plug-in 설치
+
+필요한 plug-in
+
+- P4 Plugin
+- Build Failure Analyzer
+- Build Monitor View
+- 
+
+
+
+## 
+
 ## Jenkins and python
 
 > [Jenkins에서 파이썬 출력을 실시간으로 보고싶다면?](https://taetaetae.github.io/2018/12/02/python-buffer/)
@@ -620,6 +610,13 @@ docker exec -it -u 0 jenkins /bin/bash
 
 ```bash
 mvn -DdownloadSources=true -DdownloadJavadocs=true -DoutputDirectory=target/eclipse-classes -Declipse.workspace=${HOME}/eclipse-workspace eclipse:eclipse eclipse:configure-workspace
+```
+
+```bash
+pip install jenkins
+pip install ConfigObj
+pip install python-jenkins
+pip install wcmatch
 ```
 
 
@@ -1090,19 +1087,85 @@ mvn clean
 
 # Ubuntu
 
+## Ubuntu repository 변경
+
 apt repository를 'mirror.kakao.com'으로 변경
 
 ```bash
 sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
 ```
 
-
-
 disco repository는 old-releases.ubuntu.com로 변경
 
 ```bash
 sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
 ```
+
+
+
+## Barrier 설정
+
+barrier 설치
+
+```bash
+sudo apt install barrier
+```
+
+booting시 barrier 자동 실행: 
+
+아래의 full cli command를 `시작프로그램`에 새 항목으로 추가
+
+```bash
+$ ps aux | grep barrier
+dhkwak      1926  0.5  0.0  98868  9360 ?        Sl   08:58   0:04 /usr/bin/barrierc -f --debug INFO --name dhkwak-AORUS --enable-crypto [10.152.52.40]:24800
+```
+
+```bash
+client:
+/snap/barrier/384/usr/bin/barrierc -f --no-tray --debug INFO --name test-X570-AORUS-ELITE --enable-crypto [10.152.103.212]:24800
+server:
+/snap/barrier/384/usr/bin/barriers -f --no-tray --debug INFO --name dhkwak-AORUS --enable-crypto -c /home/dhkwak/barrier.conf --address :24800
+```
+
+
+
+## Fix Time Differences in Ubuntu & Windows 10 Dual Boot
+
+**Disable UTC and use Local Time in Ubuntu**
+
+```bash
+timedatectl set-local-rtc 1 --adjust-system-clock
+```
+
+
+
+## How to Change MAC Address on Ubuntu
+
+https://www.wikihow.com/Change-MAC-Address-on-Ubuntu
+
+```
+ip link show
+sudo ip link set dev xxxx down 
+sudo ip link set dev xxxx address xx:xx:xx:xx:xx:xx 
+sudo ip link set dev xxxx up
+```
+
+
+
+## OS disk 이동
+
+Ubuntu 설치 디스크를 다른 디스크로 변경하려고 한다. 
+
+ ```
+mkdir src dest
+sudo mkfs.ext4 /dev/nvme1n1p2
+sudo mount -o loop /dev/nvme0n1p2 src/
+sudo mount -o loop /dev/nvme1n1p2 dest/
+cd dest/
+sudo cp -av ../src/* .
+cd ..
+sudo umount src dest
+ ```
 
 
 
@@ -1117,7 +1180,10 @@ Download CentOS Cloud Images from https://cloud.centos.org/centos/7/images/
 Create a snapshot so that we can branch from this disk image without affecting the parent.  We will also use this opportunity to increase the root filesystem from 8G to 10G.
 
 ```bash
-qemu-img create -f qcow2 -b CentOS-7-aarch64-GenericCloud-2003.qcow2 centos-2003.qcow2
+qemu-img create -f qcow2 -b CentOS-8-GenericCloud-8.2.2004-20200611.2.aarch64.qcow2 centos-8.3.qcow2
+qemu-img resize centos-8.3.qcow2 60G
+qemu --arch aarch64 --connect ssh --net bridge --uname test centos-8.3.qcow2 cloud_init.iso
+qemu --arch aarch64 --connect ssh --net bridge --uname test centos-8.3.qcow2 
 ```
 
 
@@ -1169,6 +1235,7 @@ packages:
   - qemu-guest-agent
 runcmd:
   - [ sh, -c, 'touch /etc/cloud/cloud-init.disabled' ]
+  - [ sh, -c, 'sudo poweroff' ]
 final_message: "The system is finally up, after $UPTIME seconds"
 ```
 

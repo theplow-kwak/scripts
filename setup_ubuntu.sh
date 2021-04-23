@@ -1,5 +1,49 @@
 #!/bin/bash
 
+usage()
+{
+cat << EOM
+Usage:
+ ${0##*/} command [command..]
+
+Command:
+ set_mirror     set apt repo as kakao.com
+ update         update and install build-essential git python3-pip
+ python         update pip modules          
+ tools          install net-tools krusader barrier qemu-kvm virt-viewer cifs-utils
+ chrome         install chrome
+ bcompare       install bcompare
+ typora         install typora
+ docker         install docker
+ scripts        install scripts
+ local_cmd      install local_cmd
+ gitkraken      install gitkraken
+ 
+Options:
+ -a, --all      run all commands
+
+EOM
+}
+
+options=$(getopt -n ${0##*/} -o ah \
+                --long all,help -- "$@")
+[ $? -eq 0 ] || { 
+    usage
+    exit 1
+}
+eval set -- "$options"
+
+while true; do
+    case "$1" in
+        -a | --all )    CMDS="set_mirror update tools chrome bcompare typora docker scripts local_cmd" ;    shift ;;    
+        -h | --help )   usage ;         exit ;;
+        --)             shift ;         break ;;
+    esac
+    shift
+done 
+
+PREFIX=${PREFIX:-$HOME/$NAME}
+
 set_mirror(){
     sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
 }
@@ -28,7 +72,7 @@ tools() {
     sudo apt -y update
     sudo apt -y upgrade
 
-    sudo apt -y install net-tools krusader barrier qemu-kvm
+    sudo apt -y install net-tools krusader barrier qemu-kvm virt-viewer cifs-utils
 }
 
 chrome() {
@@ -85,13 +129,14 @@ local_cmd() {
 if (($#)); then
     CMDS=$@
 else
-#    CMDS="set_mirror update chrome bcompare typora docker scripts local_cmd"
-    CMDS="update"
+#    CMDS="tools set_mirror update chrome bcompare typora docker scripts local_cmd"
+    usage
+    exit 1
 fi
 
-pushd $HOME/temp
+pushd $HOME/temp &>/dev/null
 for _CMD in $CMDS;
 do
     $_CMD    
 done
-popd
+popd &>/dev/null
