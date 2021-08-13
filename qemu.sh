@@ -52,6 +52,10 @@ set_disks()
           if [[ $_IMG == *.qcow2* ]]; then 
               DISKS+=" \
                 -drive file=$_IMG,cache=writeback,id=drive-$_index"
+          elif [[ $_IMG == *.vhdx* ]]; then
+              DISKS+=" \
+                -drive file=$_IMG,if=none,id=drive-$_index \
+                -device nvme,drive=drive-$_index,serial=nvme-$_index"
           else
               DISKS+=" \
                 -drive file=$_IMG,if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-$_index \
@@ -124,7 +128,8 @@ set_connect()
         CHKPORT=$SSHPORT
     fi
     if [[ $M_CONNECT == "spice" ]]; then
-        CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+        CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+#        CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 #        CONNECT=(virt-viewer -c qemu:///system --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
         CHKPORT=$SPICEPORT
     fi
@@ -181,7 +186,15 @@ set_uefi()
                   -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
             ;;
         "aarch64" )
-            UEFI=${UEFI-"-bios ../bios/QEMU_EFI.fd"}
+            OVMF_PATH=${OVMF_PATH:-"/usr/share/qemu-efi-aarch64"}
+            OVMF_CODE="$OVMF_PATH/QEMU_EFI.fd"
+            if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
+                (dd if=/dev/zero of=$OVMF_VARS bs=1M count=64) || return
+            fi           
+#            UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly=on,unit=0 \
+            UEFI=${UEFI-"-bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+                  -drive file=pflash1.img,if=pflash,index=1"}
+#            UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly=on,unit=0 "}
             ;;
     esac
     CMD+=($UEFI)
@@ -213,7 +226,7 @@ set_nvme()
     for _NVME in ${NVME_BACKEND[@]};
     do
         case $CUSTOM_QEMU in
-            "qemu-nvme"|"qemu" )   
+            "qemu" )   
                NVME+=" \
                     -device xio3130-downstream,bus=upstream1.0,id=downstream1.$_CTRL_ID,chassis=$_CTRL_ID,multifunction=on \
                     -device nvme,serial=beef${_NVME},id=${_NVME},bus=downstream1.$_CTRL_ID"
@@ -229,15 +242,6 @@ set_nvme()
                 done 
                 ;;
 
-            "qemu" )
-                if (check_file ${_NVME}.img 40); then
-                    NVME+=" \
-                        -drive file=${_NVME}.img,id=${_NVME},format=raw,if=none,cache=none"
-                    NVME+=" \
-                        -device nvme,drive=${_NVME},serial=beef${_NVME},namespaces=$NUM_NS"
-                fi
-                ;;
-                
             * )             
                 ns_backend=${_NVME}n1.img
                 if (check_file $ns_backend 40); then
@@ -316,7 +320,7 @@ set_QEMU()
             QEMU+=" -M virt -cpu cortex-a53 -device ramfb"
             ;;
         "aarch64" )
-            QEMU+=" -M virt -cpu cortex-a53 -device ramfb"
+            QEMU+=" -M virt -cpu cortex-a72 -device ramfb"
             ;;
         "x86_64" )
             QEMU+=" -cpu host --enable-kvm"
@@ -342,6 +346,17 @@ set_pcipass()
     
     PCIPASS=" -device vfio-pci,host=$PCIHOST,multifunction=on"
     CMD+=($PCIPASS)
+}
+
+set_tpm()
+{
+    fn_cancle="/tmp/foo-cancel-${V_UID}"
+    [[ -e $fn_cancle ]] || touch $fn_cancle
+
+    TPM="\
+      -tpmdev passthrough,id=tpm0,path=/dev/tpm0,cancel-path=$fn_cancle \
+      -device tpm-tis,tpmdev=tpm0"
+    CMD+=($TPM)
 }
 
 RemoveSSH()
@@ -380,7 +395,7 @@ UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 USE_UEFI=1
 
-options=$(getopt -n ${0##*/} -o sSu:k:q:ri:c:o:n:e:g:hp:b \
+options=$(getopt -n ${0##*/} -o sSu:k:q:ri:c:o:n:e:g:hp:ba: \
                 --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch:,connect:,pci: -- "$@")
 [ $? -eq 0 ] || { 
     usage
@@ -396,7 +411,7 @@ while true; do
         -r )            RMSSH=1 ;;                      # Remove existing SSH keys 
         --debug )       G_TERM= ;;
         --connect )     M_CONNECT=$2 ;      shift ;;
-        --arch )        ARCH=$2 ;           shift ;;    
+        -a | --arch )   ARCH=$2 ;           shift ;;    
         --bios )        USE_UEFI=$2 ;       shift ;;
         --ipmi)         USE_IPMI=$2 ;       shift ;;
         -u | --uname )  UNAME=$2 ;          shift ;;    # set login user name
@@ -421,6 +436,7 @@ while (($#)); do
         *vmlinuz*)              KERNEL_IMAGE=$1 ;;
         *.img* | *.IMG*)        IMG+=($1) ;;
         *.qcow2* | *.QCOW2*)    IMG+=($1) ;;
+        *.vhdx* | *.VHDX*)      IMG+=($1) ;;
         */dev/*)                IMG+=($1) ;;
         *.iso* | *.ISO*)        CDIMG+=($1) ;;
         *.cfg*)                 CFGFILE=$1 ;;
@@ -467,6 +483,7 @@ if ! (waitUntil $VMPROCID 0); then
     set_ipmi
     [[ $M_CONNECT == "spice" ]] && set_spice
     set_connect
+    set_tpm
     [[ $BOOTD ]] && EXT_PARAMS=" -boot order=d"
     CMD+=($OPT $EXT_PARAMS $@)
 else
