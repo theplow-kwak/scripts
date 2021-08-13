@@ -829,6 +829,18 @@ dir $env:LOCALAPPDATA\Packages\$PackageFamilyName\LocalState\
 
 
 
+## Enable the access to network drives from elevated apps running as administrator
+
+1. Open [Registry Editor](https://winaero.com/blog/windows-registry-editor-for-dummies/).
+2. Go to the following Registry key:
+
+```text
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+```
+
+3. Create a new DWORD value called **EnableLinkedConnections**, and set it to 1
+4. Restart your PC and you are done.
+
 
 
 # Python 참고
@@ -1290,3 +1302,28 @@ sudo rpm --import https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7-aarch64
 virsh net-list
 virsh net-info default
 virsh net-dhcp-leases default
+
+
+
+# msys64
+
+https://www.msys2.org/
+
+1. Download and install: [msys2-x86_64-20210604.exe](https://repo.msys2.org/distrib/x86_64/msys2-x86_64-20210604.exe)
+2. D:\msys64\usr\ssl\certs\ca-bundle.crt  에 crt copy
+3. Update the package database and base packages. 
+   1. pacman -Syu
+   2. pacman -Su
+   3. pacman -S --needed base-devel mingw-w64-x86_64-toolchain
+
+
+
+# pciutils for windows 
+
+https://edwinwang.com/2011/04/compile-pciutils-lspci-setpci-in-windows-x86%EF%BC%8C%E5%9C%A8-windows-x86-%E5%B9%B3%E5%8F%B0%E4%B8%8B%E7%BC%96%E8%AF%91-pciutils-%EF%BC%88lspci-setpci%EF%BC%89/
+
+1. MinGW-full-gcc-4.2.5-Dec-2010.7z  압축 풀기
+2. MinGW/home/test/pciutils  에 pciutils-3.5.5.tar.gz 풀기
+3. patch file 적용 -> patch < pciutils-crosscompile.patch
+4. win32의 configh, config.mk를 lib에 copy
+4. make 

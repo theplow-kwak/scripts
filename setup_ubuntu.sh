@@ -67,6 +67,10 @@ python() {
     pip3 install jupyterlab
 }
 
+jenkins() {
+    pip install jenkins python-jenkins wcmatch configobj
+}
+
 tools() {
     echo update
     sudo apt -y update

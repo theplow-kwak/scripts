@@ -69,11 +69,13 @@ config()
         TARGET+="${_ARCH}-softmmu"
     done
 	
-    CFG=" --enable-kvm --target-list=$TARGET --enable-linux-aio \
-        --disable-werror --disable-xen --prefix=$PREFIX --enable-gtk --enable-spice \
-        --enable-virtfs --enable-vhost-net --enable-modules --enable-snappy --enable-mpath \
-        --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" --disable-stack-protector \
-        --enable-trace-backends=$TRACE --sysconfdir=/etc --enable-libusb --enable-usb-redir --enable-plugins"
+    CFG=" \
+        --target-list=$TARGET --prefix=$PREFIX --enable-trace-backends=$TRACE \
+        --enable-kvm --enable-linux-aio --enable-gtk --enable-spice \
+        --enable-virtfs --enable-vhost-net --enable-snappy --enable-mpath \
+        --enable-libusb --enable-usb-redir --enable-plugins --enable-user \
+        "
+    # --disable-xen --enable-modules --sysconfdir=/etc --disable-stack-protector --disable-werror --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" \
 
     echo $CFG
     if [[ -e ./configure ]]; then
