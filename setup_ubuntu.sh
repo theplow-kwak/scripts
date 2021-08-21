@@ -61,6 +61,10 @@ python() {
     sudo apt -y update
     sudo apt -y upgrade
 
+    sudo apt -y install libcairo2-dev
+    sudo apt -y install libgirepository1.0-dev
+    sudo apt -y install python3-distutils-extra
+
     sudo apt -y install python3-pip
     pip3 install --upgrade pip
     pip3 freeze | cut -d'=' -f1 | xargs pip3 install --upgrade
