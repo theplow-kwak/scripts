@@ -1181,6 +1181,21 @@ sudo umount src dest
 
 
 
+## Ubuntu upgrade 
+
+```bash
+sudo apt remove snapd
+sudo apt autoremove
+sudo apt update && sudo apt dist-upgrade
+sudo apt install update-manager-core
+sudo sed -i 's/=lts/=normal/g' /etc/update-manager/release-upgrades
+do-release-upgrade
+```
+
+
+
+
+
 # Cloud-image
 
 ## Prepare Cloud Image
