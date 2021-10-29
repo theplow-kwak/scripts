@@ -1194,6 +1194,56 @@ do-release-upgrade
 
 
 
+## Bluetooth Pairing on Dual Boot of Windows & Linux
+
+Use `chntpw` from your Linux distro (easier). Start in a terminal then:
+
+1. `sudo apt-get install chntpw`
+
+2. Mount your Windows system drive
+
+3. `cd /[WindowsSystemDrive]/Windows/System32/config`
+
+4. `chntpw -e SYSTEM` opens a console
+
+5. Run these commands in that console:
+
+   ```
+   > cd CurrentControlSet\Services\BTHPORT\Parameters\Keys
+   > # if there is no CurrentControlSet, then try ControlSet001
+   > # on Windows 7, "services" above is lowercased.
+   > ls
+   # shows you your Bluetooth port's MAC address
+   Node has 1 subkeys and 0 values
+     key name
+     <aa1122334455>
+   > cd aa1122334455  # cd into the folder
+   > ls  
+   # lists the existing devices' MAC addresses
+   Node has 0 subkeys and 1 values
+     size     type            value name             [value if type DWORD]
+       16  REG_BINARY        <001f20eb4c9a>
+   > hex 001f20eb4c9a
+   => :00000 XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX ...ignore..chars..
+   # ^ the XXs are the pairing key
+   ```
+
+6. Make a note of which Bluetooth device MAC address matches which pairing key. The Mint/Ubuntu one won't need the spaces in-between.  Ignore the `:00000`.
+
+Go back to Linux
+
+1. Switch to root: `su -`
+
+
+2. cd to your Bluetooth config location `/var/lib/bluetooth/[bth port  MAC addresses]`
+
+3. Here you'll find folders for each device you've paired with. The folder names being the Bluetooth devices' MAC addresses and contain a single file `info`. In these files, you'll see the link key you need to replace with your Windows ones, like so:
+
+   ```
+   [LinkKey]
+   Key=B99999999FFFFFFFFF999999999FFFFF
+   ```
+
 
 
 # Cloud-image
