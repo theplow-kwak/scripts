@@ -922,6 +922,7 @@ pip upgrade 도중 library가 없어 에러가 발생하는 경우 아래 packag
 
 ```bash
 sudo apt install libgirepository1.0-dev libcairo2-dev librsync-dev libcups2-dev libgpgme-dev swig
+sudo apt install build-essential libdbus-glib-1-dev libgirepository1.0-dev
 ```
 
 
