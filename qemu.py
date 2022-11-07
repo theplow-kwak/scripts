@@ -190,7 +190,7 @@ class QEMU():
 
     def set_cdrom(self):
         _IF = "ide" if self.args.arch == 'x86_64' else "none"
-        _CDROMS = ""
+        _CDROMS = []
         for _image in self.vmcdimages:
             _CDROMS += [
                 f"-drive file={_image},media=cdrom,readonly=on,if={_IF},index={self.index},id=cdrom{self.index}"]
