@@ -92,7 +92,7 @@ set_net()
     [ -f /tmp/${VMPROCID}_SSH ] && read SSHPORT < /tmp/${VMPROCID}_SSH
     SSHPORT=${SSHPORT:-5900}
     SPICEPORT=$(($SSHPORT+1))
-    macaddr=$(echo ${IMG[0]}|md5sum|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
+    macaddr=$(echo -n ${V_GUID}|sed 's/^\(..\)\(..\)\(..\).*$/52:54:00:\1:\2:\3/')
 
     if [[ $_set -eq 1 ]]; then
         while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$SPICEPORT > /dev/null); do SSHPORT=$(($SSHPORT+2)); SPICEPORT=$(($SSHPORT+1)); done 
@@ -116,28 +116,31 @@ set_net()
 
 set_connect()
 {
-    T_TITLE="${VMNAME}:${CHKPORT}"
+    read -r _{,} _gateway _ _iface _ _ip _ < <(ip r g 1.0.0.0)
     [[ $ARCH == "aarch64" ]] || OPT+=" -vga $GRAPHIC"
     if [[ $M_CONNECT == "ssh" ]]; then
         OPT=${OPT/"-monitor stdio"/""}
         OPT=${OPT/"-vga $GRAPHIC"/""}
         OPT+=" -nographic -serial mon:stdio"
     	[[ $NET_T == "bridge" ]] && IPADDR=$(virsh net-dhcp-leases default | grep $macaddr | awk '{split($5,a,"/");print a[1]}')
-        IPADDR=${IPADDR:-"localhost -p $SSHPORT"}
-        CONNECT=(gnome-terminal --title=$T_TITLE -- ssh $UNAME@$IPADDR)
+        IPADDR=${IPADDR:-"${_ip} -p $SSHPORT"}
         CHKPORT=$SSHPORT
+        T_TITLE="${VMNAME}:${CHKPORT}"
+        TIMEOUT=10
+        CONNECT=(gnome-terminal --title=$T_TITLE -- ssh $UNAME@$IPADDR)
     fi
     if [[ $M_CONNECT == "spice" ]]; then
-        CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
+        CHKPORT=$SPICEPORT
+        T_TITLE="${VMNAME}:${CHKPORT}"
+        CONNECT=(remote-viewer -t ${T_TITLE} spice://${_ip}:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 #        CONNECT=(remote-viewer -t ${T_TITLE} spice://localhost:$SPICEPORT --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
 #        CONNECT=(virt-viewer -c qemu:///system --spice-usbredir-redirect-on-connect="0x03,-1,-1,-1,0|-1,-1,-1,-1,1" --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1")
-        CHKPORT=$SPICEPORT
     fi
 }
 
 set_spice()
 {
-    [[ $ARCH == "x86_64" ]] || return
+#    [[ $ARCH == "x86_64" ]] || return
     SPICE="\
       -spice port=$SPICEPORT,disable-ticketing=on \
       -device intel-hda -device hda-duplex"
@@ -179,24 +182,14 @@ set_uefi()
         "x86_64" )
             OVMF_PATH=${OVMF_PATH:-"/usr/share/OVMF"}
             OVMF_CODE="$OVMF_PATH/OVMF_CODE.fd"
-            if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
-                (cp $OVMF_PATH/OVMF_VARS.fd $OVMF_VARS) || return
-            fi
-            UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly=on,unit=0 \
-                  -drive file=$OVMF_VARS,if=pflash,format=raw,unit=1"}
             ;;
         "aarch64" )
             OVMF_PATH=${OVMF_PATH:-"/usr/share/qemu-efi-aarch64"}
             OVMF_CODE="$OVMF_PATH/QEMU_EFI.fd"
-            if [[ ! -f ${OVMF_VARS:="OVMF_${VMNAME}.fd"} ]]; then
-                (dd if=/dev/zero of=$OVMF_VARS bs=1M count=64) || return
-            fi           
-#            UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly=on,unit=0 \
-            UEFI=${UEFI-"-bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
-                  -drive file=pflash1.img,if=pflash,index=1"}
-#            UEFI=${UEFI-"-drive file=$OVMF_CODE,if=pflash,format=raw,readonly=on,unit=0 "}
-            ;;
+           ;;
     esac
+    UEFI=${UEFI-"\
+        -bios $OVMF_CODE"}
     CMD+=($UEFI)
 }
 
@@ -219,7 +212,7 @@ set_nvme()
     NVME_BACKEND=${NVME_BACKEND:-"nvme${V_UID}"}
 
     _CTRL_ID=1
-     NVME+=" \
+    NVME+=" \
         -device ioh3420,bus=pcie.0,id=root1.0,slot=1 \
         -device x3130-upstream,bus=root1.0,id=upstream1.0"
         
@@ -227,14 +220,15 @@ set_nvme()
     do
         case $CUSTOM_QEMU in
             "qemu" )   
-               NVME+=" \
+                NVME+=" \
                     -device xio3130-downstream,bus=upstream1.0,id=downstream1.$_CTRL_ID,chassis=$_CTRL_ID,multifunction=on \
-                    -device nvme,serial=beef${_NVME},id=${_NVME},bus=downstream1.$_CTRL_ID"
+                    -device nvme-subsys,id=nvme-subsys-$_CTRL_ID,nqn=subsys$_CTRL_ID \
+                    -device nvme,serial=beef${_NVME},id=${_NVME},subsys=nvme-subsys-$_CTRL_ID,bus=downstream1.$_CTRL_ID"
                 ((_CTRL_ID++))
                 for ((_nsid=1;_nsid<=$NUM_NS;_nsid++))
                 do
                     ns_backend=${_NVME}n${_nsid}.img
-                    if (check_file $ns_backend 20); then
+                    if (check_file $ns_backend 5); then
                         NVME+=" \
                           -drive file=$ns_backend,id=${_NVME}${_nsid},format=raw,if=none,cache=none \
                           -device nvme-ns,drive=${_NVME}${_nsid},bus=${_NVME},nsid=${_nsid}"
@@ -244,7 +238,7 @@ set_nvme()
 
             * )             
                 ns_backend=${_NVME}n1.img
-                if (check_file $ns_backend 40); then
+                if (check_file $ns_backend 5); then
                     NVME+=" \
                         -drive file=$ns_backend,id=${_NVME},format=raw,if=none,cache=none"
                     NVME+=" \
@@ -268,9 +262,25 @@ set_usb3()
       -chardev spicevmc,name=usbredir,id=usbredirchardev2 \
       -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2 \
       -chardev spicevmc,name=usbredir,id=usbredirchardev3 \
-      -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
+      -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3 \
+      -chardev spicevmc,name=usbredir,id=usbredirchardev4 \
+      -device usb-redir,chardev=usbredirchardev4,id=usbredirdev4"
     USB_PT="-device usb-host,hostbus=3,hostport=1"
     CMD+=($USB $USB_REDIR)
+}
+
+set_usb_storage()
+{
+    for _IMG in ${USBIMG[@]};
+    do
+        if [[ -e $_IMG ]]; then
+            STICK+=" \
+              -drive file=$_IMG,if=none,format=raw,id=stick$_index \
+              -device usb-storage,drive=stick$_index"
+            ((_index++))
+        fi
+    done
+    [[ -n $STICK ]] && CMD+=($STICK)
 }
 
 set_usb_arm()
@@ -383,6 +393,7 @@ Options:
  -k, --kernel <KERNEL>      kernel image
  -o, --num_ns <num_of_ns>   0 - do not use nvme, gt 1 - set numbers of multi name space
  -g, --vga <GRAPHIC>        set the type of VGA graphic card. 'virtio', 'qxl'(default)
+ --consol                   
  --bios <0|1>               0 - boot from MBR BIOS, 1 - boot from UEFI
  --ipmi <ipmimodel>         IPMI model - 'external', 'internal'
  --debug                    debug mode
@@ -394,9 +405,10 @@ EOM
 UNAME=${SUDO_USER:-$USER}
 RMSSH=0
 USE_UEFI=1
+CUSTOM_QEMU=qemu
 
 options=$(getopt -n ${0##*/} -o sSu:k:q:ri:c:o:n:e:g:hp:ba: \
-                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch:,connect:,pci: -- "$@")
+                --long nvme:,net:,uname:,image:,qemu:,config:,kernel:,num_ns:,vga:,bios:,ipmi:,debug,help,arch:,connect:,pci:,tpm,stick:,consol,rmssh -- "$@")
 [ $? -eq 0 ] || { 
     usage
     exit 1
@@ -408,12 +420,15 @@ while true; do
         -b )            BOOTD=1 ;;
         -s )            USE_SSH=1 ;;                    # make SSH connection to the running QEMU
         -S )            USE_SSH=1 ; RMSSH=1 ;;          # Remove existing SSH keys and make SSH connection to the running QEMU
-        -r )            RMSSH=1 ;;                      # Remove existing SSH keys 
+        -r | --rmssh)   RMSSH=1 ;;                      # Remove existing SSH keys 
+        --tpm )         USE_TPM=1 ;;
         --debug )       G_TERM= ;;
+        --consol )      GUI_BOOT= ;;
         --connect )     M_CONNECT=$2 ;      shift ;;
         -a | --arch )   ARCH=$2 ;           shift ;;    
         --bios )        USE_UEFI=$2 ;       shift ;;
         --ipmi)         USE_IPMI=$2 ;       shift ;;
+        --stick )       USBIMG+=($2) ;      shift ;;
         -u | --uname )  UNAME=$2 ;          shift ;;    # set login user name
         -i | --image )  IMG+=($2) ;         shift ;;
         -q | --qemu )   CUSTOM_QEMU=$2 ;    shift ;;
@@ -453,11 +468,12 @@ CFGFILE=${CFGFILE:-${PWD##*/}.cfg}
 [[ -f $CFGFILE ]] && source $CFGFILE
 
 BOOT_DEV=(${IMG[@]} ${NVME_BACKEND[@]} ${CDIMG[@]})
-
-VMNAME=${VMNAME:-${BOOT_DEV##*/}}
-VMNAME=${VMNAME%%.*}
-V_UID=$(echo $IMG|md5sum|sed 's/^\(..\).*$/\1/')
-_TMP=$(echo ${VMNAME}|sed 's/^\(............\).*$/\1/')
+BOOT_0=$(realpath ${BOOT_DEV[0]})
+VMNAME=${VMNAME:-${BOOT_0##*/}}
+VMNAME=${VMNAME%.*}
+V_GUID=$(echo -n ${BOOT_0} | md5sum)
+V_UID=$(echo -n ${V_GUID}|sed 's/^\(..\).*$/\1/')
+_TMP=$(echo -n ${VMNAME}|sed 's/^\(............\).*$/\1/')
 VMPROCID=${VMPROCID:-${_TMP}_${V_UID}}
 
 M_Q35=${M_Q35-1}
@@ -465,6 +481,7 @@ USE_USB3=${USE_USB3-1}
 ARCH=${ARCH:-"x86_64"}
 GRAPHIC=${GRAPHIC:-"qxl"}
 M_CONNECT=${M_CONNECT:-"spice"}
+TIMEOUT=10
 
 G_TERM=${G_TERM-"gnome-terminal --title=$VMNAME --"}
 printf "Virtual machine name: $VMNAME \n\n"
@@ -479,12 +496,13 @@ if ! (waitUntil $VMPROCID 0); then
     set_disks
     set_cdrom
     set_nvme
+    set_usb_storage
     set_net 1
     set_ipmi
     [[ $M_CONNECT == "spice" ]] && set_spice
-    set_connect
-    set_tpm
+    [[ $USE_TPM ]] && set_tpm
     [[ $BOOTD ]] && EXT_PARAMS=" -boot order=d"
+    set_connect
     CMD+=($OPT $EXT_PARAMS $@)
 else
     set_net
@@ -498,6 +516,6 @@ if [[ $GDB -eq 1 ]]; then
 else
     (waitUntil $VMPROCID 0) || (sudo $G_TERM "${CMD[@]}")
     [[ -n $CONNECT ]] && (waitUntil $VMPROCID) && ("${CONNECT[@]}")&
-    [[ -n $CONNECT ]] && (checkConn $CHKPORT 5) 
+    [[ -n $CONNECT ]] && (checkConn $CHKPORT $TIMEOUT) 
 fi
 
