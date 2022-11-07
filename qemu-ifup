@@ -1,27 +1,27 @@
 #!/bin/sh
 set -x
 
-br_name=br0
+_br=br0
+_tap=$1
 
-if ! [ -d /sys/class/net/$br_name ]; then
-    eth_name=$(ip addr show | awk '/inet.*brd/{print $NF}')
-    ip_addr=$(ip addr show $eth_name | grep 'inet ' | awk '{print $2}')
+if ! [ -d /sys/class/net/$_br ]; then
+    _eth=$(ip addr show | awk '/inet.*brd.*en/{print $NF}')
+    ip_addr=$(ip addr show $_eth | grep 'inet ' | awk '{print $2}')
     
-    ip link add $br_name type bridge && ip link set $br_name address 52:54:00:01:02:03 && ip link set $br_name up 
-    ip link set $eth_name master $br_name # ip addr delete $ip_addr dev $eth_name && 
-    dhclient $br_name
+    ip link add $_br type bridge && ip link set $_br address 52:54:00:01:02:03 && ip link set $_br up 
+    ip link set $_eth master $_br # ip addr delete $ip_addr dev $_eth && 
+    dhclient $_br
 fi
 
-if [ -n "$1" ];then
-    ip tuntap add $1 mode tap user `whoami`
-    ip link set $1 up # promisc on
-    NUMBER=1$(echo "$1" | sed 's/[^0-9]*//g') 
-    ip link set $1 address 52:54:00:01:02:$NUMBER         
+if [ -n "$_tap" ];then
+    ip tuntap add $_tap mode tap user `whoami`
+    ip link set $_tap up # promisc on
+    NUMBER=1$(echo "$_tap" | sed 's/[^0-9]*//g') 
+    ip link set $_tap address 52:54:00:01:02:$NUMBER         
     sleep 0.5s
-    ip link set $1 master $br_name
+    ip link set $_tap master $_br
     exit 0
 else
     echo "Error: no interface specified"
     exit 1
 fi
-
