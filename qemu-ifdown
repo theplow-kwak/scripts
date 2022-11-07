@@ -1,7 +1,7 @@
 #!/bin/sh
 set -x
 
-br_name=br0
+_br=br0
 
 if ! [ -n "$1" ];then
     echo "Error: no interface specified"
@@ -12,11 +12,10 @@ ip link set $1 down
 ip link delete $1
 
 if ! (ip link show | grep tap > /dev/null); then 
-    ip link set $br_name down
-    ip link delete $br_name
+    ip link set $_br down
+    ip link delete $_br
     sleep 0.5s
     sudo systemctl restart NetworkManager.service
 fi
 
 exit 0
-
