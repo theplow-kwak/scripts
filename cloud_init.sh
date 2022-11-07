@@ -8,7 +8,7 @@ cat <<EOL > $_F_NAME
 #cloud-config
 hostname: $_HOST_NAME
 users:
-  - name: test
+  - name: $_USER_NAME
     groups: wheel
     lock_passwd: false
     shell: /bin/bash
