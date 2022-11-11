@@ -794,6 +794,12 @@ select * from information_schema.columns where table_name = 'ovt'
 
 
 
+* Could not find the recovery environment
+
+  ```
+  reagentc /enable
+  reagentc /info
+  ```
 
 
 ## Windows 10 WSL 2 설치
@@ -843,6 +849,21 @@ HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
 
 
 
+## Default login 
+
+```
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+```
+
+String value DefaultUserName, DefaultPassword
+
+## Dual Boot Windows with Virtual Hard Disk (VHDX)
+
+[Boot to a virtual hard disk: Add a VHDX or VHD to the boot menu]: https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/boot-to-vhd--native-boot--add-a-virtual-hard-disk-to-the-boot-menu?view=windows-11
+[Native Boot Windows 11 Virtual Hard Disk (VHDX)]: https://www.elevenforum.com/t/native-boot-windows-11-virtual-hard-disk-vhdx.611/
+
+
+
 # Python 참고
 
 ## PIP Certification 
@@ -850,7 +871,7 @@ HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
 ### Using a certificate as parameter
 
 ```py
-$ pip install --cert /path/to/mycertificate.crt linkchecker
+$ pip install --cert /path/to/mycertificate.crt packagename
 ```
 
 ### Using a certificate in a `pip.conf`
@@ -875,7 +896,7 @@ _EOF_
 ### Ignoring certificate and using HTTP
 
 ```py
-$ pip install --trusted-host pypi.python.org linkchecker
+$ pip install --trusted-host pypi.python.org packagename
 ```
 
 ### Ignoring certificate and using HTTP in a pip.conf
@@ -1140,6 +1161,12 @@ server:
 /snap/barrier/384/usr/bin/barriers -f --no-tray --debug INFO --name dhkwak-AORUS --enable-crypto -c /home/dhkwak/barrier.conf --address :24800
 ```
 
+ERROR: ssl certificate doesn't exist: /home/test/.local/share/barrier/SSL/Barrier.pem
+
+```bash
+cd /home/test/.local/share/barrier/SSL/
+openssl req -x509 -nodes -days 365 -subj /CN=Barrier -newkey rsa:4096 -keyout Barrier.pem -out Barrier.pem
+```
 
 
 ## Fix Time Differences in Ubuntu & Windows 10 Dual Boot
@@ -1393,3 +1420,19 @@ https://edwinwang.com/2011/04/compile-pciutils-lspci-setpci-in-windows-x86%EF%BC
 3. patch file 적용 -> patch < pciutils-crosscompile.patch
 4. win32의 configh, config.mk를 lib에 copy
 4. make 
+
+
+
+# network 
+
+https://ubuntu.com/server/docs/network-configuration
+
+```bash
+sudo lshw -class network
+ip link set dev enp0s25 up
+ip link set dev enp0s25 down
+```
+
+```bash
+sudo dhclient eth0
+```
