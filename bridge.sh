@@ -3,7 +3,7 @@
 _br=br0
 
 if ! [ -d /sys/class/net/$_br ]; then
-    _eth=$(ip addr show | awk '/inet.*brd/{print $NF}')
+    _eth=$(ip addr show | awk '/inet.*brd.*en/{print $NF}')
     _eth_name=$(nmcli -t -f NAME,TYPE,DEVICE con show | awk -F: '$2 ~ /.*ethernet/ {print $1}')
 
     nmcli connection add type bridge ifname $_br con-name $_br stp no
@@ -24,4 +24,3 @@ fi
 
 #    nmcli connection add type tun ifname $_tap con-name $_tap mod tap owner `id -u`
 #    nmcli connection add type bridge-slave ifname $_tap master $_br
-
