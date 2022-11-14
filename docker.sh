@@ -50,7 +50,7 @@ docker_run()
     printf "docker run ${CONTAINER}\n"
     docker run -it --user $(whoami) \
         -v /etc/ssl/certs:/etc/ssl/certs:ro \
-        --mount type=bind,source="${SRC_PATH}",target=/clive \
+        --mount type=bind,source="${SRC_PATH}",target=/works \
         --name "${CONTAINER}" ${DOCKERNAME} /bin/bash
 }
 
