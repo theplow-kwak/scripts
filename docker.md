@@ -1,5 +1,63 @@
 # Docker and container
 
+## Install Docker Engine on CentOS
+
+#### Set up the repository
+
+Install the `yum-utils` package (which provides the `yum-config-manager` utility) and set up the repository.
+
+```bash
+$ sudo yum install -y yum-utils
+$ sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+```
+
+#### Install Docker Engine
+
+Install the *latest version* of Docker Engine, containerd, and Docker Compose or go to the next step to install a specific version:
+
+```bash
+$ sudo yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+
+Start Docker.
+
+```bash
+$ sudo systemctl start docker
+```
+
+
+
+## Manage Docker as a non-root user[🔗](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+
+1. Create the `docker` group.
+
+   ```bash
+   $ sudo groupadd docker
+   ```
+
+2. Add your user to the `docker` group.
+
+   ```bash
+   $ sudo usermod -aG docker $USER
+   ```
+
+3. Activate the changes to groups.
+
+   ```bash
+   $ newgrp docker
+   ```
+
+
+
+## Configure Docker to start on boot with systemd
+
+Many modern Linux distributions use [systemd](https://docs.docker.com/config/daemon/systemd/) to manage which services start when the system boots. On Debian and Ubuntu, the Docker service starts on boot by default. To automatically start Docker and containerd on boot for other Linux distributions using systemd, run the following commands:
+
+```bash
+$ sudo systemctl enable docker.service
+$ sudo systemctl enable containerd.service
+```
+
 
 
 ## Accessing the host device inside the container
@@ -41,10 +99,10 @@ $ docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix ubunt
 
 First create the configuration file /etc/docker/daemon.json as suggested in the Docker documentation with the following content (the iptables line may not even be needed):
 
-```
+```json
 {
-"bridge": "virbr0",
-"iptables": false
+  "bridge": "virbr0",
+  "iptables": false
 }
 ```
 
@@ -75,26 +133,5 @@ docker run -it --rm -p 5901:5901 --mount source=/dev/nvme0n1p2,target=/mnt/nvme,
 docker run -it --rm -p 8888:8888 tensorflow/tensorflow:latest-py3-jupyter  
 newgrp docker       
 sudo usermod -aG docker $USER    
-```
-
-
-
-# WSL2에서 docker demon 자동 실행
-
-/etc/sudoers.d/test를 생성 후 아래 내용 추가 
-
-```bash
-test ALL=(ALL) NOPASSWD: /usr/bin/dockerd
-```
-
-dockerd를 자동 실행 하도록 profile(.bash_aliases) 수정
-
-```bash
-echo '# Start Docker daemon automatically when logging in if not running.' >> ~/.bash_aliases
-echo 'RUNNING=`ps aux | grep dockerd | grep -v grep`' >> ~/.bash_aliases
-echo 'if [ -z "$RUNNING" ]; then' >> ~/.bash_aliases
-echo '    sudo dockerd > /dev/null 2>&1 &' >> ~/.bash_aliases
-echo '    disown' >> ~/.bash_aliases
-echo 'fi' >> ~/.bash_aliases
 ```
 
