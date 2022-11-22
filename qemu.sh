@@ -42,12 +42,13 @@ init()
     args_arch="x86_64"
     args_vga="qxl"
     args_connect="spice"
+    args_machine="q35"
 }
 
 set_args()
 {
     options=$(getopt --name ${0##*/} --options qa:d:n:u:i:h \
-                    --long bios,consol,qemu,rmssh,tpm,arch:,connect:,debug:,ipmi:,net:,uname:,vga:,stick:,images:,nvme:,kernel:,pci:,numns:,help -- "$@")
+                    --long bios,consol,qemu,rmssh,tpm,arch:,connect:,debug:,ipmi:,machine:,net:,uname:,vga:,stick:,images:,nvme:,kernel:,pci:,numns:,help -- "$@")
     [ $? != 0 ] && { 
         usage
         exit 1
@@ -55,8 +56,8 @@ set_args()
     eval set -- "$options"
 
     while true; do
-        # echo "option: $1 $2"
         case "$1" in
+            # Command line argment parsing
             --bios )        args_bios=1 ;;                          # Using legacy BIOS instead of UEFI
             --consol )      args_consol=1 ;;                        # Used the current terminal as the consol I/O
             --qemu | -q )   args_qemu=1 ;;                          # Use the qemu public distribution
@@ -66,6 +67,7 @@ set_args()
             --connect )     args_connect="$2" ;   shift ;;          # Connection method - 'ssh' 'spice'(default)
             --debug | -d )  args_debug="$2" ;     shift ;;          # Set the logging level. (default: 'warning')
             --ipmi)         args_ipmi="$2" ;      shift ;;          # IPMI model - 'external', 'internal'
+            --machine )     args_machine="$2" ;   shift ;;          # Machine type for x86_64
             --net | -n )    args_net="$2" ;       shift ;;          # Network interface model - 'user', 'tap', 'bridge'
             --uname | -u )  args_uname="$2" ;     shift ;;          # Set login user name
             --vga )         args_vga="$2" ;       shift ;;          # Set the type of VGA graphic card. 'virtio', 'qxl'(default)
@@ -73,7 +75,7 @@ set_args()
             --images | -i ) vmimages+=("$2") ;    shift ;;          # Set the VM images
             --nvme )        vmnvme=("$2") ;       shift ;;          # Set the NVMe images
             --kernel )      vmkernel="$2" ;       shift ;;          # Set the Linux Kernel image
-            --pci )         PCIHOST="$2" ;        shift ;;          # PCI passthrough 
+            --pcihost )     args_pcihost="$2" ;   shift ;;          # PCI passthrough 
             --numns )                                               # Set the numbers of NVMe namespace
                 [[ $2 -eq 0 ]] && { use_nvme=0; } || { use_nvme=1; [[ $2 -ge 1 ]] && arg_numns=$2; } ; shift ;;
             -h | --help )   usage ;             exit;;
@@ -83,7 +85,6 @@ set_args()
     done 
 
     while (($#)); do
-        # echo "positional: $1"
         args_images+=($1)
         shift
     done
@@ -123,7 +124,7 @@ set_images()
     vmguid=$(echo -n ${boot_0} | md5sum)
     vmuid=${vmguid::2}
     vmprocid=${vmname::12}_${vmuid}
-    G_TERM="gnome-terminal --title=$vmname --"
+    [[ $args_debug != "debug" ]] && G_TERM="gnome-terminal --title=$vmprocid" || G_TERM=""
     _index=0
 }
 
@@ -135,22 +136,18 @@ set_qemu()
     params=("-name $vmname,process=$vmprocid")
     case $args_arch in
         "arm" )
-            params+=("-M virt -cpu cortex-a53 -device ramfb") ;;
+            params+=("-machine virt -cpu cortex-a53 -device ramfb") ;;
         "aarch64" )
-            params+=("-M virt -cpu cortex-a72 -device ramfb") ;;
+            params+=("-machine virt -cpu cortex-a72 -device ramfb") ;;
         "x86_64" )
-            params+=("-cpu host --enable-kvm") ;;
+            params+=("-machine type=${args_machine},accel=kvm,usb=on -device intel-iommu")
+            params+=("-cpu host --enable-kvm")
+            params+=("-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0") ;;
     esac
     _numcore=$(($(nproc)/2))
-    params+=("-m 8G -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults")
+    params+=(
+        "-m 8G -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults")
     opts+=("-monitor stdio")
-}
-
-set_M_Q35()
-{
-    opts+=(
-        "-machine type=q35,accel=kvm,usb=on -device intel-iommu")
-    params+=("-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0")
 }
 
 set_uefi()
@@ -289,6 +286,16 @@ set_nvme()
     [[ -n $NVME ]] && params+=(${NVME[@]})
 }
 
+set_virtiofs()
+{
+    virtiofsd=(sudo $G_TERM --geometry=80x24+5+5 -- $HOME/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$HOME)
+    ("${virtiofsd[@]}")&
+    _virtiofs=("-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock"
+        "-device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs"
+        "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem")
+    params+=(${_virtiofs[@]})
+}
+
 set_ipmi()
 {
     case $args_ipmi in
@@ -362,7 +369,7 @@ set_net()
                     "-nic user,model=virtio-net-pci,mac=$macaddr,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22") ;;
             "tap"|"t" )
                 NET=(
-                    "-nic tap,model=virtio-net-pci,mac=$macaddr,script=$HOME/vm/share/qemu-ifup") ;;
+                    "-nic tap,model=virtio-net-pci,mac=$macaddr,script=$HOME/projects/scripts/qemu-ifup") ;;
                     # ,downscript=$HOME/vm/share/qemu-ifdown  ;;
             "bridge"|"b" )
                 NET=(
@@ -387,7 +394,7 @@ set_connect()
             CHKPORT=$SSHPORT
             T_TITLE="${vmname}:${CHKPORT}"
             CONNECT=($G_TERM 
-				ssh $args_uname@${SSH_CONNECT}) ;;
+				-- ssh $args_uname@${SSH_CONNECT}) ;;
         "spice" )
             CHKPORT=$SPICEPORT
             T_TITLE="${vmname}:${CHKPORT}"
@@ -441,15 +448,15 @@ set_kernel()
 
 set_pcipass()
 {
-    [[ -z $PCIHOST ]] && return 
+    [[ -z $args_pcihost ]] && return 
     # unbind 0000:0x:00.0 from xhci_hcd kernel module
-    _driver_=$(sudo lspci -k -s $PCIHOST | awk '/Kernel driver.*/{print $NF}')
-    sudo -S sh -c "echo '$PCIHOST' > /sys/bus/pci/drivers/$_driver_/unbind"
+    _driver_=$(sudo lspci -k -s $args_pcihost | awk '/Kernel driver.*/{print $NF}')
+    sudo -S sh -c "echo '$args_pcihost' > /sys/bus/pci/drivers/$_driver_/unbind"
     # bind 0000:0x:00.0 to vfio-pci kernel module
-    DEVID=$(sudo lspci -ns $PCIHOST | awk '//{print $NF}' | awk -F: '{print "%s %s", $1, $2}')
+    DEVID=$(sudo lspci -ns $args_pcihost | awk '//{print $NF}' | awk -F: '{print "%s %s", $1, $2}')
     sudo -S sh -c "echo '$DEVID' > /sys/bus/pci/drivers/vfio-pci/new-id"
     
-    PCIPASS=" -device vfio-pci,host=$PCIHOST,multifunction=on"
+    PCIPASS=" -device vfio-pci,host=$args_pcihost,multifunction=on"
     params+=($PCIPASS)
 }
 
@@ -459,7 +466,6 @@ setting()
     set_images
     if ! (findProc $vmprocid 0); then
         set_qemu
-        [[ $args_arch == "x86_64" ]] && set_M_Q35
         [[ $args_bios != 1 ]] && set_uefi
         [[ $vmkernel ]] && set_kernel
         # set_pcipass
@@ -468,6 +474,7 @@ setting()
         set_cdrom
         set_nvme
         set_usb_storage
+        set_virtiofs
         set_net 1
         set_ipmi
         [[ $args_connect == "spice" ]] && set_spice
@@ -484,21 +491,22 @@ setting()
 run()
 {
     if ! (findProc $vmprocid 0); then
-        _qemu_command=('sudo' $G_TERM
+        _qemu_command=('sudo' $G_TERM --
             $qemu_exe ${params[@]} ${opts[@]})
         if [[ $args_debug == 'cmd' ]]; then
             echo "${_qemu_command[*]}"
         else
-            ("${_qemu_command[@]}"); fi
+            completed=$("${_qemu_command[@]}"); fi
     fi
     if [[ -n $CONNECT ]]; then
+        _qemu_connect=(${CONNECT[*]})
         if [[ $args_debug == 'cmd' ]]; then
-            echo "${CONNECT[*]}"
+            echo "${_qemu_connect[*]}"
         else
-            if (findProc $vmprocid); then
+            if [[ -z ${completed} ]] && (findProc $vmprocid); then
                 if [[ $args_connect == 'ssh' ]]; then
                     checkConn 60; fi
-                ("${CONNECT[@]}")&
+                ("${_qemu_connect[@]}")&
             fi
         fi
     fi
