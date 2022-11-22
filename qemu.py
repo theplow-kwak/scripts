@@ -44,23 +44,27 @@ class QEMU():
         self.index = self.use_nvme = 0
 
     def set_args(self):
-        parser = argparse.ArgumentParser(
-            formatter_class=argparse.RawTextHelpFormatter)
-        parser.add_argument("--bios", action='store_true', help="Using legacy BIOS instead of UEFI")
-        parser.add_argument("--consol", action='store_true', help="Used the current terminal as the consol I/O")
-        parser.add_argument("--qemu", '-q', action='store_true', help="Use the qemu public distribution")
-        parser.add_argument("--rmssh", action='store_true', help="Remove existing SSH key")
-        parser.add_argument("--tpm", action='store_true', help="Support TPM device for windows 11")
-        parser.add_argument('--arch', '-a', default='x86_64', choices=['x86_64', 'aarch64', 'arm'], help="The architecture of target VM.")
-        parser.add_argument("--connect", default='spice', choices=['ssh', 'spice'], help="Connection method - 'ssh' 'spice'(default)")
-        parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info'], help="Set the logging level. (default: 'warning')")
-        parser.add_argument("--ipmi", choices=['internal', 'external'], help="IPMI model - 'external', 'internal'")
-        parser.add_argument("--net", default='bridge', choices=['user', 'u', 'tap', 't', 'bridge', 'b'], help="Network interface model - 'user', 'tap', 'bridge'")
-        parser.add_argument("--uname", '-u', default=getpass.getuser(), help="Set login user name")
-        parser.add_argument("--vga", default='qxl', choices=['qxl', 'virtio'], help="Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
-        parser.add_argument("--stick", help="Set the USB storage image")
-        parser.add_argument('images', metavar='IMAGES', nargs='+', help='Set the VM images')
-        parser.add_argument("--numns", type=int, help="Number of NS: 0 - do not use nvme, gt 1 - set numbers of multi name space")
+        parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+        # Command line argment parsing
+        parser.add_argument("--bios", action='store_true',                      help = "Using legacy BIOS instead of UEFI")
+        parser.add_argument("--consol", action='store_true',                    help = "Used the current terminal as the consol I/O")
+        parser.add_argument("--qemu", '-q', action='store_true',                help = "Use the qemu public distribution")
+        parser.add_argument("--rmssh", action='store_true',                     help = "Remove existing SSH key")
+        parser.add_argument("--tpm", action='store_true',                       help = "Support TPM device for windows 11")
+        parser.add_argument('--arch', '-a', default='x86_64', choices=['x86_64', 'aarch64', 'arm'],                         help = "The architecture of target VM.")
+        parser.add_argument("--connect", default='spice', choices=['ssh', 'spice'],                                         help = "Connection method - 'ssh' 'spice'(default)")
+        parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info'],  help = "Set the logging level. (default: 'warning')")
+        parser.add_argument("--ipmi", choices=['internal', 'external'],         help = "IPMI model - 'external', 'internal'")
+        parser.add_argument("--machine", default='q35', choices=['q35', 'ubuntu-q35', 'pc', 'ubuntu'],                      help = "IPMI model - 'external', 'internal'")
+        parser.add_argument("--net", default='bridge', choices=['user', 'u', 'tap', 't', 'bridge', 'b'],                    help = "Network interface model - 'user', 'tap', 'bridge'")
+        parser.add_argument("--uname", '-u', default=getpass.getuser(),         help = "Set login user name")
+        parser.add_argument("--vga", default='qxl', choices=['qxl', 'virtio'],  help = "Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
+        parser.add_argument("--stick",                                          help = "Set the USB storage image")
+        parser.add_argument('images', metavar='IMAGES', nargs='+',              help = "Set the VM images")
+        parser.add_argument('--nvme',                                           help = "Set the NVMe images")
+        parser.add_argument('--kernel',                                         help = "Set the Linux Kernel image") 
+        parser.add_argument('--pcihost',                                        help = "PCI passthrough") 
+        parser.add_argument("--numns", type=int,                                help = "Set the numbers of NVMe namespace")
         self.args = parser.parse_args()
         if self.args.debug != 'cmd':
             mylogger.setLevel(self.args.debug.upper())
@@ -81,10 +85,11 @@ class QEMU():
                         self.use_nvme = 1
                     case _:
                         pass
-            else:
-                mylogger.debug(f"File not found! {image}")
 
         _boot_dev = self.vmimages + self.vmnvme + self.vmcdimages
+        mylogger.info(f"vmimages {self.vmimages} ")
+        mylogger.info(f"vmcdimages {self.vmcdimages} ")
+        mylogger.info(f"vmnvme {self.vmnvme} ")
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
         boot_0 = Path(_boot_dev[0]).resolve()
@@ -92,11 +97,7 @@ class QEMU():
         self.vmguid = hashlib.md5(str(boot_0).encode()).hexdigest()
         self.vmuid = self.vmguid[0:2]
         self.vmprocid = f"{self.vmname[0:12]}_{self.vmuid}"
-        self.G_TERM = [f"gnome-terminal --title={self.vmname} --"]
-
-        mylogger.info(f"vmimages {self.vmimages} ")
-        mylogger.info(f"vmcdimages {self.vmcdimages} ")
-        mylogger.info(f"vmnvme {self.vmnvme} ")
+        self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"] if self.args.debug != 'debug' else [""]
 
     def runshell(self, cmd, _async=False):
         if isinstance(cmd, list): cmd = ' '.join(cmd)
@@ -118,19 +119,17 @@ class QEMU():
 
         match self.args.arch:
             case 'arm':
-                self.params += ["-M virt -cpu cortex-a53 -device ramfb"]
+                self.params += ["-machine virt -cpu cortex-a53 -device ramfb"]
             case 'aarch64':
-                self.params += ["-M virt -cpu cortex-a72 -device ramfb"]
+                self.params += ["-machine virt -cpu cortex-a72 -device ramfb"]
             case 'x86_64':
+                self.params += [f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"]
                 self.params += ["-cpu host --enable-kvm"]
+                self.params += ["-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"]
         _numcore = int(os.cpu_count() / 2)
         self.params += [
             f"-m 8G -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults"]
         self.opts += ["-monitor stdio"]
-
-    def set_M_Q35(self):
-        self.opts += ["-machine type=q35,accel=kvm,usb=on -device intel-iommu"]
-        self.params += ["-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"]
 
     def set_uefi(self):
         match self.args.arch:
@@ -249,6 +248,14 @@ class QEMU():
         if NVME:
             self.params += NVME
 
+    def set_virtiofs(self):
+        virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --", f"{str(Path.home())}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={str(Path.home())}"]
+        self.runshell(virtiofsd, True)
+        _virtiofs = [f"-chardev socket,id=char{self.vmuid},path=/tmp/virtiofs_{self.vmuid}.sock",
+            f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
+            "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem"]
+        self.params += _virtiofs
+
     def set_ipmi(self):
         match self.args.ipmi:
             case "internal":
@@ -301,8 +308,10 @@ class QEMU():
         self.macaddr = f"52:54:00:{self.vmguid[0:2]}:{self.vmguid[2:4]}:{self.vmguid[4:6]}"
         _result = self.runshell("ip r g 1.0.0.0")
         self.hostip = _result.stdout.split()[6] if _result.returncode == 0 else 'localhost'
+        mylogger.debug(f"hostip: {self.hostip}")
         dhcp_chk = self.runshell(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
         self.localip = dhcp_chk.stdout.split()[4].split('/')[0] if dhcp_chk.stdout else None
+        mylogger.debug(f"localip: {self.localip}")
 
         if _set:
             while not self.runshell(f"lsof -w -i :{self.SPICEPORT}").returncode or not self.runshell(f"lsof -w -i :{self.SSHPORT}").returncode:
@@ -314,7 +323,7 @@ class QEMU():
                         f"-nic user,model=virtio-net-pci,mac={self.macaddr},smb={str(Path.home())},hostfwd=tcp::{self.SSHPORT}-:22"]
                 case "tap" | "t":
                     NET = [
-                        f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={str(Path.home())}/vm/share/qemu-ifup"]
+                        f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={str(Path.home())}/projects/scripts/qemu-ifup"]
                     # ,downscript=$VMHOME/share/qemu-ifdown
                 case "bridge" | "b":
                     NET = [
@@ -334,12 +343,13 @@ class QEMU():
                 self.CHKPORT = self.SSHPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
                 self.CONNECT = self.G_TERM + \
-                    [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
+                    ["--", f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
             case "spice":
                 self.CHKPORT = self.SPICEPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
                 self.CONNECT = [
-                    f"remote-viewer -t {T_TITLE} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1"]
+                    f"remote-viewer -t {T_TITLE} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1",
+                    f"--spice-shared-dir={str(Path.home())}"]
         mylogger.info(T_TITLE)
         mylogger.info(self.CONNECT)
 
@@ -361,38 +371,63 @@ class QEMU():
             sleep(1)
         return 0
 
+    # def set_kernel(self): 
+    #     KERNEL = f"-kernel {self.args.vmkernel}"
+    #     [[ $vmkernel == *vmlinuz* ]] && INITRD="-initrd ${vmkernel/"vmlinuz"/"initrd.img"}"
+        
+    #     if [[ $args_consol -eq 1 ]]; then
+    #         [[ ! " ${opts[@]} " =~ " -vga $args_vga " ]] && opts+=("-vga $args_vga")
+    #         PARAM="root=/dev/sda vga=0x300"
+    #     else
+    #         opts=("${opts[@]/"-monitor stdio"}")
+    #         opts+=("-nographic -serial mon:stdio")
+    #         PARAM="root=/dev/sda console=ttyS0"
+    #     fi
+
+    #     APPEND="-append"
+    #     self.params+=($KERNEL $INITRD $APPEND "$PARAM")
+
+    # def set_pcipass(self):
+    #     [[ -z self.args.pcihost ]] && return 
+    #     # unbind 0000:0x:00.0 from xhci_hcd kernel module
+    #     _driver_=$(sudo lspci -k -s $args_pcihost | awk '/Kernel driver.*/{print $NF}')
+    #     sudo -S sh -c "echo '$args_pcihost' > /sys/bus/pci/drivers/$_driver_/unbind"
+    #     # bind 0000:0x:00.0 to vfio-pci kernel module
+    #     DEVID=$(sudo lspci -ns $args_pcihost | awk '//{print $NF}' | awk -F: '{print "%s %s", $1, $2}')
+    #     sudo -S sh -c "echo '$DEVID' > /sys/bus/pci/drivers/vfio-pci/new-id"
+        
+    #     PCIPASS=" -device vfio-pci,host=$args_pcihost,multifunction=on"
+    #     self.params+=($PCIPASS)
+
     def setting(self):
         self.set_args()
         self.set_images()
         if not self.findProc(self.vmprocid, 0):
             self.set_qemu()
-            if self.args.arch == 'x86_64':
-                self.set_M_Q35()
-            if not self.args.bios:
-                self.set_uefi()
+            if not self.args.bios: self.set_uefi()
+            # self.set_kernel()
+            # self.set_pcipass()
             self.set_usb3() if self.args.arch == 'x86_64' else self.set_usb_arm()
             self.set_disks()
             self.set_cdrom()
             self.set_nvme()
             self.set_usb_storage()
+            self.set_virtiofs()
             self.set_net(True)
-            if self.args.ipmi:
-                self.set_ipmi()
-            if self.args.connect == 'spice':
-                self.set_spice()
-            if self.args.tpm:
-                self.set_tpm()
+            if self.args.ipmi: self.set_ipmi()
+            if self.args.connect == 'spice': self.set_spice()
+            if self.args.tpm: self.set_tpm()
             self.set_connect()
         else:
             self.set_net()
             self.set_connect()
 
-        if self.args.rmssh:
-            self.RemoveSSH()
+        if self.args.rmssh: self.RemoveSSH()
 
     def run(self):
+        completed = subprocess.CompletedProcess(0,0)
         if not self.findProc(self.vmprocid, 0):
-            _qemu_command = self.sudo + self.G_TERM + \
+            _qemu_command = self.sudo + self.G_TERM + ["--"] + \
                 self.qemu_exe + self.params + self.opts
             if self.args.debug == 'cmd':
                 print(' '.join(_qemu_command))
@@ -403,7 +438,7 @@ class QEMU():
             if self.args.debug == 'cmd':
                 print(' '.join(_qemu_connect))
             else:
-                if self.findProc(self.vmprocid):
+                if completed.returncode == 0 and self.findProc(self.vmprocid):
                     if self.args.connect == 'ssh':
                         self.checkConn(60)
                     self.runshell(_qemu_connect, True)
