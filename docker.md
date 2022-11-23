@@ -60,6 +60,27 @@ $ sudo systemctl enable containerd.service
 
 
 
+## WSL2에서 docker demon 자동 실행하기
+
+/etc/sudoers.d/test를 생성 후 아래 내용 추가 
+
+```bash
+test ALL=(ALL) NOPASSWD: /usr/bin/dockerd
+```
+
+dockerd를 자동 실행 하도록 profile(.bash_aliases) 수정
+
+```bash
+echo '# Start Docker daemon automatically when logging in if not running.' >> ~/.bash_aliases
+echo 'RUNNING=`ps aux | grep dockerd | grep -v grep`' >> ~/.bash_aliases
+echo 'if [ -z "$RUNNING" ]; then' >> ~/.bash_aliases
+echo '    sudo dockerd > /dev/null 2>&1 &' >> ~/.bash_aliases
+echo '    disown' >> ~/.bash_aliases
+echo 'fi' >> ~/.bash_aliases
+```
+
+
+
 ## Accessing the host device inside the container
 
 - Docker 1.2부터 container 실행시 `--device` option을 사용하여 host의 physical device에 접근할 수 있다.
