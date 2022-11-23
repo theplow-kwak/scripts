@@ -13,10 +13,6 @@ rm_image()
 {
     _DOCKERNAME=$1
     printf "remove docker image ${_DOCKERNAME}\n"
-    # _containers=$(docker ps -aq --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
-    # for _container in $_containers; do
-    #     rm_container ${_container}
-    # done
     docker rm -f $(docker ps -aq --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
     docker image rm $_DOCKERNAME
 }
