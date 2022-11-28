@@ -75,8 +75,8 @@ get_display()
 launch_app()
 {
     # adb shell am start-activity --display $display com.android.chrome
-    adb shell am start-activity --display $display com.sec.android.app.sbrowser 
-    # --windowingMode 1 
+    app=${1:-"com.sec.android.app.sbrowser"}
+    adb shell am start-activity -S --display $display $app # --windowingMode 1 
 }
 
 connect_screen()
@@ -105,6 +105,8 @@ else
 fi
 
 [[ "$1" == "off" ]] && { disable_screen ; exit ; }
-[[ "$1" == "con" ]] && { connect_screen ; launch_app ; exit ; }
-[[ "$1" == "app" ]] && { launch_app ; exit ; }
+[[ "$1" == "con" ]] && { connect_screen ; launch_app $2 ; exit ; }
+[[ "$1" == "app" ]] && { launch_app $2 ; exit ; }
 [[ "_$1" != "_" ]] && { display=$1 ; connect_screen $1 ; exit ; }
+
+# com.sec.android.app.dexonpc
