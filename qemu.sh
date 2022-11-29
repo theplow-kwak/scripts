@@ -124,7 +124,7 @@ set_images()
     vmguid=$(echo -n ${boot_0} | md5sum)
     vmuid=${vmguid::2}
     vmprocid=${vmname::12}_${vmuid}
-    [[ $args_debug != "debug" ]] && G_TERM="gnome-terminal --title=$vmprocid" || G_TERM=""
+    G_TERM="gnome-terminal --title=$vmprocid"
     _index=0
 }
 
@@ -288,7 +288,8 @@ set_nvme()
 
 set_virtiofs()
 {
-    virtiofsd=(sudo $G_TERM --geometry=80x24+5+5 -- $HOME/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$HOME)
+    virtiofsd=(sudo $G_TERM --geometry=80x24+5+5 -- 
+        $HOME/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$HOME)
     ("${virtiofsd[@]}")&
     _virtiofs=("-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock"
         "-device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs"
@@ -378,7 +379,6 @@ set_net()
         params+=(${NET[@]})
         echo $SSHPORT > /tmp/${vmprocid}_SSH
     fi
-
 }
 
 set_connect()
@@ -393,8 +393,8 @@ set_connect()
             [[ $args_net != "user" ]] && SSH_CONNECT=$localip || SSH_CONNECT="${hostip} -p $SSHPORT" 
             CHKPORT=$SSHPORT
             T_TITLE="${vmname}:${CHKPORT}"
-            CONNECT=($G_TERM 
-				-- ssh $args_uname@${SSH_CONNECT}) ;;
+            CONNECT=($G_TERM --
+				ssh $args_uname@${SSH_CONNECT}) ;;
         "spice" )
             CHKPORT=$SPICEPORT
             T_TITLE="${vmname}:${CHKPORT}"
