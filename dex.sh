@@ -28,10 +28,9 @@ enable_desktop_mode(){
 change_secondary_display_behaviour()
 {
     # Change secondary display behaviour
-    adb shell settings put global force_desktop_mode_on_external_displays 1
     adb shell settings put global force_resizable_activities 1
     adb shell settings put global enable_freeform_support 1
-    adb shell settings put global enable_sizecompat_freeform 1
+    # adb shell settings put global enable_sizecompat_freeform 1
 }
 
 enable_screen()
@@ -41,10 +40,10 @@ enable_screen()
     # 1440x3200 450
     # 1080x2400 420 
     screen_size=2400x1440
-    screen_density=240
+    screen_density=210
     adb shell settings put global overlay_display_devices $screen_size/$screen_density
     sleep 1
-    get_display
+    display=$(get_display)
     [[ $display ]] && adb shell "wm size $screen_size -d $display ; wm density $screen_density -d $display"  
 }
 
@@ -52,7 +51,6 @@ disable_screen()
 {
     # Disable the secondary screen option
     adb shell settings put global overlay_display_devices none
-    # adb shell settings delete global overlay_display_devices
 }
 
 list_screen()
@@ -63,9 +61,9 @@ list_screen()
 
 get_display()
 {
-    display=$(adb shell 'dumpsys display | grep mDisplayId= | cut -d "=" -f2 | sort -n | uniq | grep -v "^0$" | head -n1')
-    if [[ $display ]]; then
-        echo $display
+    local _display=$(adb shell 'dumpsys display displays | grep mDisplayId= | tail -n 1 | cut -d = -f2 | grep -v "^0$"')
+    if [[ $_display ]]; then
+        echo $_display
         return 0
     else
         return 1
@@ -74,14 +72,15 @@ get_display()
 
 launch_app()
 {
-    # adb shell am start-activity --display $display com.android.chrome
+    # adb shell am start-activity --display $display com.android.chrome  com.sec.android.app.dexonpc
     app=${1:-"com.sec.android.app.sbrowser"}
-    adb shell am start-activity -S --display $display $app # --windowingMode 1 
+    adb shell am start-activity --display $display $app --windowingMode 1 
 }
 
 connect_screen()
 {
-    (scrcpy --display $display --window-title 'DexOnLinux' --turn-screen-off --stay-awake) &
+    [[ -n $1 ]] && _size="-m $1" || _size="-m 1920"
+    (scrcpy --display $display --window-title 'DexOnLinux' --stay-awake $_size) &
 }
 
 set_secondscreen()
@@ -97,16 +96,15 @@ fi
 
 if ! display=$(get_display); then
     echo "None"
-    enable_screen
-    get_display
     change_secondary_display_behaviour
+    enable_screen
+    display=$(get_display)
 else
     echo "Display: $display"
 fi
 
 [[ "$1" == "off" ]] && { disable_screen ; exit ; }
-[[ "$1" == "con" ]] && { connect_screen ; launch_app $2 ; exit ; }
+[[ "$1" == "con" ]] && { connect_screen $2 ; launch_app ; exit ; }
 [[ "$1" == "app" ]] && { launch_app $2 ; exit ; }
+[[ "$1" == "add" ]] && { enable_screen ; display=$(get_display) ; exit ; }
 [[ "_$1" != "_" ]] && { display=$1 ; connect_screen $1 ; exit ; }
-
-# com.sec.android.app.dexonpc
