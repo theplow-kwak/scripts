@@ -346,11 +346,11 @@ sudo mount -t cifs -o credentials=/etc/.smb.cred,uid=$(id -u `whoami`),gid=$(id 
 
 
 ```bash
-sudo mount -t cifs -o username=dhkwak //10.0.2.4/qemu ./host
+sudo mount -t cifs -o username=uname //10.0.2.4/qemu ./host
 ```
 
 ```bash
-gio mount "smb://WORKGROUP;dhkwak@10.0.2.2/home/"
+gio mount "smb://WORKGROUP;uname@10.0.2.2/home/"
 ```
 
 
@@ -363,7 +363,7 @@ Windows 10에서 samba server에 연결이 안되고 계속 인증 에러가 나
 Samba version 4.8.4-Ubuntu
 PID     Username     Group        Machine                                   Protocol Version  Encryption           Signing              
 ----------------------------------------------------------------------------------------------------------------------------------------
-3406    nobody       nogroup      10.152.126.210 (ipv4:10.152.126.210:61267) SMB3_11           -                    -                    
+3406    nobody       nogroup      10.0.0.210 (ipv4:10.0.0.210:61267) SMB3_11           -                    -                    
 ```
 
 
@@ -641,7 +641,7 @@ Run the below command with some configuration options:
 
 
 ```bash
-docker run -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=password' --network host --name mssql -v /home/dhkwak/vm/docker/mssql:/var/opt/mssql mcr.microsoft.com/mssql/server:2017-latest
+docker run -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=password' --network host --name mssql -v /home/uname/vm/docker/mssql:/var/opt/mssql mcr.microsoft.com/mssql/server:2017-latest
 ```
 - -e ‘SA_PASSWORD : Specify the sa password
 - -p: Specify the port address in the format of 1433:1433 which means TCP 1433 port on both the container and the host
@@ -662,7 +662,7 @@ SQL command를 사용하여 test는 방법
 
 ```
 tsql -H 127.0.0.1 -p 1433 -U sa -P 'password'
-tsql -H 10.92.63.114 -p 1433 -U sa -P 'password'
+tsql -H 10.0.0.114 -p 1433 -U sa -P 'password'
 ```
 
 
@@ -708,10 +708,10 @@ select * from information_schema.columns where table_name = 'ovt'
 - Network static IP setting:
 
   ```powershell
-  netsh -c interface ip set address name='Embedded LOM 1 Port 1' source=static addr=$ipaddr mask=255.255.255.0 gateway=10.92.168.1 gwmetric=0
+  netsh -c interface ip set address name='Embedded LOM 1 Port 1' source=static addr=$ipaddr mask=255.255.255.0 gateway=10.0.1.1 gwmetric=0
   sleep 5
-  netsh -c interface ip set dns name='Embedded LOM 1 Port 1' source=static addr=10.156.25.61 register=PRIMARY
-  netsh -c interface ip add dns name='Embedded LOM 1 Port 1' addr=10.156.25.64 index=2
+  netsh -c interface ip set dns name='Embedded LOM 1 Port 1' source=static addr=10.0.0.61 register=PRIMARY
+  netsh -c interface ip add dns name='Embedded LOM 1 Port 1' addr=10.0.0.64 index=2
   netsh interface ip show config
   ```
 
@@ -800,6 +800,7 @@ select * from information_schema.columns where table_name = 'ovt'
   reagentc /enable
   reagentc /info
   ```
+
 
 
 ## Windows 10 WSL 2 설치
@@ -891,6 +892,14 @@ cat << _EOF_ | tee .pip/pip.conf
 [global]
 cert = /path/to/mycertificate.crt
 _EOF_
+```
+
+### Set the configuration in Windows
+
+```text
+# Windows
+pip config set global.cert %USERPROFILE%\certs\ca-bundle.crt
+pip config list
 ```
 
 ### Ignoring certificate and using HTTP
@@ -1025,6 +1034,12 @@ export P4CONFIG=~/.p4config
 export P4CLIENT=p4client
 ```
 
+```text
+/etc/profile.d/p4config.sh
+  P4CONFIG=.p4config
+  export P4CONFIG
+```
+
 
 
 3. '`p4 client`' 설정
@@ -1151,14 +1166,14 @@ booting시 barrier 자동 실행:
 
 ```bash
 $ ps aux | grep barrier
-dhkwak      1926  0.5  0.0  98868  9360 ?        Sl   08:58   0:04 /usr/bin/barrierc -f --debug INFO --name dhkwak-AORUS --enable-crypto [10.152.52.40]:24800
+uname      1926  0.5  0.0  98868  9360 ?        Sl   08:58   0:04 /usr/bin/barrierc -f --debug INFO --name uname-AORUS --enable-crypto [10.0.0.150]:24800
 ```
 
 ```bash
 client:
-/snap/barrier/384/usr/bin/barrierc -f --no-tray --debug INFO --name test-X570-AORUS-ELITE --enable-crypto [10.152.103.212]:24800
+/snap/barrier/384/usr/bin/barrierc -f --no-tray --debug INFO --name test-X570-AORUS-ELITE --enable-crypto [10.0.0.150]:24800
 server:
-/snap/barrier/384/usr/bin/barriers -f --no-tray --debug INFO --name dhkwak-AORUS --enable-crypto -c /home/dhkwak/barrier.conf --address :24800
+/snap/barrier/384/usr/bin/barriers -f --no-tray --debug INFO --name uname-AORUS --enable-crypto -c /home/uname/barrier.conf --address :24800
 ```
 
 ERROR: ssl certificate doesn't exist: /home/test/.local/share/barrier/SSL/Barrier.pem
@@ -1207,6 +1222,23 @@ cd ..
 sudo umount src dest
  ```
 
+
+
+## NTFS mount 
+
+For my case, The command `sudo dmesg | tail` shows:
+
+```
+ntfs3: Unknown parameter 'windows_names'
+```
+
+It seems the new `ntfs3` driver does not support the 'windows_names' flag anymore. Base on [this suggestion](https://github.com/storaged-project/udisks/pull/917#issuecomment-962596147) I made `/etc/udisks2/mount_options.conf` file containing:
+
+```text
+[defaults]
+ntfs_defaults=uid=$UID,gid=$GID
+ntfs_allow=uid=$UID,gid=$GID,nls,umask,dmask,fmask,nohidden,sys_immutable,discard,force,sparse,showmeta,prealloc,no_acs_rules,acl,noatime
+```
 
 
 ## Ubuntu upgrade 
@@ -1285,7 +1317,7 @@ Download CentOS Cloud Images from https://cloud.centos.org/centos/7/images/
 Create a snapshot so that we can branch from this disk image without affecting the parent.  We will also use this opportunity to increase the root filesystem from 8G to 10G.
 
 ```bash
-qemu-img create -f qcow2 -b CentOS-8-GenericCloud-8.2.2004-20200611.2.aarch64.qcow2 centos-8.3.qcow2
+qemu-img create -f qcow2 -F qcow2 -b CentOS-8-GenericCloud-8.2.2004-20200611.2.aarch64.qcow2 centos-8.3.qcow2
 qemu-img resize centos-8.3.qcow2 60G
 qemu --arch aarch64 --connect ssh --net bridge --uname test centos-8.3.qcow2 cloud_init.iso
 qemu --arch aarch64 --connect ssh --net bridge --uname test centos-8.3.qcow2 
@@ -1312,7 +1344,7 @@ sudo apt -y install libguestfs-tools
 ## Setup/inject an ssh keys
 
 ```bash
-sudo virt-customize -a centos-2003.qcow2 --ssh-inject centos:file:/home/dhkwak/.ssh/id_rsa.pub
+sudo virt-customize -a centos-2003.qcow2 --ssh-inject centos:file:/home/uname/.ssh/id_rsa.pub
 ```
 
 
@@ -1436,3 +1468,4 @@ ip link set dev enp0s25 down
 ```bash
 sudo dhclient eth0
 ```
+
