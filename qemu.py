@@ -53,7 +53,7 @@ class QEMU():
         parser.add_argument("--tpm", action='store_true',                       help = "Support TPM device for windows 11")
         parser.add_argument('--arch', '-a', default='x86_64', choices=['x86_64', 'aarch64', 'arm'],                         help = "The architecture of target VM.")
         parser.add_argument("--connect", default='spice', choices=['ssh', 'spice'],                                         help = "Connection method - 'ssh' 'spice'(default)")
-        parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info'],  help = "Set the logging level. (default: 'warning')")
+        parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info', 'test'],  help = "Set the logging level. (default: 'warning')")
         parser.add_argument("--ipmi", choices=['internal', 'external'],         help = "IPMI model - 'external', 'internal'")
         parser.add_argument("--machine", default='q35', choices=['q35', 'ubuntu-q35', 'pc', 'ubuntu'],                      help = "IPMI model - 'external', 'internal'")
         parser.add_argument("--net", default='bridge', choices=['user', 'u', 'tap', 't', 'bridge', 'b'],                    help = "Network interface model - 'user', 'tap', 'bridge'")
@@ -97,7 +97,7 @@ class QEMU():
         self.vmguid = hashlib.md5(str(boot_0).encode()).hexdigest()
         self.vmuid = self.vmguid[0:2]
         self.vmprocid = f"{self.vmname[0:12]}_{self.vmuid}"
-        self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"] if self.args.debug != 'debug' else [""]
+        self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"]
 
     def runshell(self, cmd, _async=False):
         if isinstance(cmd, list): cmd = ' '.join(cmd)
@@ -108,8 +108,8 @@ class QEMU():
         else:
             completed = subprocess.run(
                 _cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        mylogger.debug(
-            f"Return code {completed.returncode}: {completed.stdout}")
+            mylogger.debug(
+                f"Return code {completed.returncode}: {completed.stdout}")
         return completed
 
     def set_qemu(self):
@@ -249,8 +249,10 @@ class QEMU():
             self.params += NVME
 
     def set_virtiofs(self):
-        virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --", f"{str(Path.home())}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={str(Path.home())}"]
+        virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --"] + \
+            [f"{str(Path.home())}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={str(Path.home())}"]
         self.runshell(virtiofsd, True)
+        sleep(1)
         _virtiofs = [f"-chardev socket,id=char{self.vmuid},path=/tmp/virtiofs_{self.vmuid}.sock",
             f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
             "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem"]
@@ -342,8 +344,8 @@ class QEMU():
                 self.SSH_CONNECT = self.localip if self.args.net != "user" else f"{self.hostip} -p {self.SSHPORT}"
                 self.CHKPORT = self.SSHPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
-                self.CONNECT = self.G_TERM + \
-                    ["--", f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
+                self.CONNECT = self.G_TERM + ["--"] + \
+                    [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
             case "spice":
                 self.CHKPORT = self.SPICEPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
@@ -372,10 +374,10 @@ class QEMU():
         return 0
 
     # def set_kernel(self): 
-    #     KERNEL = f"-kernel {self.args.vmkernel}"
-    #     [[ $vmkernel == *vmlinuz* ]] && INITRD="-initrd ${vmkernel/"vmlinuz"/"initrd.img"}"
+    #     KERNEL = [f"-kernel {self.args.vmkernel}"]
+    #     [[ $vmkernel == *vmlinuz* ]] && INITRD = ["-initrd ${vmkernel/"vmlinuz"/"initrd.img"}"]
         
-    #     if [[ $args_consol -eq 1 ]]; then
+    #     if self.args.consol:
     #         [[ ! " ${opts[@]} " =~ " -vga $args_vga " ]] && opts+=("-vga $args_vga")
     #         PARAM="root=/dev/sda vga=0x300"
     #     else
@@ -427,7 +429,7 @@ class QEMU():
     def run(self):
         completed = subprocess.CompletedProcess(0,0)
         if not self.findProc(self.vmprocid, 0):
-            _qemu_command = self.sudo + self.G_TERM + ["--"] + \
+            _qemu_command = self.sudo + ([] if self.args.debug == 'debug' else self.G_TERM + ["--"]) + \
                 self.qemu_exe + self.params + self.opts
             if self.args.debug == 'cmd':
                 print(' '.join(_qemu_command))
