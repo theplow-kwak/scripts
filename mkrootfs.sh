@@ -10,33 +10,34 @@ isEmptyFolder()
 
 FormatDisk() 
 {
-    local _IMGFILE=$1
+    local _ROOTFS_FILE=$1
 
-    if [ ! -e $_IMGFILE ]; then
-        qemu-img create $_IMGFILE $IMGSIZE
-        # dd if=/dev/zero of=$_IMGFILE bs=1M count=32768
+    if [ ! -e $_ROOTFS_FILE ]; then
+        qemu-img create $_ROOTFS_FILE $IMGSIZE
+        # dd if=/dev/zero of=$_ROOTFS_FILE bs=1M count=32768
     fi
-    if [ -O $_IMGFILE ]; then
-        mkfs.ext4 $_IMGFILE
+    if [ -O $_ROOTFS_FILE ]; then
+        mkfs.ext4 $_ROOTFS_FILE
     else
-        sudo mkfs.ext4 $_IMGFILE
+        sudo mkfs.ext4 $_ROOTFS_FILE
     fi
 }
 
 MakeRootFS()
 {
-    local _TARGETDIR=$1
-    local _DESTRO=${DESTRO:-"cosmic"}
+    local _MOUNT_PATH=$1
+    local _DESTRO=${DESTRO:-"kinetic"}
+    local _MIRROR=${MIRROR:-"http://mirror.kakao.com/ubuntu/"}
     
-    if [[ ! $(findmnt $_TARGETDIR) ]]; then
-        echo $_TARGETDIR does not mounted !! stop processing !
+    if [[ ! $(findmnt $_MOUNT_PATH) ]]; then
+        echo $_MOUNT_PATH does not mounted !! stop processing !
         exit 1
     fi
 
-    echo debootstrap --verbose --arch amd64 $_DESTRO $_TARGETDIR http://archive.ubuntu.com/ubuntu
-    sudo debootstrap --verbose --arch amd64 $_DESTRO $_TARGETDIR http://archive.ubuntu.com/ubuntu
+    echo debootstrap --verbose --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
+    sudo debootstrap --verbose --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
 
-    pushd $_TARGETDIR
+    pushd $_MOUNT_PATH
 
     sudo mkdir ./mnt/host
     printf "%s\n" \
@@ -62,14 +63,14 @@ MakeRootFS()
         | sudo dd of=./etc/netplan/01-network-all.yaml
 
     printf "%s\n" \
-        "deb http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO main restricted universe multiverse" \
-        "deb-src http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO main restricted universe multiverse" \
+        "deb $_MIRROR $_DESTRO main restricted universe multiverse" \
+        "deb-src $_MIRROR $_DESTRO main restricted universe multiverse" \
         "" \
-        "deb http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-updates main restricted universe multiverse" \
-        "deb-src http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-updates main restricted universe multiverse" \
+        "deb $_MIRROR $_DESTRO-updates main restricted universe multiverse" \
+        "deb-src $_MIRROR $_DESTRO-updates main restricted universe multiverse" \
         "" \
-        "deb http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-security main restricted universe multiverse" \
-        "deb-src http://kr.archive.ubuntu.com/ubuntu/ $_DESTRO-security main restricted universe multiverse" \
+        "deb $_MIRROR $_DESTRO-security main restricted universe multiverse" \
+        "deb-src $_MIRROR $_DESTRO-security main restricted universe multiverse" \
         | sudo dd of=./etc/apt/sources.list
 
     printf "%s\n" \
@@ -87,38 +88,38 @@ MakeRootFS()
         | sudo dd of=./setupenv.sh
         sudo chmod +x ./setupenv.sh
     
-    LANG=C.UTF-8 sudo chroot $_TARGETDIR /bin/bash setupenv.sh
+    LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash setupenv.sh
     sudo rm ./setupenv.sh
     popd
     
-    unMountFolder $_TARGETDIR
+    unMountFolder $_MOUNT_PATH
 }
 
 MountFolder() {
-    local _IMGFILE=$1
-    local _TARGETDIR=$2
+    local _ROOTFS_FILE=$1
+    local _MOUNT_PATH=$2
 
-    if (isEmptyFolder $_TARGETDIR ); then
-        echo mount $_IMGFILE to $_TARGETDIR
-        sudo mount -o loop $_IMGFILE $_TARGETDIR
+    if (isEmptyFolder $_MOUNT_PATH ); then
+        echo mount $_ROOTFS_FILE to $_MOUNT_PATH
+        sudo mount -o loop $_ROOTFS_FILE $_MOUNT_PATH
     else
-        echo "$_TARGETDIR was not empty. can't mount $_IMGFILE"
+        echo "$_MOUNT_PATH was not empty. can't mount $_ROOTFS_FILE"
         MKROOT=0
     fi
 }
 
 unMountFolder() {
-    local _TARGETDIR=$1
+    local _MOUNT_PATH=$1
 
-    echo umount $_TARGETDIR
-    sudo umount $_TARGETDIR
+    echo umount $_MOUNT_PATH
+    sudo umount $_MOUNT_PATH
     exit 1
 }
 
 ChRoot() {
-    local _TARGETDIR=$1
+    local _MOUNT_PATH=$1
     
-    LANG=C.UTF-8 sudo chroot $_TARGETDIR /bin/bash
+    LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash
 }
 
 UNLOAD=0
@@ -126,7 +127,7 @@ CHROOT=0
 FORMAT=0
 MKROOT=0
 UNAME=${SUDO_USER:-$USER}
-TARGETDIR="$PWD/rootfs"
+MOUNT_PATH="$PWD/rootfs"
 
 while getopts ":ucfmn:d:s:t:" opt; do
     case $opt in
@@ -137,7 +138,7 @@ while getopts ":ucfmn:d:s:t:" opt; do
         n)  UNAME=$OPTARG ;;
         d)  DESTRO=$OPTARG ;;
         s)  SIZE=$OPTARG ;;
-        t)  TARGETDIR=$OPTARG ;;
+        t)  MOUNT_PATH=$OPTARG ;;
         \?) echo "Invalid option: -$OPTARG" >&2 
             exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2 
@@ -147,22 +148,22 @@ done
 
 shift $(($OPTIND-1)) 
 
-IMGFILE=${1:-"/dev/nvme1n1p1"}
+ROOTFS_FILE=${1:-"./rootfs.img"}
 IMGSIZE=${SIZE:-"16g"}
-TARGETDIR=${2:-"$TARGETDIR"}
+MOUNT_PATH=${2:-"$MOUNT_PATH"}
 
-echo source $IMGFILE
-echo target $TARGETDIR
+echo source $ROOTFS_FILE
+echo target $MOUNT_PATH
 
-[ $UNLOAD -eq 1 ] && unMountFolder $TARGETDIR
+[ $UNLOAD -eq 1 ] && unMountFolder $MOUNT_PATH
 
-[ $FORMAT -eq 1 ] && FormatDisk $IMGFILE $TARGETDIR
+[ $FORMAT -eq 1 ] && FormatDisk $ROOTFS_FILE $MOUNT_PATH
 
-MountFolder $IMGFILE $TARGETDIR
+MountFolder $ROOTFS_FILE $MOUNT_PATH
 
-[ $MKROOT -eq 1 ] && MakeRootFS $TARGETDIR
+[ $MKROOT -eq 1 ] && MakeRootFS $MOUNT_PATH
 
-[ $CHROOT -eq 1 ] && ChRoot $TARGETDIR
+[ $CHROOT -eq 1 ] && ChRoot $MOUNT_PATH
 
 echo " end of work"
 

@@ -74,7 +74,7 @@ done
 
 _TMP=$(echo $RANDOM|md5sum|sed 's/^\(....\).*$/\l\1/')
 _USER_NAME=${_USER_NAME:-"test"}
-_HOST_NAME=${_HOST_NAME:-"${_USER_NAME}-CLOUD_${_TMP}"}
+_HOST_NAME=${_HOST_NAME:-"${_USER_NAME}-cloud_${_TMP}"}
 _F_NAME=${_F_NAME:-"_cloud_init.cfg"}
 
 [[ -e $HOME/.ssh/id_rsa.pub ]] || ssh-keygen -t rsa
