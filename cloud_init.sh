@@ -2,13 +2,13 @@
 
 create_cfgfile()
 {
-touch $_F_NAME
+touch $CINIT_FILE
 
-cat <<EOL > $_F_NAME
+cat <<EOL > $CINIT_FILE
 #cloud-config
-hostname: $_HOST_NAME
+hostname: $HOST_NAME
 users:
-  - name: $_USER_NAME
+  - name: $USER_NAME
     groups: wheel
     lock_passwd: false
     shell: /bin/bash
@@ -31,11 +31,11 @@ EOL
 
 if [[ -e $HOME/.ssh/id_rsa.pub ]]; then
     read _SSH_KEY < $HOME/.ssh/id_rsa.pub
-    sed -i "/sudo:/ a \    ssh-authorized-keys:\n      - \"${_SSH_KEY}\"" $_F_NAME
+    sed -i "/sudo:/ a \    ssh-authorized-keys:\n      - \"${_SSH_KEY}\"" $CINIT_FILE
 fi
 if [[ -e $_CERT_FILE ]]; then
-    printf "\nca-certs:\n  trusted:\n  - |\n" >> $_F_NAME
-    cat $_CERT_FILE >> $_F_NAME
+    printf "\nca-certs:\n  trusted:\n  - |\n" >> $CINIT_FILE
+    cat $_CERT_FILE >> $CINIT_FILE
 fi
 }
 
@@ -62,9 +62,9 @@ eval set -- "$options"
 
 while true; do
     case "$1" in
-        -n | --name )   _USER_NAME=$2 ;     shift ;;    # set login user name
-        -H | --host )   _HOST_NAME=$2 ;     shift ;;    
-        -f | --fname )  _F_NAME=$2 ;        shift ;;
+        -n | --name )   USER_NAME=$2 ;      shift ;;    # set login user name
+        -H | --host )   HOST_NAME=$2 ;      shift ;;    
+        -f | --fname )  CINIT_FILE=$2 ;     shift ;;
         -c | --cert )   _CERT_FILE=$2 ;     shift ;;
         -h | --help )   usage ;             exit ;;
         --)             shift ;             break ;;
@@ -72,13 +72,13 @@ while true; do
     shift
 done 
 
-_TMP=$(echo $RANDOM|md5sum|sed 's/^\(....\).*$/\l\1/')
-_USER_NAME=${_USER_NAME:-"test"}
-_HOST_NAME=${_HOST_NAME:-"${_USER_NAME}-cloud_${_TMP}"}
-_F_NAME=${_F_NAME:-"_cloud_init.cfg"}
+_TMP=$(echo $RANDOM|md5sum|sed 's/^\(....\).*$/\U\1/')
+USER_NAME=${USER_NAME:-$USER}
+HOST_NAME=${HOST_NAME:-"${USER_NAME}-QEMU-${_TMP}"}
+CINIT_FILE=${CINIT_FILE:-"_cloud_init.cfg"}
 
 [[ -e $HOME/.ssh/id_rsa.pub ]] || ssh-keygen -t rsa
 
 create_cfgfile
-cloud-localds -v cloud_init.iso $_F_NAME
+cloud-localds -v cloud_init.iso $CINIT_FILE
 

@@ -91,8 +91,8 @@ chrome() {
 
 bcompare() {
     echo install byound compare
-    wget https://www.scootersoftware.com/bcompare-4.3.6.25063_amd64.deb && \
-    sudo dpkg -i bcompare-4.3.6.25063_amd64.deb
+    wget https://www.scootersoftware.com/bcompare-4.4.4.27058_amd64.deb && \
+    sudo apt install ./bcompare-4.4.4.27058_amd64.deb
 }
 
 gitkraken() {

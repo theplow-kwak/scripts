@@ -5,17 +5,19 @@ IMGNAME="centos-8.3.qcow2"
 QEMU="qemu2"
 NET="bridge"
 
-while getopts ":b:i:q:n:" opt; do
+while getopts ":b:i:q:n:u:" opt; do
 	case $opt in
-		b)    BACKIMG=$OPTARG ;;
-		i)    IMGNAME=$OPTARG ;;
-		q)    QEMU=$OPTARG ;;	
-		n)    NET=$OPTARG ;;	
+		b)      BACKIMG=$OPTARG ;;
+		i)      IMGNAME=$OPTARG ;;
+		q)      QEMU=$OPTARG ;;	
+		n)      NET=$OPTARG ;;
+		u)      USER_NAME=$OPTARG ;;
 		\?)   echo "Invalid option: -$OPTARG" >&2 ;;
 		:)    echo "Option -$OPTARG requires an argument." >&2 ;;
 	esac
 done 
 shift $(($OPTIND-1))
+USER_NAME=${USER_NAME:-$USER}
 
 if [[ ! -e $IMGNAME ]]; then
     qemu-img create -f qcow2 $IMGNAME -F qcow2 -b $BACKIMG
@@ -24,6 +26,6 @@ if [[ ! -e $IMGNAME ]]; then
 fi
 
 if [[ -e $IMGNAME ]]; then
-    echo $QEMU --bios --connect ssh --net $NET --uname test $IMGNAME $CLOUD_INIT $@
-    $QEMU --bios --connect ssh --net $NET --uname test $IMGNAME $CLOUD_INIT $@
+    echo $QEMU --bios --connect ssh --net $NET --uname $USER_NAME $IMGNAME $CLOUD_INIT $@
+    $QEMU --bios --connect ssh --net $NET --uname $USER_NAME $IMGNAME $CLOUD_INIT $@
 fi

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# sudo apt install debootstrap
 
 isEmptyFolder() 
 {
@@ -48,7 +49,7 @@ MakeRootFS()
         | sudo dd of=./etc/fstab
 
     printf "%s\n" \
-        "QEMU-OCSSD" \
+        "${HOST_NAME}" \
         | sudo dd of=./etc/hostname
 
     printf "%s\n" \
@@ -56,9 +57,9 @@ MakeRootFS()
         "  version: 2" \
         "  renderer: networkd" \
         "  ethernets:" \
-        "    ens:" \
+        "    id0:" \
         "      match:" \
-        "        name: ens*" \
+        "        name: en*" \
         "      dhcp4: true" \
         | sudo dd of=./etc/netplan/01-network-all.yaml
 
@@ -74,17 +75,16 @@ MakeRootFS()
         | sudo dd of=./etc/apt/sources.list
 
     printf "%s\n" \
-        "dpkg-reconfigure tzdata" \
-        "apt update" \
+        "ln -fs /usr/share/zoneinfo/Asia/Seoul /etc/localtime" \
+        "dpkg-reconfigure -f noninteractive tzdata" \
+        "apt update -y" \
         "apt install -y language-pack-ko" \
         "apt install -y openssh-server" \
         "apt install -y tasksel net-tools nvme-cli" \
         "tasksel install standard" \
-        "apt upgrade" \
-        "adduser $UNAME" \
-        "addgroup --system admin" \
-        "adduser $UNAME admin" \
-        "passwd root" \
+        "apt upgrade -y" \
+        "adduser $USER_NAME" \
+        "usermod -aG sudo $USER_NAME" \
         | sudo dd of=./setupenv.sh
         sudo chmod +x ./setupenv.sh
     
@@ -126,7 +126,7 @@ UNLOAD=0
 CHROOT=0
 FORMAT=0
 MKROOT=0
-UNAME=${SUDO_USER:-$USER}
+USER_NAME=${SUDO_USER:-$USER}
 MOUNT_PATH="$PWD/rootfs"
 
 while getopts ":ucfmn:d:s:t:" opt; do
@@ -135,7 +135,7 @@ while getopts ":ucfmn:d:s:t:" opt; do
         c)  CHROOT=1 ;;
         f)  FORMAT=1 ;;
         m)  MKROOT=1 ;;
-        n)  UNAME=$OPTARG ;;
+        n)  USER_NAME=$OPTARG ;;
         d)  DESTRO=$OPTARG ;;
         s)  SIZE=$OPTARG ;;
         t)  MOUNT_PATH=$OPTARG ;;
@@ -147,6 +147,9 @@ while getopts ":ucfmn:d:s:t:" opt; do
 done 
 
 shift $(($OPTIND-1)) 
+
+_TMP=$(echo $RANDOM|md5sum|sed 's/^\(....\).*$/\U\1/')
+HOST_NAME=${HOST_NAME:-"${USER_NAME}-QEMU-${_TMP}"}
 
 ROOTFS_FILE=${1:-"./rootfs.img"}
 IMGSIZE=${SIZE:-"16g"}
