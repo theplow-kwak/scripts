@@ -290,7 +290,12 @@ set_virtiofs()
 {
     virtiofsd=(sudo $G_TERM --geometry=80x24+5+5 -- 
         $HOME/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$HOME)
-    ("${virtiofsd[@]}")&
+    if [[ $args_debug == 'cmd' ]]; then
+        (IFS=\|; echo "${virtiofsd[*]}")
+    else
+        ("${virtiofsd[@]}")&
+        until [[ -e "/tmp/virtiofs_${vmuid}.sock" ]]; do sleep 1; echo "wating for /tmp/virtiofs_${vmuid}.sock"; done
+    fi
     _virtiofs=("-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock"
         "-device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs"
         "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem")
@@ -390,7 +395,7 @@ set_connect()
             opts=("${opts[@]/"-monitor stdio"}")
             opts=("${opts[@]/"-vga $args_vga"}")
             opts+=("-nographic -serial mon:stdio")
-            [[ $args_net != "user" ]] && SSH_CONNECT=$localip || SSH_CONNECT="${hostip} -p $SSHPORT" 
+            [[ $args_net != "user" && -n $localip ]] && SSH_CONNECT=$localip || SSH_CONNECT="${hostip} -p $SSHPORT" 
             CHKPORT=$SSHPORT
             T_TITLE="${vmname}:${CHKPORT}"
             CONNECT=($G_TERM --
@@ -433,17 +438,12 @@ set_kernel()
     KERNEL="-kernel ${vmkernel}"
     [[ $vmkernel == *vmlinuz* ]] && INITRD="-initrd ${vmkernel/"vmlinuz"/"initrd.img"}"
     
-    if [[ $args_consol -eq 1 ]]; then
-        [[ ! " ${opts[@]} " =~ " -vga $args_vga " ]] && opts+=("-vga $args_vga")
-        PARAM="root=/dev/sda vga=0x300"
+    if [[ $args_connect -eq "ssh" ]]; then
+        PARAM=("root=/dev/sda console=ttyS0")
     else
-        opts=("${opts[@]/"-monitor stdio"}")
-        opts+=("-nographic -serial mon:stdio")
-        PARAM="root=/dev/sda console=ttyS0"
+        PARAM=("root=/dev/sda vga=0x300")
     fi
-
     APPEND="-append"
-    params+=($KERNEL $INITRD $APPEND "$PARAM")
 }
 
 set_pcipass()
@@ -491,17 +491,17 @@ setting()
 run()
 {
     if ! (findProc $vmprocid 0); then
-        _qemu_command=('sudo' $G_TERM --
-            $qemu_exe ${params[@]} ${opts[@]})
+        _qemu_command=('sudo' $( [[ $args_debug != 'debug' ]] && echo $G_TERM -- )
+            $qemu_exe ${params[@]} ${opts[@]} $KERNEL $INITRD $APPEND "${PARAM[@]}")
         if [[ $args_debug == 'cmd' ]]; then
-            echo "${_qemu_command[*]}"
+            (IFS=\|; echo "${_qemu_command[*]}")
         else
             completed=$("${_qemu_command[@]}"); fi
     fi
     if [[ -n $CONNECT ]]; then
         _qemu_connect=(${CONNECT[*]})
         if [[ $args_debug == 'cmd' ]]; then
-            echo "${_qemu_connect[*]}"
+            (IFS=\|; echo "${_qemu_connect[*]}")
         else
             if [[ -z ${completed} ]] && (findProc $vmprocid); then
                 if [[ $args_connect == 'ssh' ]]; then

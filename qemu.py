@@ -41,6 +41,7 @@ class QEMU():
         self.vmnvme = []
         self.params = []
         self.opts = []
+        self.KERNEL = []
         self.index = self.use_nvme = 0
 
     def set_args(self):
@@ -62,7 +63,7 @@ class QEMU():
         parser.add_argument("--stick",                                          help = "Set the USB storage image")
         parser.add_argument('images', metavar='IMAGES', nargs='+',              help = "Set the VM images")
         parser.add_argument('--nvme',                                           help = "Set the NVMe images")
-        parser.add_argument('--kernel',                                         help = "Set the Linux Kernel image") 
+        parser.add_argument('--kernel', dest='vmkernel',                        help = "Set the Linux Kernel image") 
         parser.add_argument('--pcihost',                                        help = "PCI passthrough") 
         parser.add_argument("--numns", type=int,                                help = "Set the numbers of NVMe namespace")
         self.args = parser.parse_args()
@@ -83,13 +84,16 @@ class QEMU():
                     case _ if 'nvme' in image[:4]:
                         self.vmnvme.append(image)
                         self.use_nvme = 1
+                    case _ if 'vmlinuz' in image:
+                        self.args.vmkernel = image
                     case _:
                         pass
 
-        _boot_dev = self.vmimages + self.vmnvme + self.vmcdimages
+        _boot_dev = self.vmimages + self.vmnvme + self.vmcdimages + [self.args.vmkernel]
         mylogger.info(f"vmimages {self.vmimages} ")
         mylogger.info(f"vmcdimages {self.vmcdimages} ")
         mylogger.info(f"vmnvme {self.vmnvme} ")
+        mylogger.info(f"vmkernel {self.args.vmkernel} ")
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
         boot_0 = Path(_boot_dev[0]).resolve()
@@ -251,8 +255,13 @@ class QEMU():
     def set_virtiofs(self):
         virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --"] + \
             [f"{str(Path.home())}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={str(Path.home())}"]
-        self.runshell(virtiofsd, True)
-        sleep(1)
+        if self.args.debug == 'cmd':
+            print('|'.join(virtiofsd))
+        else:
+            self.runshell(virtiofsd, True)
+            while not Path(f"/tmp/virtiofs_{self.vmuid}.sock").exists():
+                sleep(1)
+                print("wating for /tmp/virtiofs_{self.vmuid}.sock")
         _virtiofs = [f"-chardev socket,id=char{self.vmuid},path=/tmp/virtiofs_{self.vmuid}.sock",
             f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
             "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem"]
@@ -341,7 +350,7 @@ class QEMU():
                 if "-monitor stdio" in self.opts: self.opts.remove("-monitor stdio")
                 if f"-vga {self.args.vga}" in self.opts: self.opts.remove(f"-vga {self.args.vga}")
                 self.opts += ["-nographic -serial mon:stdio"]
-                self.SSH_CONNECT = self.localip if self.args.net != "user" else f"{self.hostip} -p {self.SSHPORT}"
+                self.SSH_CONNECT = self.localip if self.args.net != "user" and self.localip is not None else f"{self.hostip} -p {self.SSHPORT}"
                 self.CHKPORT = self.SSHPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
                 self.CONNECT = self.G_TERM + ["--"] + \
@@ -373,21 +382,14 @@ class QEMU():
             sleep(1)
         return 0
 
-    # def set_kernel(self): 
-    #     KERNEL = [f"-kernel {self.args.vmkernel}"]
-    #     [[ $vmkernel == *vmlinuz* ]] && INITRD = ["-initrd ${vmkernel/"vmlinuz"/"initrd.img"}"]
+    def set_kernel(self): 
+        self.KERNEL = [f"-kernel {self.args.vmkernel}"]
+        if "vmlinuz" in self.args.vmkernel: self.KERNEL += ["-initrd", self.args.vmkernel.replace("vmlinuz", "initrd.img")]
         
-    #     if self.args.consol:
-    #         [[ ! " ${opts[@]} " =~ " -vga $args_vga " ]] && opts+=("-vga $args_vga")
-    #         PARAM="root=/dev/sda vga=0x300"
-    #     else
-    #         opts=("${opts[@]/"-monitor stdio"}")
-    #         opts+=("-nographic -serial mon:stdio")
-    #         PARAM="root=/dev/sda console=ttyS0"
-    #     fi
-
-    #     APPEND="-append"
-    #     self.params+=($KERNEL $INITRD $APPEND "$PARAM")
+        if self.args.connect == 'ssh':
+            self.KERNEL += ["-append \"root=/dev/sda console=ttyS0\""]
+        else:
+            self.KERNEL += ["-append \"root=/dev/sda vga=0x300\""]
 
     # def set_pcipass(self):
     #     [[ -z self.args.pcihost ]] && return 
@@ -407,7 +409,7 @@ class QEMU():
         if not self.findProc(self.vmprocid, 0):
             self.set_qemu()
             if not self.args.bios: self.set_uefi()
-            # self.set_kernel()
+            if self.args.vmkernel: self.set_kernel()
             # self.set_pcipass()
             self.set_usb3() if self.args.arch == 'x86_64' else self.set_usb_arm()
             self.set_disks()
@@ -430,15 +432,15 @@ class QEMU():
         completed = subprocess.CompletedProcess(0,0)
         if not self.findProc(self.vmprocid, 0):
             _qemu_command = self.sudo + ([] if self.args.debug == 'debug' else self.G_TERM + ["--"]) + \
-                self.qemu_exe + self.params + self.opts
+                self.qemu_exe + self.params + self.opts + self.KERNEL
             if self.args.debug == 'cmd':
-                print(' '.join(_qemu_command))
+                print('|'.join(_qemu_command))
             else:
                 completed = self.runshell(_qemu_command)
         if self.CONNECT:
             _qemu_connect = self.CONNECT
             if self.args.debug == 'cmd':
-                print(' '.join(_qemu_connect))
+                print('|'.join(_qemu_connect))
             else:
                 if completed.returncode == 0 and self.findProc(self.vmprocid):
                     if self.args.connect == 'ssh':
