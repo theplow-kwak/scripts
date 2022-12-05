@@ -13,6 +13,6 @@ if [[ ${#dhcp_leases[@]} > 0 && $1 ]]; then
     (virsh net-update default delete ip-dhcp-host "$dest_str" --live --config)
 else
     for dhcp in "${dhcp_leases[@]}"; do
-        echo "dhcp ${dhcp}"
+        echo "${dhcp}"
     done
 fi
