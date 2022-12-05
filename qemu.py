@@ -82,10 +82,9 @@ class QEMU():
                     case [*name, 'iso' | 'ISO']:        self.vmcdimages.append(image)
                     case _ if '/dev/' in image:         self.vmimages.append(image)
                     case _ if 'nvme' in image[:4]:
-                        self.vmnvme.append(image)
-                        self.use_nvme = 1
-                    case _ if 'vmlinuz' in image:
-                        self.args.vmkernel = image
+                                                        self.vmnvme.append(image)
+                                                        self.use_nvme = 1
+                    case _ if 'vmlinuz' in image:       self.args.vmkernel = image
                     case _:
                         pass
 
@@ -94,6 +93,7 @@ class QEMU():
         mylogger.info(f"vmcdimages {self.vmcdimages} ")
         mylogger.info(f"vmnvme {self.vmnvme} ")
         mylogger.info(f"vmkernel {self.args.vmkernel} ")
+        mylogger.info(f"boot_dev {_boot_dev} ")
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
         boot_0 = Path(_boot_dev[0]).resolve()
@@ -249,8 +249,7 @@ class QEMU():
                             f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}"]
         if Path("./events").exists():
             NVME += ["--trace events=./events"]
-        if NVME:
-            self.params += NVME
+        if NVME:    self.params += NVME
 
     def set_virtiofs(self):
         virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --"] + \
@@ -359,8 +358,7 @@ class QEMU():
                 self.CHKPORT = self.SPICEPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
                 self.CONNECT = [
-                    f"remote-viewer -t {T_TITLE} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1",
-                    f"--spice-shared-dir={str(Path.home())}"]
+                    f"remote-viewer -t {T_TITLE} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1"]
         mylogger.info(T_TITLE)
         mylogger.info(self.CONNECT)
 
