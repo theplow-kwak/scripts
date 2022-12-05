@@ -15,7 +15,6 @@ FormatDisk()
 
     if [ ! -e $_ROOTFS_FILE ]; then
         qemu-img create $_ROOTFS_FILE $IMGSIZE
-        # dd if=/dev/zero of=$_ROOTFS_FILE bs=1M count=32768
     fi
     if [ -O $_ROOTFS_FILE ]; then
         mkfs.ext4 $_ROOTFS_FILE
