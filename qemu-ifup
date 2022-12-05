@@ -1,7 +1,7 @@
 #!/bin/sh
 set -x
 
-_br=br0
+_br=virbr0
 _tap=$1
 
 if ! [ -d /sys/class/net/$_br ]; then
