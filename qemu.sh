@@ -115,7 +115,6 @@ set_images()
     (IFS=:; echo "vmnvme: ${vmnvme[*]}")
     (IFS=:; echo "vmkernel: ${vmkernel[*]}")
     (IFS=:; echo "boot_dev: ${_boot_dev[*]}")
-    
     if [[ -z $_boot_dev ]] && [[ -z $vmkernel ]]; then
         printf "There is no Boot device!!\n" && exit 1
     fi
@@ -294,7 +293,9 @@ set_virtiofs()
         (IFS=\|; echo "${virtiofsd[*]}")
     else
         ("${virtiofsd[@]}")&
-        until [[ -e "/tmp/virtiofs_${vmuid}.sock" ]]; do sleep 1; echo "wating for /tmp/virtiofs_${vmuid}.sock"; done
+        until [[ -e "/tmp/virtiofs_${vmuid}.sock" ]]; do 
+            sleep 1
+            echo "wating for /tmp/virtiofs_${vmuid}.sock"; done
     fi
     _virtiofs=("-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock"
         "-device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs"
@@ -435,15 +436,15 @@ checkConn()
 
 set_kernel() 
 {
-    KERNEL="-kernel ${vmkernel}"
-    [[ $vmkernel == *vmlinuz* ]] && INITRD="-initrd ${vmkernel/"vmlinuz"/"initrd.img"}"
+    KERNEL=("-kernel ${vmkernel}")
+    [[ $vmkernel == *vmlinuz* ]] && KERNEL+=("-initrd ${vmkernel/"vmlinuz"/"initrd.img"}")
     
+    KERNEL+=("-append")
     if [[ $args_connect -eq "ssh" ]]; then
         PARAM=("root=/dev/sda console=ttyS0")
     else
         PARAM=("root=/dev/sda vga=0x300")
     fi
-    APPEND="-append"
 }
 
 set_pcipass()
@@ -492,7 +493,7 @@ run()
 {
     if ! (findProc $vmprocid 0); then
         _qemu_command=('sudo' $( [[ $args_debug != 'debug' ]] && echo $G_TERM -- )
-            $qemu_exe ${params[@]} ${opts[@]} $KERNEL $INITRD $APPEND "${PARAM[@]}")
+            $qemu_exe ${params[@]} ${opts[@]} ${KERNEL[@]} "${PARAM[@]}")
         if [[ $args_debug == 'cmd' ]]; then
             (IFS=\|; echo "${_qemu_command[*]}")
         else
