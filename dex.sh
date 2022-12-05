@@ -28,6 +28,7 @@ enable_desktop_mode(){
 change_secondary_display_behaviour()
 {
     # Change secondary display behaviour
+    adb shell pm grant com.farmerbb.taskbar android.permission.WRITE_SECURE_SETTINGS
     adb shell settings put global force_resizable_activities 1
     adb shell settings put global enable_freeform_support 1
     # adb shell settings put global enable_sizecompat_freeform 1
@@ -94,9 +95,10 @@ if ! (adb devices | grep ".*device$"); then
     exit  1
 fi
 
+change_secondary_display_behaviour
+
 if ! display=$(get_display); then
     echo "None"
-    change_secondary_display_behaviour
     enable_screen
     display=$(get_display)
 else
