@@ -8,6 +8,7 @@ Usage:
 
 Command:
  set_mirror     set apt repo as kakao.com
+ timeset        Disable UTC and use Local Time
  update         update and install build-essential git python3-pip
  python         update pip modules          
  tools          install net-tools krusader barrier qemu-kvm virt-viewer cifs-utils
@@ -48,39 +49,32 @@ set_mirror(){
     sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
 }
 
-update() {
+tools() {
     echo update
     sudo apt -y update
     sudo apt -y upgrade
 
     sudo apt -y install build-essential git python3-pip
+    sudo apt -y install net-tools krusader barrier qemu-kvm virt-viewer cifs-utils
+}
+
+timeset() {
+    timedatectl set-local-rtc 1 --adjust-system-clock
 }
 
 python() {
-    echo update
+    echo install python3
     sudo apt -y update
     sudo apt -y upgrade
 
-    sudo apt -y install libcairo2-dev
-    sudo apt -y install libgirepository1.0-dev
-    sudo apt -y install python3-distutils-extra
-
-    sudo apt -y install python3-pip
-    pip3 install --upgrade pip
+    sudo apt -y install python3-pip && \
+    pip3 install --upgrade pip && \
     pip3 freeze | cut -d'=' -f1 | xargs pip3 install --upgrade
     pip3 install jupyterlab
 }
 
 jenkins() {
     pip install jenkins python-jenkins wcmatch configobj
-}
-
-tools() {
-    echo update
-    sudo apt -y update
-    sudo apt -y upgrade
-
-    sudo apt -y install net-tools krusader barrier qemu-kvm virt-viewer cifs-utils
 }
 
 chrome() {
@@ -114,15 +108,6 @@ docker() {
     sudo apt -y install docker.io docker-compose
     sudo groupadd docker
     sudo usermod -aG docker $USER
-}
-
-scripts() {
-    echo install utility scripts
-    sudo apt -y install git
-    [[ -d $HOME/projects ]] || mkdir $HOME/projects
-    pushd $HOME/projects
-    [[ -d scripts ]] || git clone https://github.com/jskwak/scripts.git
-    popd
 }
 
 local_cmd() {
