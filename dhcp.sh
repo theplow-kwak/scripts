@@ -1,6 +1,17 @@
 #!/bin/bash
 
-result=$(virsh --quiet net-dhcp-leases default)
+runshell()
+{
+    cmd=$1
+    echo "runshell: ${cmd[*]}"
+    ret_stdout=$(${cmd[@]})
+    retcode=$?
+    echo "runshell return code: $retcode, stdout: $ret_stdout"
+    echo " "
+    return $retcode
+}
+
+result=$(runshell "virsh --quiet net-dhcp-leases default")
 SAVEIFS=$IFS; IFS=$'\n'; dhcp_leases=($result); IFS=$SAVEIFS
 
 if [[ ${#dhcp_leases[@]} > 0 && $1 ]]; then
@@ -16,3 +27,13 @@ else
         echo "${dhcp}"
     done
 fi
+
+SSHPORT=${1:-5900}
+SPICEPORT=$(($SSHPORT+1))
+
+while (runshell "lsof -w -i :$SPICEPORT") || (runshell "lsof -w -i :$SSHPORT"); do 
+    echo "increase port number: $SSHPORT"
+    SSHPORT=$(($SSHPORT+2))
+    SPICEPORT=$(($SSHPORT+1)); done 
+
+echo "final port number: $SSHPORT, $SPICEPORT"

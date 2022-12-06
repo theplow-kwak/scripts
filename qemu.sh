@@ -127,6 +127,17 @@ set_images()
     _index=0
 }
 
+runshell()
+{
+    cmd=$1
+    echo "runshell: ${cmd[*]}"
+    ret_stdout=$(${cmd[@]})
+    retcode=$?
+    echo "runshell return code: $retcode, stdout: $ret_stdout"
+    echo " "
+    return $retcode
+}
+
 set_qemu()
 {
     [[ $args_qemu -eq 1 ]] && qemu_exe=("qemu-system-$args_arch") || qemu_exe=("$HOME/qemu/bin/qemu-system-$args_arch")
@@ -241,8 +252,8 @@ check_file()
     local filename=$1
     local size=$2
     
-    [[ -e $filename ]] || (qemu-img create -f raw ${filename} ${size}G)
-    if ! (lsof -w $filename >& /dev/null); then
+    [[ -e $filename ]] || (runshell "qemu-img create -f raw ${filename} ${size}G")
+    if ! (runshell "lsof -w $filename"); then
         return 0; fi
     return 1
 }
@@ -367,7 +378,7 @@ set_net()
     [[ -n $dhcp_chk ]] && localip=${dhcp_chk[4]%/*}
 
     if [[ $_set -eq 1 ]]; then
-        while (lsof -i :$SSHPORT > /dev/null) || (lsof -i :$SPICEPORT > /dev/null); do 
+        while (runshell "lsof -w -i :$SPICEPORT") || (runshell "lsof -w -i :$SSHPORT"); do 
             SSHPORT=$(($SSHPORT+2))
             SPICEPORT=$(($SSHPORT+1)); done 
         case $args_net in 
@@ -414,7 +425,7 @@ findProc()
     local _PROCID=$1
     local _timeout=${2:-10}
     
-    until (ps -C $_PROCID > /dev/null); do 
+    until (runshell "ps -C $_PROCID"); do 
         ((_timeout--))
         [[ $_timeout < 0 ]] && return 1
         sleep 1
@@ -426,7 +437,7 @@ checkConn()
 {
     local _timeout=${1:-10}
     [[ -n $SSH_CONNECT ]] || return 0
-    until (ping -c 1 $SSH_CONNECT > /dev/null); do
+    until (runshell "ping -c 1 $SSH_CONNECT"); do
         ((_timeout--))
         [[ $_timeout < 0 ]] && return 1
         sleep 1
