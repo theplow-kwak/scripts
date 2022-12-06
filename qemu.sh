@@ -303,7 +303,7 @@ set_virtiofs()
     if [[ $args_debug == 'cmd' ]]; then
         (IFS=\|; echo "${virtiofsd[*]}")
     else
-        ("${virtiofsd[@]}")&
+        (runshell "${virtiofsd[*]}")&
         until [[ -e "/tmp/virtiofs_${vmuid}.sock" ]]; do 
             sleep 1
             echo "wating for /tmp/virtiofs_${vmuid}.sock"; done
@@ -518,7 +518,7 @@ run()
             if [[ -z ${completed} ]] && (findProc $vmprocid); then
                 if [[ $args_connect == 'ssh' ]]; then
                     checkConn 60; fi
-                ("${_qemu_connect[@]}")&
+                (runshell "${_qemu_connect[*]}")&
             fi
         fi
     fi
