@@ -6,6 +6,23 @@ setup_qemu()
     sudo apt install -y virt-viewer    
 }
 
+declare -A log_level=([debug]=1 [cmd]=2 [info]=2 [warning]=3 [error]=4)
+
+set_logger()
+{
+    [[ -v "log_level[$1]" ]] && current_level=${log_level[$1]} || current_level=${log_level['warning']}
+}
+
+mylogger()
+{
+    _log_level=${log_level[$1]}
+    _log_message=$2
+
+    if [[ $_log_level -ge $current_level ]]; then
+        echo "${_log_message}"
+    fi
+}
+
 usage()
 {
 cat << EOM
@@ -88,6 +105,7 @@ set_args()
         args_images+=($1)
         shift
     done
+    set_logger $args_debug
 }
 
 set_images()
@@ -110,13 +128,13 @@ set_images()
     done
     
     _boot_dev=("${vmimages[@]}" "${vmnvme[@]}" "${vmcdimages[@]}" "${vmkernel[@]}")
-    (IFS=:; echo "vmimages: ${vmimages[*]}")
-    (IFS=:; echo "vmcdimages: ${vmcdimages[*]}")
-    (IFS=:; echo "vmnvme: ${vmnvme[*]}")
-    (IFS=:; echo "vmkernel: ${vmkernel[*]}")
-    (IFS=:; echo "boot_dev: ${_boot_dev[*]}")
+    mylogger info "vmimages: ${vmimages[*]}"
+    mylogger info "vmcdimages: ${vmcdimages[*]}"
+    mylogger info "vmnvme: ${vmnvme[*]}"
+    mylogger info "vmkernel: ${vmkernel[*]}"
+    mylogger info "boot_dev: ${_boot_dev[*]}"
     if [[ -z $_boot_dev ]] && [[ -z $vmkernel ]]; then
-        printf "There is no Boot device!!\n" && exit 1
+        mylogger error "There is no Boot device!!" ; exit 1
     fi
     boot_0=$(realpath ${_boot_dev[0]})
     vmname=${boot_0##*/} ; vmname=${vmname%.*}
@@ -130,18 +148,22 @@ set_images()
 runshell()
 {
     cmd=$1
-    echo "runshell: ${cmd[*]}"
-    ret_stdout=$(${cmd[@]})
-    retcode=$?
-    echo "runshell return code: $retcode, stdout: $ret_stdout"
-    echo " "
-    return $retcode
+    if [[ $2 == 'True' ]]; then
+        mylogger debug "runshell Async: ${cmd[@]}"
+        (${cmd[@]})& 
+        ret=0
+    else
+        mylogger debug "runshell: ${cmd[@]}"
+        completed_stdout=$(${cmd[@]}); returncode=$?
+        mylogger debug "Return code: $returncode, stdout: $completed_stdout"
+    fi
+    return $returncode
 }
 
 set_qemu()
 {
     [[ $args_qemu -eq 1 ]] && qemu_exe=("qemu-system-$args_arch") || qemu_exe=("$HOME/qemu/bin/qemu-system-$args_arch")
-    (which $qemu_exe >& /dev/null) || { echo $qemu_exe was not installed!! ; exit 1; }
+    (which $qemu_exe >& /dev/null) || { mylogger error $qemu_exe was not installed!! ; exit 1; }
 
     params=("-name $vmname,process=$vmprocid")
     case $args_arch in
@@ -301,12 +323,12 @@ set_virtiofs()
     virtiofsd=(sudo $G_TERM --geometry=80x24+5+5 -- 
         $HOME/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$HOME)
     if [[ $args_debug == 'cmd' ]]; then
-        (IFS=\|; echo "${virtiofsd[*]}")
+        echo "${virtiofsd[*]}"
     else
-        (runshell "${virtiofsd[*]}")&
+        (runshell "${virtiofsd[*]}" 'True')
         until [[ -e "/tmp/virtiofs_${vmuid}.sock" ]]; do 
             sleep 1
-            echo "wating for /tmp/virtiofs_${vmuid}.sock"; done
+            mylogger debug "wating for /tmp/virtiofs_${vmuid}.sock"; done
     fi
     _virtiofs=("-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock"
         "-device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs"
@@ -373,9 +395,13 @@ set_net()
     [ -f /tmp/${vmprocid}_SSH ] && SSHPORT=$(< /tmp/${vmprocid}_SSH) || SSHPORT=5900
     SPICEPORT=$(($SSHPORT+1))
     macaddr="52:54:00:${vmguid::2}:${vmguid:2:2}:${vmguid:4:2}"
-    _tmp=($(ip r g 1.0.0.0)) && hostip=${_tmp[6]} || hostip='localhost'
-    dhcp_chk=($(virsh --quiet net-dhcp-leases default --mac ${macaddr}))
+    runshell "ip r g 1.0.0.0"
+    _result=($completed_stdout); [[ ${#_result[@]} ]] && hostip=${_result[6]} || hostip='localhost'
+    mylogger info "hostip: ${hostip}"
+    runshell "virsh --quiet net-dhcp-leases default --mac ${macaddr}"; _result=$completed_stdout
+    SAVEIFS=$IFS; IFS=$'\n'; dhcp_leases=($_result); IFS=$SAVEIFS ; [[ $dhcp_leases ]] && dhcp_chk=(${dhcp_leases[-1]})
     [[ -n $dhcp_chk ]] && localip=${dhcp_chk[4]%/*}
+    mylogger info "localip: ${localip}"
 
     if [[ $_set -eq 1 ]]; then
         while (runshell "lsof -w -i :$SPICEPORT") || (runshell "lsof -w -i :$SSHPORT"); do 
@@ -407,7 +433,7 @@ set_connect()
             opts=("${opts[@]/"-monitor stdio"}")
             opts=("${opts[@]/"-vga $args_vga"}")
             opts+=("-nographic -serial mon:stdio")
-            [[ $args_net != "user" && -n $localip ]] && SSH_CONNECT=$localip || SSH_CONNECT="${hostip} -p $SSHPORT" 
+            [[ $args_net == "user" ]] && SSH_CONNECT="${hostip} -p $SSHPORT" || { [[ -n $localip ]] && SSH_CONNECT=$localip ; }
             CHKPORT=$SSHPORT
             T_TITLE="${vmname}:${CHKPORT}"
             CONNECT=($G_TERM --
@@ -418,6 +444,8 @@ set_connect()
             CONNECT=(
                 remote-viewer -t ${T_TITLE} spice://${hostip}:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1") ;;
     esac
+    mylogger info "${T_TITLE}"
+    mylogger info "${CONNECT[*]}"
 }
 
 findProc()
@@ -426,10 +454,12 @@ findProc()
     local _timeout=${2:-10}
     
     until (runshell "ps -C $_PROCID"); do 
+        mylogger debug "findProc timeout ${_timeout}"
         ((_timeout--))
         [[ $_timeout < 0 ]] && return 1
         sleep 1
     done
+    mylogger debug "findProc return 1"
     return 0
 }
 
@@ -518,7 +548,7 @@ run()
             if [[ -z ${completed} ]] && (findProc $vmprocid); then
                 if [[ $args_connect == 'ssh' ]]; then
                     checkConn 60; fi
-                (runshell "${_qemu_connect[*]}")&
+                (runshell "${_qemu_connect[*]}" 'True')
             fi
         fi
     fi
