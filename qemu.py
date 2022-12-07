@@ -54,7 +54,7 @@ class QEMU():
         parser.add_argument("--tpm", action='store_true',                       help = "Support TPM device for windows 11")
         parser.add_argument('--arch', '-a', default='x86_64', choices=['x86_64', 'aarch64', 'arm'],                         help = "The architecture of target VM.")
         parser.add_argument("--connect", default='spice', choices=['ssh', 'spice'],                                         help = "Connection method - 'ssh' 'spice'(default)")
-        parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info', 'test'],  help = "Set the logging level. (default: 'warning')")
+        parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info', 'warning'],  help = "Set the logging level. (default: 'warning')")
         parser.add_argument("--ipmi", choices=['internal', 'external'],         help = "IPMI model - 'external', 'internal'")
         parser.add_argument("--machine", default='q35', choices=['q35', 'ubuntu-q35', 'pc', 'ubuntu'],                      help = "IPMI model - 'external', 'internal'")
         parser.add_argument("--net", default='bridge', choices=['user', 'u', 'tap', 't', 'bridge', 'b'],                    help = "Network interface model - 'user', 'tap', 'bridge'")
@@ -67,7 +67,9 @@ class QEMU():
         parser.add_argument('--pcihost',                                        help = "PCI passthrough") 
         parser.add_argument("--numns", type=int,                                help = "Set the numbers of NVMe namespace")
         self.args = parser.parse_args()
-        if self.args.debug != 'cmd':
+        if self.args.debug == 'cmd':
+            mylogger.setLevel('INFO')
+        else:
             mylogger.setLevel(self.args.debug.upper())
         if self.args.numns:
             self.use_nvme = 1
@@ -105,15 +107,14 @@ class QEMU():
 
     def runshell(self, cmd, _async=False):
         if isinstance(cmd, list): cmd = ' '.join(cmd)
-        mylogger.debug(f"runshell: {cmd}")
         _cmd = shlex.split(cmd)
         if _async:
+            mylogger.debug(f"runshell Async: {cmd}")
             completed = subprocess.Popen(_cmd)
         else:
-            completed = subprocess.run(
-                _cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            mylogger.debug(
-                f"Return code {completed.returncode}: {completed.stdout}")
+            mylogger.debug(f"runshell: {cmd}")
+            completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}")
         return completed
 
     def set_qemu(self):
@@ -255,12 +256,12 @@ class QEMU():
         virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --"] + \
             [f"{str(Path.home())}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={str(Path.home())}"]
         if self.args.debug == 'cmd':
-            print('|'.join(virtiofsd))
+            print(' '.join(virtiofsd))
         else:
             self.runshell(virtiofsd, True)
             while not Path(f"/tmp/virtiofs_{self.vmuid}.sock").exists():
                 sleep(1)
-                print("wating for /tmp/virtiofs_{self.vmuid}.sock")
+                mylogger.debug("wating for /tmp/virtiofs_{self.vmuid}.sock")
         _virtiofs = [f"-chardev socket,id=char{self.vmuid},path=/tmp/virtiofs_{self.vmuid}.sock",
             f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
             "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem"]
@@ -318,10 +319,11 @@ class QEMU():
         self.macaddr = f"52:54:00:{self.vmguid[0:2]}:{self.vmguid[2:4]}:{self.vmguid[4:6]}"
         _result = self.runshell("ip r g 1.0.0.0")
         self.hostip = _result.stdout.split()[6] if _result.returncode == 0 else 'localhost'
-        mylogger.debug(f"hostip: {self.hostip}")
-        dhcp_chk = self.runshell(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
-        self.localip = dhcp_chk.stdout.split()[4].split('/')[0] if dhcp_chk.stdout else None
-        mylogger.debug(f"localip: {self.localip}")
+        mylogger.info(f"hostip: {self.hostip}")
+        _result = self.runshell(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
+        dhcp_chk = _result.stdout.rstrip().split('\n')[-1] if _result.returncode == 0 and _result.stdout else []
+        self.localip = dhcp_chk.split()[4].split('/')[0] if len(dhcp_chk) else None
+        mylogger.info(f"localip: {self.localip}")
 
         if _set:
             while not self.runshell(f"lsof -w -i :{self.SPICEPORT}").returncode or not self.runshell(f"lsof -w -i :{self.SSHPORT}").returncode:
@@ -349,7 +351,7 @@ class QEMU():
                 if "-monitor stdio" in self.opts: self.opts.remove("-monitor stdio")
                 if f"-vga {self.args.vga}" in self.opts: self.opts.remove(f"-vga {self.args.vga}")
                 self.opts += ["-nographic -serial mon:stdio"]
-                self.SSH_CONNECT = self.localip if self.args.net != "user" and self.localip is not None else f"{self.hostip} -p {self.SSHPORT}"
+                self.SSH_CONNECT = f"{self.hostip} -p {self.SSHPORT}" if self.args.net == "user" else self.localip if self.localip is not None else None
                 self.CHKPORT = self.SSHPORT
                 T_TITLE = f"{self.vmname}:{self.CHKPORT}"
                 self.CONNECT = self.G_TERM + ["--"] + \
@@ -364,10 +366,12 @@ class QEMU():
 
     def findProc(self, _PROCID, _timeout=10):
         while self.runshell(f"ps -C {_PROCID}").returncode:
+            mylogger.debug(f"findProc timeout {_timeout}")
             _timeout -= 1
             if _timeout < 0:
                 return 0
             sleep(1)
+        mylogger.debug("findProc return 1")
         return 1
 
     def checkConn(self, timeout=10):
