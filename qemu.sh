@@ -2,8 +2,8 @@
 
 setup_qemu()
 {
-    sudo apt install -y qemu-kvm
-    sudo apt install -y virt-viewer    
+    $SUDO apt install -y qemu-kvm
+    $SUDO apt install -y virt-viewer    
 }
 
 declare -A log_level=([debug]=1 [cmd]=2 [info]=2 [warning]=3 [error]=4)
@@ -60,6 +60,7 @@ init()
     args_vga="qxl"
     args_connect="spice"
     args_machine="q35"
+    home_folder="/home/$args_uname"
 }
 
 set_args()
@@ -151,7 +152,8 @@ runshell()
     if [[ $2 == 'True' ]]; then
         mylogger debug "runshell Async: ${cmd[@]}"
         (${cmd[@]})& 
-        ret=0
+        returncode=0
+        sleep 1
     else
         mylogger debug "runshell: ${cmd[@]}"
         completed_stdout=$(${cmd[@]}); returncode=$?
@@ -162,8 +164,9 @@ runshell()
 
 set_qemu()
 {
-    [[ $args_qemu -eq 1 ]] && qemu_exe=("qemu-system-$args_arch") || qemu_exe=("$HOME/qemu/bin/qemu-system-$args_arch")
-    (which $qemu_exe >& /dev/null) || { mylogger error $qemu_exe was not installed!! ; exit 1; }
+    [[ $UID > 0 ]] && SUDO="sudo" || SUDO=
+    [[ $args_qemu -eq 1 ]] && qemu_exe=("qemu-system-$args_arch") || qemu_exe=("$home_folder/qemu/bin/qemu-system-$args_arch")
+    (which $qemu_exe >& /dev/null) || { mylogger error "$qemu_exe was not installed!!" ; exit 1; }
 
     params=("-name $vmname,process=$vmprocid")
     case $args_arch in
@@ -320,8 +323,8 @@ set_nvme()
 
 set_virtiofs()
 {
-    virtiofsd=(sudo $G_TERM --geometry=80x24+5+5 -- 
-        $HOME/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$HOME)
+    virtiofsd=($SUDO $G_TERM --geometry=80x24+5+5 -- 
+        $home_folder/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$home_folder)
     if [[ $args_debug == 'cmd' ]]; then
         echo "${virtiofsd[*]}"
     else
@@ -364,7 +367,7 @@ set_spice()
         "-device virtio-serial"
         "-device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0")
     SHARE0=(
-        "-virtfs local,id=fsdev0,path=$HOME,security_model=passthrough,writeout=writeout,mount_tag=host")
+        "-virtfs local,id=fsdev0,path=$home_folder,security_model=passthrough,writeout=writeout,mount_tag=host")
     params+=(${SPICE[@]} ${SPICE_AGENT[@]})
 }
 
@@ -410,11 +413,11 @@ set_net()
         case $args_net in 
             "user"|"u" )
                 NET=(
-                    "-nic user,model=virtio-net-pci,mac=$macaddr,smb=$HOME,hostfwd=tcp::${SSHPORT}-:22") ;;
+                    "-nic user,model=virtio-net-pci,mac=$macaddr,smb=$home_folder,hostfwd=tcp::${SSHPORT}-:22") ;;
             "tap"|"t" )
                 NET=(
-                    "-nic tap,model=virtio-net-pci,mac=$macaddr,script=$HOME/projects/scripts/qemu-ifup") ;;
-                    # ,downscript=$HOME/vm/share/qemu-ifdown  ;;
+                    "-nic tap,model=virtio-net-pci,mac=$macaddr,script=$home_folder/projects/scripts/qemu-ifup") ;;
+                    # ,downscript=$home_folder/vm/share/qemu-ifdown  ;;
             "bridge"|"b" )
                 NET=(
                     "-nic bridge,br=virbr0,model=virtio-net-pci,mac=$macaddr") ;;
@@ -492,11 +495,11 @@ set_pcipass()
 {
     [[ -z $args_pcihost ]] && return 
     # unbind 0000:0x:00.0 from xhci_hcd kernel module
-    _driver_=$(sudo lspci -k -s $args_pcihost | awk '/Kernel driver.*/{print $NF}')
-    sudo -S sh -c "echo '$args_pcihost' > /sys/bus/pci/drivers/$_driver_/unbind"
+    _driver_=$($SUDO lspci -k -s $args_pcihost | awk '/Kernel driver.*/{print $NF}')
+    $SUDO -S sh -c "echo '$args_pcihost' > /sys/bus/pci/drivers/$_driver_/unbind"
     # bind 0000:0x:00.0 to vfio-pci kernel module
-    DEVID=$(sudo lspci -ns $args_pcihost | awk '//{print $NF}' | awk -F: '{print "%s %s", $1, $2}')
-    sudo -S sh -c "echo '$DEVID' > /sys/bus/pci/drivers/vfio-pci/new-id"
+    DEVID=$($SUDO lspci -ns $args_pcihost | awk '//{print $NF}' | awk -F: '{print "%s %s", $1, $2}')
+    $SUDO -S sh -c "echo '$DEVID' > /sys/bus/pci/drivers/vfio-pci/new-id"
     
     PCIPASS=" -device vfio-pci,host=$args_pcihost,multifunction=on"
     params+=($PCIPASS)
@@ -533,7 +536,7 @@ setting()
 run()
 {
     if ! (findProc $vmprocid 0); then
-        _qemu_command=('sudo' $( [[ $args_debug != 'debug' ]] && echo $G_TERM -- )
+        _qemu_command=($SUDO $( [[ $args_debug != 'debug' ]] && echo $G_TERM -- )
             $qemu_exe ${params[@]} ${opts[@]} ${KERNEL[@]} "${PARAM[@]}")
         if [[ $args_debug == 'cmd' ]]; then
             (IFS=\|; echo "${_qemu_command[*]}")
