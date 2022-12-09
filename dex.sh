@@ -73,9 +73,12 @@ get_display()
 
 launch_app()
 {
+    # adb shell dumpsys package com.farmerbb.taskbar > temp/taskbar.txt
     # adb shell am start-activity --display $display com.android.chrome  com.sec.android.app.dexonpc
+    # com.sec.android.app.launcher/.activities.LauncherActivity
     app=${1:-"com.sec.android.app.sbrowser"}
-    adb shell am start-activity --display $display $app --windowingMode 1 
+    adb shell am start --display $display -n com.farmerbb.taskbar/.activity.SecondaryHomeActivity --windowingMode 1
+    adb shell am start-activity --display $display $app --windowingMode 1
 }
 
 connect_screen()
@@ -87,7 +90,8 @@ connect_screen()
 set_secondscreen()
 {
     adb shell pm grant com.farmerbb.taskbar android.permission.WRITE_SECURE_SETTINGS
-    adb shell pm grant com.farmerbb.secondscreen.free android.permission.WRITE_SECURE_SETTINGS    
+    adb shell pm grant com.farmerbb.secondscreen.free android.permission.WRITE_SECURE_SETTINGS 
+    # adb shell pm set-home-activity "com.farmerbb.taskbar/.activity.SecondaryHomeActivity"
 }
 
 if ! (adb devices | grep ".*device$"); then
