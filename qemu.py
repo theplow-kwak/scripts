@@ -43,6 +43,7 @@ class QEMU():
         self.opts = []
         self.KERNEL = []
         self.index = self.use_nvme = 0
+        self.home_folder = f"/home/{os.getlogin()}"
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -58,7 +59,7 @@ class QEMU():
         parser.add_argument("--ipmi", choices=['internal', 'external'],         help = "IPMI model - 'external', 'internal'")
         parser.add_argument("--machine", default='q35', choices=['q35', 'ubuntu-q35', 'pc', 'ubuntu'],                      help = "IPMI model - 'external', 'internal'")
         parser.add_argument("--net", default='bridge', choices=['user', 'u', 'tap', 't', 'bridge', 'b'],                    help = "Network interface model - 'user', 'tap', 'bridge'")
-        parser.add_argument("--uname", '-u', default=getpass.getuser(),         help = "Set login user name")
+        parser.add_argument("--uname", '-u', default=os.getlogin(),             help = "Set login user name")
         parser.add_argument("--vga", default='qxl', choices=['qxl', 'virtio'],  help = "Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
         parser.add_argument("--stick",                                          help = "Set the USB storage image")
         parser.add_argument('images', metavar='IMAGES', nargs='+',              help = "Set the VM images")
@@ -111,6 +112,7 @@ class QEMU():
         if _async:
             mylogger.debug(f"runshell Async: {cmd}")
             completed = subprocess.Popen(_cmd)
+            sleep(1)
         else:
             mylogger.debug(f"runshell: {cmd}")
             completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -119,7 +121,7 @@ class QEMU():
 
     def set_qemu(self):
         self.sudo = ["sudo"] if os.getuid() else []
-        self.qemu_exe = [f"qemu-system-{self.args.arch}"] if self.args.qemu else [f"{str(Path.home())}/qemu/bin/qemu-system-{self.args.arch}"]
+        self.qemu_exe = [f"qemu-system-{self.args.arch}"] if self.args.qemu else [f"{self.home_folder}/qemu/bin/qemu-system-{self.args.arch}"]
         self.params = [f"-name {self.vmname},process={self.vmprocid}"]
 
         match self.args.arch:
@@ -254,7 +256,7 @@ class QEMU():
 
     def set_virtiofs(self):
         virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --"] + \
-            [f"{str(Path.home())}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={str(Path.home())}"]
+            [f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"]
         if self.args.debug == 'cmd':
             print(' '.join(virtiofsd))
         else:
@@ -291,7 +293,7 @@ class QEMU():
             "-device virtio-serial",
             "-device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"]
         SHARE0 = [
-            f"-virtfs local,id=fsdev0,path={str(Path.home())},security_model=passthrough,writeout=writeout,mount_tag=host"]
+            f"-virtfs local,id=fsdev0,path={self.home_folder},security_model=passthrough,writeout=writeout,mount_tag=host"]
         self.params += SPICE + SPICE_AGENT
 
     def set_tpm(self):
@@ -332,16 +334,17 @@ class QEMU():
             match self.args.net:
                 case "user" | "u":
                     NET = [
-                        f"-nic user,model=virtio-net-pci,mac={self.macaddr},smb={str(Path.home())},hostfwd=tcp::{self.SSHPORT}-:22"]
+                        f"-nic user,model=virtio-net-pci,mac={self.macaddr},smb={self.home_folder},hostfwd=tcp::{self.SSHPORT}-:22"]
                 case "tap" | "t":
                     NET = [
-                        f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={str(Path.home())}/projects/scripts/qemu-ifup"]
+                        f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={self.home_folder}/projects/scripts/qemu-ifup"]
                     # ,downscript=$VMHOME/share/qemu-ifdown
                 case "bridge" | "b":
                     NET = [
                         f"-nic bridge,br=virbr0,model=virtio-net-pci,mac={self.macaddr}"]
             self.params += NET
-            Path(f"/tmp/{self.vmprocid}_SSH").write_text(str(self.SSHPORT))
+            try:    Path(f"/tmp/{self.vmprocid}_SSH").write_text(str(self.SSHPORT))
+            except: pass
 
     def set_connect(self):
         if self.args.arch != "aarch64":
