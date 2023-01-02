@@ -66,7 +66,7 @@ init()
 set_args()
 {
     options=$(getopt --name ${0##*/} --options qa:d:n:u:i:h \
-                    --long bios,consol,qemu,rmssh,tpm,arch:,connect:,debug:,ipmi:,machine:,net:,uname:,vga:,stick:,images:,nvme:,kernel:,pci:,numns:,help -- "$@")
+                    --long bios,consol,noshare,qemu,rmssh,tpm,arch:,connect:,debug:,ipmi:,machine:,net:,uname:,vga:,stick:,images:,nvme:,kernel:,pci:,numns:,help -- "$@")
     [ $? != 0 ] && { 
         usage
         exit 1
@@ -78,6 +78,7 @@ set_args()
             # Command line argment parsing
             --bios )        args_bios=1 ;;                          # Using legacy BIOS instead of UEFI
             --consol )      args_consol=1 ;;                        # Used the current terminal as the consol I/O
+            --noshare )     args_noshare=1 ;;                       # Do not support virtiofs
             --qemu | -q )   args_qemu=1 ;;                          # Use the qemu public distribution
             --rmssh )       args_rmssh=1 ;;                         # Remove existing SSH key 
             --tpm )         args_tpm=1 ;;                           # Support TPM device for windows 11
@@ -178,6 +179,7 @@ set_qemu()
             params+=("-machine type=${args_machine},accel=kvm,usb=on -device intel-iommu")
             params+=("-cpu host --enable-kvm")
             params+=("-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0") ;;
+			opts+=("-vga $args_vga")
     esac
     _numcore=$(($(nproc)/2))
     params+=(
@@ -429,8 +431,6 @@ set_net()
 
 set_connect()
 {
-    if [[ $args_arch != "aarch64" ]] && [[ ! " ${opts[@]} " =~ " -vga $args_vga " ]]; then
-        opts+=("-vga $args_vga"); fi
     case $args_connect in
         "ssh" )
             opts=("${opts[@]/"-monitor stdio"}")
@@ -438,16 +438,16 @@ set_connect()
             opts+=("-nographic -serial mon:stdio")
             [[ $args_net == "user" ]] && SSH_CONNECT="${hostip} -p $SSHPORT" || { [[ -n $localip ]] && SSH_CONNECT=$localip ; }
             CHKPORT=$SSHPORT
-            T_TITLE="${vmname}:${CHKPORT}"
             CONNECT=($G_TERM --
 				ssh $args_uname@${SSH_CONNECT}) ;;
         "spice" )
             CHKPORT=$SPICEPORT
-            T_TITLE="${vmname}:${CHKPORT}"
             CONNECT=(
-                remote-viewer -t ${T_TITLE} spice://${hostip}:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1") ;;
+                remote-viewer -t $vmprocid spice://${hostip}:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1") ;;
+        "qemu" )
+            CHKPORT=$SPICEPORT
+            CONNECT=("")
     esac
-    mylogger info "${T_TITLE}"
     mylogger info "${CONNECT[*]}"
 }
 
@@ -519,7 +519,7 @@ setting()
         set_cdrom
         set_nvme
         set_usb_storage
-        set_virtiofs
+        [[ $args_noshare != 1 ]] && set_virtiofs
         set_net 1
         set_ipmi
         [[ $args_connect == "spice" ]] && set_spice
@@ -539,14 +539,14 @@ run()
         _qemu_command=($SUDO $( [[ $args_debug != 'debug' ]] && echo $G_TERM -- )
             $qemu_exe ${params[@]} ${opts[@]} ${KERNEL[@]} "${PARAM[@]}")
         if [[ $args_debug == 'cmd' ]]; then
-            (IFS=\|; echo "${_qemu_command[*]}")
+            (IFS=' '; echo "${_qemu_command[*]}")
         else
             completed=$("${_qemu_command[@]}"); fi
     fi
     if [[ -n $CONNECT ]]; then
         _qemu_connect=(${CONNECT[*]})
         if [[ $args_debug == 'cmd' ]]; then
-            (IFS=\|; echo "${_qemu_connect[*]}")
+            (IFS=' '; echo "${_qemu_connect[*]}")
         else
             if [[ -z ${completed} ]] && (findProc $vmprocid); then
                 if [[ $args_connect == 'ssh' ]]; then
