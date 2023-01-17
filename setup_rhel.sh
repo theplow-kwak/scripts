@@ -89,6 +89,18 @@ gitkraken() {
     sudo yum -y install ./gitkraken-amd64.rpm
 }
 
+docker()
+{
+    echo install docker
+    sudo yum install -y yum-utils
+    sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    sudo groupadd docker
+    sudo usermod -aG docker $USER
+    sudo systemctl enable docker.service
+    sudo systemctl enable containerd.service
+}
+
 pymssql() {
     sudo rpm -Uvh https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/e/epel-release-7-12.noarch.rpm && \
     sudo yum -y install python2-pymssql
@@ -97,7 +109,8 @@ pymssql() {
 local_cmd() {
     [[ -d $HOME/.local/bin ]] || mkdir -p $HOME/.local/bin
     pushd $HOME/.local/bin
-    for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
+	for file in ~/projects/scripts/*.py; do name=${file##*/}; [[ -e ${name%%.*} ]] || ln -s $file ${name%%.*}; done
+	for file in ~/projects/scripts/*.sh; do name=${file##*/}; [[ -e ${name%%.*} ]] || ln -s $file ${name%%.*}; done
     popd
 }
 
