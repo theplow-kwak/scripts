@@ -29,6 +29,7 @@ docker_run()
     docker_cmd=(
         docker run -it --user $(whoami) 
         -v /etc/ssl/certs:/etc/ssl/certs:ro)
+    [[ -d /etc/pki/ca-trust ]] && docker_cmd+=(-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro)
     [[ -n $SHAREFOLDER ]] && docker_cmd+=(--mount type=bind,source="${SHAREFOLDER}",target=/host)
     docker_cmd+=(
         --name "${CONTAINER}" ${DOCKERNAME} /bin/bash)
@@ -95,7 +96,7 @@ if [[ $removecnt ]] || [[ $removeimg ]]; then
     exit
 fi
 
-[[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && build_image
+[[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { build_image ; usage ; docker images ; exit ;}
 [[ $(docker ps -aq --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
 [[ $(docker ps --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || docker start ${CONTAINER}
 
