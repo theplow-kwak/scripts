@@ -1078,6 +1078,14 @@ p4 client -o ${P4CLIENT}
     ```bash
     git -c http.sslVerify=false clone https://example.com/path/to/git
     ```
+    
+    or 
+    
+    ```bash
+    git config --global http.sslVerify false
+    ```
+    
+    
 
 - 'wget' 사용시 fail 회피 방안
 
