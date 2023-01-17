@@ -54,7 +54,7 @@ class QEMU():
         parser.add_argument("--qemu", '-q', action='store_true',                help = "Use the qemu public distribution")
         parser.add_argument("--rmssh", action='store_true',                     help = "Remove existing SSH key")
         parser.add_argument("--tpm", action='store_true',                       help = "Support TPM device for windows 11")
-        parser.add_argument('--arch', '-a', default='x86_64', choices=['x86_64', 'aarch64', 'arm'],                         help = "The architecture of target VM.")
+        parser.add_argument("--arch", '-a', default='x86_64', choices=['x86_64', 'aarch64', 'arm'],                         help = "The architecture of target VM.")
         parser.add_argument("--connect", default='spice', choices=['ssh', 'spice', 'qemu'],                                 help = "Connection method - 'spice'(default)")
         parser.add_argument("--debug", '-d', nargs='?', const='info', default='warning', choices=['cmd', 'debug', 'info', 'warning'],  help = "Set the logging level. (default: 'warning')")
         parser.add_argument("--ipmi", choices=['internal', 'external'],         help = "IPMI model - 'external', 'internal'")
@@ -63,10 +63,10 @@ class QEMU():
         parser.add_argument("--uname", '-u', default=os.getlogin(),             help = "Set login user name")
         parser.add_argument("--vga", default='qxl', help = "Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
         parser.add_argument("--stick",                                          help = "Set the USB storage image")
-        parser.add_argument('images', metavar='IMAGES', nargs='+',              help = "Set the VM images")
-        parser.add_argument('--nvme',                                           help = "Set the NVMe images")
-        parser.add_argument('--kernel', dest='vmkernel',                        help = "Set the Linux Kernel image") 
-        parser.add_argument('--pcihost',                                        help = "PCI passthrough") 
+        parser.add_argument("images", metavar='IMAGES', nargs='+',              help = "Set the VM images")
+        parser.add_argument("--nvme",                                           help = "Set the NVMe images")
+        parser.add_argument("--kernel", dest='vmkernel',                        help = "Set the Linux Kernel image") 
+        parser.add_argument("--pcihost",                                        help = "PCI passthrough") 
         parser.add_argument("--numns", type=int,                                help = "Set the numbers of NVMe namespace")
         self.args = parser.parse_args()
         if self.args.debug == 'cmd':
@@ -138,7 +138,6 @@ class QEMU():
         _numcore = int(os.cpu_count() / 2)
         self.params += [
             f"-m 8G -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults"]
-        self.opts += ["-monitor stdio"]
 
     def set_uefi(self):
         match self.args.arch:
@@ -351,7 +350,6 @@ class QEMU():
     def set_connect(self):
         match self.args.connect:
             case "ssh":
-                if "-monitor stdio" in self.opts: self.opts.remove("-monitor stdio")
                 if f"-vga {self.args.vga}" in self.opts: self.opts.remove(f"-vga {self.args.vga}")
                 self.opts += ["-nographic -serial mon:stdio"]
                 self.SSH_CONNECT = f"{self.hostip} -p {self.SSHPORT}" if self.args.net == "user" else self.localip if self.localip is not None else None
@@ -359,10 +357,12 @@ class QEMU():
                 self.CONNECT = self.G_TERM + ["--"] + \
                     [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
             case "spice":
+                self.opts += ["-monitor stdio"]
                 self.CHKPORT = self.SPICEPORT
                 self.CONNECT = [
                     f"remote-viewer -t {self.vmprocid} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1"]
             case "qemu":
+                self.opts += ["-monitor stdio"]
                 self.CHKPORT = self.SPICEPORT
                 self.CONNECT = [""]               
         mylogger.info(self.CONNECT)
