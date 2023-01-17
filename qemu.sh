@@ -169,22 +169,21 @@ set_qemu()
     [[ $args_qemu -eq 1 ]] && qemu_exe=("qemu-system-$args_arch") || qemu_exe=("$home_folder/qemu/bin/qemu-system-$args_arch")
     (which $qemu_exe >& /dev/null) || { mylogger error "$qemu_exe was not installed!!" ; exit 1; }
 
-    params=("-name $vmname,process=$vmprocid")
+    params=(-name $vmname,process=$vmprocid)
     case $args_arch in
         "arm" )
-            params+=("-machine virt -cpu cortex-a53 -device ramfb") ;;
+            params+=(-machine virt -cpu cortex-a53 -device ramfb) ;;
         "aarch64" )
-            params+=("-machine virt -cpu cortex-a72 -device ramfb") ;;
+            params+=(-machine virt -cpu cortex-a72 -device ramfb) ;;
         "x86_64" )
-            params+=("-machine type=${args_machine},accel=kvm,usb=on -device intel-iommu")
-            params+=("-cpu host --enable-kvm")
-            params+=("-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0") ;;
-			opts+=("-vga $args_vga")
+            params+=(-machine type=${args_machine},accel=kvm,usb=on -device intel-iommu)
+            params+=(-cpu host --enable-kvm)
+            params+=(-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0)
+			opts+=(-vga $args_vga) ;;
     esac
     _numcore=$(($(nproc)/2))
     params+=(
-        "-m 8G -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults")
-    opts+=("-monitor stdio")
+        -m 8G -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults)
 }
 
 set_uefi()
@@ -200,19 +199,19 @@ set_uefi()
             return ;;
     esac
     _UEFI=(
-        "-bios $_OVMF_CODE")
+        -bios $_OVMF_CODE)
     params+=(${_UEFI[@]})
 }
 
 set_usb3()
 {
-    _USB=("-device qemu-xhci,id=usb3")
+    _USB=(-device qemu-xhci,id=usb3)
     _USB_REDIR=(
-        "-chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1"
-        "-chardev spicevmc,name=usbredir,id=usbredirchardev2 -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2"
-        "-chardev spicevmc,name=usbredir,id=usbredirchardev3 -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3"
-        "-chardev spicevmc,name=usbredir,id=usbredirchardev4 -device usb-redir,chardev=usbredirchardev4,id=usbredirdev4")
-    _USB_PT=("-device usb-host,hostbus=3,hostport=1")
+        -chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1
+        -chardev spicevmc,name=usbredir,id=usbredirchardev2 -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2
+        -chardev spicevmc,name=usbredir,id=usbredirchardev3 -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3
+        -chardev spicevmc,name=usbredir,id=usbredirchardev4 -device usb-redir,chardev=usbredirchardev4,id=usbredirdev4)
+    _USB_PT=(-device usb-host,hostbus=3,hostport=1)
     params+=(${_USB[@]} ${_USB_REDIR[@]})
 }
 
@@ -220,8 +219,8 @@ set_usb_storage()
 {
     if [[ $args_stick ]] && [[ -e $args_stick ]]; then
         _STICK=(
-            "-drive file=$args_stick,if=none,format=raw,id=stick$_index"
-            "-device usb-storage,drive=stick$_index")
+            -drive file=$args_stick,if=none,format=raw,id=stick$_index
+            -device usb-storage,drive=stick$_index)
         ((_index++))
         params+=(${_STICK[@]})
     fi
@@ -230,29 +229,29 @@ set_usb_storage()
 set_usb_arm()
 {
     _USB=(
-        "-device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet")
+        -device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet)
     params+=(${_USB[@]})
 }
 
 set_disks()
 {
     _SCSI=(
-        "-object iothread,id=iothread0 -device virtio-scsi-pci,id=scsi0,iothread=iothread0")
+        -object iothread,id=iothread0 -device virtio-scsi-pci,id=scsi0,iothread=iothread0)
     _DISKS=()
     for _image in ${vmimages[@]}; do
         case $_image in
             *.qcow2 | *.QCOW2)
                 _DISKS+=(
-                    "-drive file=$_image,cache=writeback,id=drive-$_index")   ;;
+                    -drive file=$_image,cache=writeback,id=drive-$_index)   ;;
             *.vhdx | *.VHDX)
                 _DISKS+=(
-                    "-drive file=$_image,if=none,id=drive-$_index"
-                    "-device nvme,drive=drive-$_index,serial=nvme-$_index")   ;;
+                    -drive file=$_image,if=none,id=drive-$_index
+                    -device nvme,drive=drive-$_index,serial=nvme-$_index)   ;;
             * )
                 # if [[ -b $_image ]] && [[ $_image != *nvme* ]]; then _disk_type="scsi-hd"; else _disk_type="scsi-hd"; fi
                 _DISKS+=(
-                    "-drive file=$_image,if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-$_index"
-                    "-device scsi-hd,scsi-id=$_index,drive=drive-$_index,id=scsi0-$_index")   ;;
+                    -drive file=$_image,if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-$_index
+                    -device scsi-hd,scsi-id=$_index,drive=drive-$_index,id=scsi0-$_index)   ;;
         esac
         ((_index++))
     done
@@ -265,10 +264,10 @@ set_cdrom()
     _CDROMS=()
     for _image in ${vmcdimages[@]}; do
         _CDROMS+=(
-            "-drive file=$_image,media=cdrom,readonly=on,if=$_IF,index=$_index,id=cdrom$_index")
+            -drive file=$_image,media=cdrom,readonly=on,if=$_IF,index=$_index,id=cdrom$_index)
         if [[ $args_arch != "x86_64" ]]; then
             _CDROMS+=(
-                "-device usb-storage,drive=cdrom$_index") ; fi
+                -device usb-storage,drive=cdrom$_index) ; fi
         ((_index++))
     done
     [[ -n $_CDROMS ]] && params+=(${_CDROMS[@]})
@@ -294,32 +293,32 @@ set_nvme()
 
     _ctrl_id=1
     NVME=(
-        "-device ioh3420,bus=pcie.0,id=root1.0,slot=1"
-        "-device x3130-upstream,bus=root1.0,id=upstream1.0")
+        -device ioh3420,bus=pcie.0,id=root1.0,slot=1
+        -device x3130-upstream,bus=root1.0,id=upstream1.0)
         
     for _NVME in ${vmnvme[@]}; do
         if [[ $args_qemu -eq 1 ]] ; then
             ns_backend=${_NVME}n1.img
             if (check_file $ns_backend $_ns_size); then
                 NVME+=(
-                    "-drive file=$ns_backend,id=${_NVME},format=raw,if=none,cache=none"
-                    "-device nvme,drive=${_NVME},serial=beef${_NVME}"); fi
+                    -drive file=$ns_backend,id=${_NVME},format=raw,if=none,cache=none
+                    -device nvme,drive=${_NVME},serial=beef${_NVME}); fi
         else
             NVME+=(
-                "-device xio3130-downstream,bus=upstream1.0,id=downstream1.$_ctrl_id,chassis=$_ctrl_id,multifunction=on"
-                "-device nvme-subsys,id=nvme-subsys-$_ctrl_id,nqn=subsys$_ctrl_id"
-                "-device nvme,serial=beef${_NVME},id=${_NVME},subsys=nvme-subsys-$_ctrl_id,bus=downstream1.$_ctrl_id")
+                -device xio3130-downstream,bus=upstream1.0,id=downstream1.$_ctrl_id,chassis=$_ctrl_id,multifunction=on
+                -device nvme-subsys,id=nvme-subsys-$_ctrl_id,nqn=subsys$_ctrl_id
+                -device nvme,serial=beef${_NVME},id=${_NVME},subsys=nvme-subsys-$_ctrl_id,bus=downstream1.$_ctrl_id)
             ((_ctrl_id++))
             for ((_nsid=1;_nsid<=$_num_ns;_nsid++)); do
                 ns_backend=${_NVME}n${_nsid}.img
                 if (check_file $ns_backend $_ns_size); then
                     NVME+=(
-                        "-drive file=$ns_backend,id=${_NVME}${_nsid},format=raw,if=none,cache=none"
-                        "-device nvme-ns,drive=${_NVME}${_nsid},bus=${_NVME},nsid=${_nsid}"); fi
+                        -drive file=$ns_backend,id=${_NVME}${_nsid},format=raw,if=none,cache=none
+                        -device nvme-ns,drive=${_NVME}${_nsid},bus=${_NVME},nsid=${_nsid}); fi
             done
         fi
     done
-    [[ -f ./events ]] && NVME+=("--trace events=./events")
+    [[ -f ./events ]] && NVME+=(--trace events=./events)
     [[ -n $NVME ]] && params+=(${NVME[@]})
 }
 
@@ -335,9 +334,9 @@ set_virtiofs()
             sleep 1
             mylogger debug "wating for /tmp/virtiofs_${vmuid}.sock"; done
     fi
-    _virtiofs=("-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock"
-        "-device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs"
-        "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem")
+    _virtiofs=(-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock
+        -device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs
+        -object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem)
     params+=(${_virtiofs[@]})
 }
 
@@ -345,12 +344,12 @@ set_ipmi()
 {
     case $args_ipmi in
         "internal" )
-            _IPMI=("-device ipmi-bmc-sim,id=bmc0") ;;
+            _IPMI=(-device ipmi-bmc-sim,id=bmc0) ;;
         "external" )
             _IPMI=(
-                "-chardev socket,id=ipmi0,host=localhost,port=9002,reconnect=10"
-                "-device ipmi-bmc-extern,chardev=ipmi0,id=bmc1"
-                "-device isa-ipmi-kcs,bmc=bmc1") ;;
+                -chardev socket,id=ipmi0,host=localhost,port=9002,reconnect=10
+                -device ipmi-bmc-extern,chardev=ipmi0,id=bmc1
+                -device isa-ipmi-kcs,bmc=bmc1) ;;
     esac
     [[ -n $_IPMI ]] && params+=(${_IPMI[@]})   
 }
@@ -358,18 +357,18 @@ set_ipmi()
 set_spice()
 {
     SPICE=(
-        "-spice port=$SPICEPORT,disable-ticketing=on"
-        "-device intel-hda -device hda-duplex")
+        -spice port=$SPICEPORT,disable-ticketing=on
+        -device intel-hda -device hda-duplex)
     SPICE_AGENT=(
-        "-chardev spicevmc,id=vdagent,name=vdagent"
-        "-device virtio-serial"
-        "-device virtserialport,chardev=vdagent,name=com.redhat.spice.0")
+        -chardev spicevmc,id=vdagent,name=vdagent
+        -device virtio-serial
+        -device virtserialport,chardev=vdagent,name=com.redhat.spice.0)
     GUEST_AGENT=(
-        "-chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0"
-        "-device virtio-serial"
-        "-device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0")
+        -chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0,name=qga0
+        -device virtio-serial
+        -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0)
     SHARE0=(
-        "-virtfs local,id=fsdev0,path=$home_folder,security_model=passthrough,writeout=writeout,mount_tag=host")
+        -virtfs local,id=fsdev0,path=$home_folder,security_model=passthrough,writeout=writeout,mount_tag=host)
     params+=(${SPICE[@]} ${SPICE_AGENT[@]})
 }
 
@@ -379,8 +378,8 @@ set_tpm()
     [[ -e $fn_cancle ]] || touch $fn_cancle
 
     TPM=(
-        "-tpmdev passthrough,id=tpm0,path=/dev/tpm0,cancel-path=$fn_cancle"
-        "-device tpm-tis,tpmdev=tpm0")
+        -tpmdev passthrough,id=tpm0,path=/dev/tpm0,cancel-path=$fn_cancle
+        -device tpm-tis,tpmdev=tpm0)
     params+=(${TPM[@]})
 }
 
@@ -415,14 +414,14 @@ set_net()
         case $args_net in 
             "user"|"u" )
                 NET=(
-                    "-nic user,model=virtio-net-pci,mac=$macaddr,smb=$home_folder,hostfwd=tcp::${SSHPORT}-:22") ;;
+                    -nic user,model=virtio-net-pci,mac=$macaddr,smb=$home_folder,hostfwd=tcp::${SSHPORT}-:22) ;;
             "tap"|"t" )
                 NET=(
-                    "-nic tap,model=virtio-net-pci,mac=$macaddr,script=$home_folder/projects/scripts/qemu-ifup") ;;
+                    -nic tap,model=virtio-net-pci,mac=$macaddr,script=$home_folder/projects/scripts/qemu-ifup) ;;
                     # ,downscript=$home_folder/vm/share/qemu-ifdown  ;;
             "bridge"|"b" )
                 NET=(
-                    "-nic bridge,br=virbr0,model=virtio-net-pci,mac=$macaddr") ;;
+                    -nic bridge,br=virbr0,model=virtio-net-pci,mac=$macaddr) ;;
         esac
         params+=(${NET[@]})
         echo $SSHPORT > /tmp/${vmprocid}_SSH
@@ -433,18 +432,19 @@ set_connect()
 {
     case $args_connect in
         "ssh" )
-            opts=("${opts[@]/"-monitor stdio"}")
-            opts=("${opts[@]/"-vga $args_vga"}")
-            opts+=("-nographic -serial mon:stdio")
+            { opts=(${opts[@]/"-vga"}) ; opts=(${opts[@]/"$args_vga"}) ; }
+            opts+=(-nographic -serial mon:stdio)
             [[ $args_net == "user" ]] && SSH_CONNECT="${hostip} -p $SSHPORT" || { [[ -n $localip ]] && SSH_CONNECT=$localip ; }
             CHKPORT=$SSHPORT
             CONNECT=($G_TERM --
 				ssh $args_uname@${SSH_CONNECT}) ;;
         "spice" )
+            opts+=(-monitor stdio)
             CHKPORT=$SPICEPORT
             CONNECT=(
                 remote-viewer -t $vmprocid spice://${hostip}:$SPICEPORT --spice-usbredir-auto-redirect-filter="0x03,-1,-1,-1,0|-1,-1,-1,-1,1") ;;
         "qemu" )
+            opts+=(-monitor stdio)
             CHKPORT=$SPICEPORT
             CONNECT=("")
     esac
@@ -480,14 +480,13 @@ checkConn()
 
 set_kernel() 
 {
-    KERNEL=("-kernel ${vmkernel}")
-    [[ $vmkernel == *vmlinuz* ]] && KERNEL+=("-initrd ${vmkernel/"vmlinuz"/"initrd.img"}")
+    KERNEL=(-kernel ${vmkernel})
+    [[ $vmkernel == *vmlinuz* ]] && KERNEL+=(-initrd ${vmkernel/"vmlinuz"/"initrd.img"})
     
-    KERNEL+=("-append")
     if [[ $args_connect -eq "ssh" ]]; then
-        PARAM=("root=/dev/sda console=ttyS0")
+        PARAM=(-append "root=/dev/sda console=ttyS0")
     else
-        PARAM=("root=/dev/sda vga=0x300")
+        PARAM=(-append "root=/dev/sda vga=0x300")
     fi
 }
 
