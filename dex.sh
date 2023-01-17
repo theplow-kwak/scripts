@@ -99,10 +99,9 @@ if ! (adb devices | grep ".*device$"); then
     exit  1
 fi
 
-change_secondary_display_behaviour
-
 if ! display=$(get_display); then
     echo "None"
+    change_secondary_display_behaviour
     enable_screen
     display=$(get_display)
 else
@@ -113,4 +112,4 @@ fi
 [[ "$1" == "con" ]] && { connect_screen $2 ; launch_app ; exit ; }
 [[ "$1" == "app" ]] && { launch_app $2 ; exit ; }
 [[ "$1" == "add" ]] && { enable_screen ; display=$(get_display) ; exit ; }
-[[ "_$1" != "_" ]] && { display=$1 ; connect_screen $1 ; exit ; }
+[[ "_$1" != "_" ]] && { display=$1 ; connect_screen ; exit ; }
