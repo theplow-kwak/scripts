@@ -1477,3 +1477,7 @@ ip link set dev enp0s25 down
 sudo dhclient eth0
 ```
 
+
+
+# VS Code
+
