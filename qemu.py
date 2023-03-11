@@ -44,6 +44,7 @@ class QEMU():
         self.KERNEL = []
         self.index = self.use_nvme = 0
         self.home_folder = f"/home/{os.getlogin()}"
+        self.memsize = "4G"
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -137,7 +138,7 @@ class QEMU():
                 self.opts += [f"-vga {self.args.vga}"]
         _numcore = int(os.cpu_count() / 2)
         self.params += [
-            f"-m 8G -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults"]
+            f"-m {self.memsize} -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults"]
 
     def set_uefi(self):
         match self.args.arch:
@@ -267,7 +268,7 @@ class QEMU():
                 mylogger.debug("wating for /tmp/virtiofs_{self.vmuid}.sock")
         _virtiofs = [f"-chardev socket,id=char{self.vmuid},path=/tmp/virtiofs_{self.vmuid}.sock",
             f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
-            "-object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem"]
+            f"-object memory-backend-memfd,id=mem,size={self.memsize},share=on -numa node,memdev=mem"]
         self.params += _virtiofs
 
     def set_ipmi(self):

@@ -61,6 +61,9 @@ init()
     args_connect="spice"
     args_machine="q35"
     home_folder="/home/$args_uname"
+    phy_mem=$(($(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1000000))
+    # memsize="$(($phy_mem/2))G"
+    [[ $phy_mem > 8 ]] && memsize="$(($phy_mem/2))G" || memsize="4G"
 }
 
 set_args()
@@ -76,6 +79,7 @@ set_args()
     while true; do
         case "$1" in
             # Command line argment parsing
+            --nousb )       args_nousb ;;
             --bios )        args_bios=1 ;;                          # Using legacy BIOS instead of UEFI
             --consol )      args_consol=1 ;;                        # Used the current terminal as the consol I/O
             --noshare )     args_noshare=1 ;;                       # Do not support virtiofs
@@ -183,7 +187,7 @@ set_qemu()
     esac
     _numcore=$(($(nproc)/2))
     params+=(
-        -m 8G -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults)
+        -m ${memsize} -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults)
 }
 
 set_uefi()
@@ -205,6 +209,7 @@ set_uefi()
 
 set_usb3()
 {
+    [[ $args_nousb ]] && return
     _USB=(-device qemu-xhci,id=usb3)
     _USB_REDIR=(
         -chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1
@@ -228,6 +233,7 @@ set_usb_storage()
 
 set_usb_arm()
 {
+    [[ $args_nousb ]] && return
     _USB=(
         -device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet)
     params+=(${_USB[@]})
@@ -324,6 +330,7 @@ set_nvme()
 
 set_virtiofs()
 {
+    [[ $args_noshare ]] && return
     virtiofsd=($SUDO $G_TERM --geometry=80x24+5+5 -- 
         $home_folder/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$home_folder)
     if [[ $args_debug == 'cmd' ]]; then
@@ -336,7 +343,7 @@ set_virtiofs()
     fi
     _virtiofs=(-chardev socket,id=char${vmuid},path=/tmp/virtiofs_${vmuid}.sock
         -device vhost-user-fs-pci,chardev=char${vmuid},tag=hostfs
-        -object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem)
+        -object memory-backend-memfd,id=mem,size=${memsize},share=on -numa node,memdev=mem)
     params+=(${_virtiofs[@]})
 }
 
