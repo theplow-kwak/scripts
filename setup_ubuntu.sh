@@ -55,7 +55,8 @@ tools() {
     sudo apt -y upgrade
 
     sudo apt -y install build-essential git python3-pip
-    sudo apt -y install net-tools krusader barrier qemu-kvm virt-viewer cifs-utils
+    sudo apt -y install net-tools krusader qemu-kvm virt-viewer cifs-utils 
+    sudo apt -y install libvirt-daemon-system # barrier
 }
 
 timeset() {
