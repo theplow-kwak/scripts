@@ -46,6 +46,7 @@ enable_screen()
     sleep 1
     display=$(get_display)
     [[ $display ]] && adb shell "wm size $screen_size -d $display ; wm density $screen_density -d $display"  
+    adb shell am start --display $display -n com.farmerbb.taskbar/.activity.SecondaryHomeActivity --windowingMode 1
 }
 
 disable_screen()
@@ -77,7 +78,6 @@ launch_app()
     # adb shell am start-activity --display $display com.android.chrome  com.sec.android.app.dexonpc
     # com.sec.android.app.launcher/.activities.LauncherActivity
     app=${1:-"com.sec.android.app.sbrowser"}
-    adb shell am start --display $display -n com.farmerbb.taskbar/.activity.SecondaryHomeActivity --windowingMode 1
     adb shell am start-activity --display $display $app --windowingMode 1
 }
 
