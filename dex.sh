@@ -10,19 +10,19 @@ enable_desktop_mode(){
     adb shell settings put global overlay_display_devices none
     echo "Enabled desktop mode"
 
-	adb shell sync
-	sleep 2
+    adb shell sync
+    sleep 2
 
-	# You need to reboot aparently for it to apply
-	adb reboot
-	echo "Rebooting..."
+    # You need to reboot aparently for it to apply
+    adb reboot
+    echo "Rebooting..."
 
-	# Wait for it to reappear
-	adb wait-for-device
-	echo "Waiting for the device to respond"
+    # Wait for it to reappear
+    adb wait-for-device
+    echo "Waiting for the device to respond"
 
-	# Wait for the services to initialize
-	sleep 20
+    # Wait for the services to initialize
+    sleep 20
 }
 
 change_secondary_display_behaviour()
