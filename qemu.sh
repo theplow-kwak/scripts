@@ -61,8 +61,7 @@ init()
     args_connect="spice"
     args_machine="q35"
     home_folder="/home/$args_uname"
-    phy_mem=$(($(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1000000))
-    # memsize="$(($phy_mem/2))G"
+    phy_mem=$(($(awk '/MemTotal/ {print $2}' /proc/meminfo) / (1024*1000)))
     [[ $phy_mem > 8 ]] && memsize="$(($phy_mem/2))G" || memsize="4G"
 }
 
@@ -79,10 +78,10 @@ set_args()
     while true; do
         case "$1" in
             # Command line argment parsing
-            --nousb )       args_nousb ;;
             --bios )        args_bios=1 ;;                          # Using legacy BIOS instead of UEFI
             --consol )      args_consol=1 ;;                        # Used the current terminal as the consol I/O
             --noshare )     args_noshare=1 ;;                       # Do not support virtiofs
+            --nousb )       args_nousb=1 ;;                         # Do not support usb port
             --qemu | -q )   args_qemu=1 ;;                          # Use the qemu public distribution
             --rmssh )       args_rmssh=1 ;;                         # Remove existing SSH key 
             --tpm )         args_tpm=1 ;;                           # Support TPM device for windows 11
@@ -209,7 +208,6 @@ set_uefi()
 
 set_usb3()
 {
-    [[ $args_nousb ]] && return
     _USB=(-device qemu-xhci,id=usb3)
     _USB_REDIR=(
         -chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1
@@ -233,7 +231,6 @@ set_usb_storage()
 
 set_usb_arm()
 {
-    [[ $args_nousb ]] && return
     _USB=(
         -device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet)
     params+=(${_USB[@]})
@@ -330,7 +327,6 @@ set_nvme()
 
 set_virtiofs()
 {
-    [[ $args_noshare ]] && return
     virtiofsd=($SUDO $G_TERM --geometry=80x24+5+5 -- 
         $home_folder/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_${vmuid}.sock -o source=$home_folder)
     if [[ $args_debug == 'cmd' ]]; then
@@ -520,7 +516,7 @@ setting()
         [[ $args_bios != 1 ]] && set_uefi
         [[ $vmkernel ]] && set_kernel
         # set_pcipass
-        [[ $args_arch == "x86_64" ]] && set_usb3 || set_usb_arm
+        [[ $args_nousb != 1 ]] && { [[ $args_arch == "x86_64" ]] && set_usb3 || set_usb_arm ; }
         set_disks
         set_cdrom
         set_nvme
