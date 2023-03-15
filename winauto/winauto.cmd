@@ -1,8 +1,11 @@
 echo off
 
-set srcfolder=.\Win11_22H2_English_x64v1
-set targetfile=.\Win11_22H2_English_x64v1.iso
-if not [%1]==[] set srcfolder=%1
+set target=Win11_22H2_English_x64v1
+if not [%1]==[] set target=%1
+
+set srcfolder=.\ImageSource
+set targetfile=.\%target%_auto.iso
+
 if not [%2]==[] set targetfile=%2
 
 echo %srcfolder% %targetfile%
