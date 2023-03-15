@@ -44,7 +44,8 @@ class QEMU():
         self.KERNEL = []
         self.index = self.use_nvme = 0
         self.home_folder = f"/home/{os.getlogin()}"
-        self.memsize = "4G"
+        phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024*1024*1000))
+        self.memsize = f"{phy_mem/2}G" if(phy_mem > 8) else "4G"
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -52,6 +53,7 @@ class QEMU():
         parser.add_argument("--bios", action='store_true',                      help = "Using legacy BIOS instead of UEFI")
         parser.add_argument("--consol", action='store_true',                    help = "Used the current terminal as the consol I/O")
         parser.add_argument("--noshare", action='store_true',                   help = "Do not support virtiofs")
+        parser.add_argument("--nousb", action='store_true',                     help = "Do not support usb port")
         parser.add_argument("--qemu", '-q', action='store_true',                help = "Use the qemu public distribution")
         parser.add_argument("--rmssh", action='store_true',                     help = "Remove existing SSH key")
         parser.add_argument("--tpm", action='store_true',                       help = "Support TPM device for windows 11")
@@ -69,6 +71,7 @@ class QEMU():
         parser.add_argument("--kernel", dest='vmkernel',                        help = "Set the Linux Kernel image") 
         parser.add_argument("--pcihost",                                        help = "PCI passthrough") 
         parser.add_argument("--numns", type=int,                                help = "Set the numbers of NVMe namespace")
+        parser.add_argument("--nssize", type=int, default=1,                    help = "Set the size of NVMe namespace")
         self.args = parser.parse_args()
         if self.args.debug == 'cmd':
             mylogger.setLevel('INFO')
@@ -224,7 +227,7 @@ class QEMU():
         if not self.use_nvme:
             return
         _num_ns = self.args.numns if self.args.numns else 4
-        _ns_size = 1
+        _ns_size = self.args.nssize
         if not self.vmnvme:
             self.vmnvme.append(f"nvme{self.vmuid}")
 
@@ -417,7 +420,7 @@ class QEMU():
             if not self.args.bios: self.set_uefi()
             if self.args.vmkernel: self.set_kernel()
             # self.set_pcipass()
-            self.set_usb3() if self.args.arch == 'x86_64' else self.set_usb_arm()
+            if not self.args.nousb: self.set_usb3() if self.args.arch == 'x86_64' else self.set_usb_arm()
             self.set_disks()
             self.set_cdrom()
             self.set_nvme()
