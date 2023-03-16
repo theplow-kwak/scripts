@@ -45,7 +45,7 @@ class QEMU():
         self.index = self.use_nvme = 0
         self.home_folder = f"/home/{os.getlogin()}"
         phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024*1024*1000))
-        self.memsize = f"{int(phy_mem/2)}G" if(phy_mem > 8) else "4G"
+        self.memsize = "8G" if(phy_mem > 8) else "4G"
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -261,7 +261,7 @@ class QEMU():
 
     def set_virtiofs(self):
         virtiofsd = self.sudo + self.G_TERM + ["--geometry=80x24+5+5 --"] + \
-            [f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"]
+            [f"/usr/lib/qemu/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"]
         if self.args.debug == 'cmd':
             print(' '.join(virtiofsd))
         else:

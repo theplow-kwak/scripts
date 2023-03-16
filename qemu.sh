@@ -62,7 +62,7 @@ init()
     args_machine="q35"
     home_folder="/home/$args_uname"
     phy_mem=$(($(awk '/MemTotal/ {print $2}' /proc/meminfo) / (1024*1000)))
-    [[ $phy_mem -gt 8 ]] && memsize="$(($phy_mem/2))G" || memsize="4G"
+    [[ $phy_mem -gt 8 ]] && memsize="8G" || memsize="4G"
 }
 
 set_args()
