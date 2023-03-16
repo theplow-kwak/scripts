@@ -45,7 +45,7 @@ class QEMU():
         self.index = self.use_nvme = 0
         self.home_folder = f"/home/{os.getlogin()}"
         phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024*1024*1000))
-        self.memsize = f"{phy_mem/2}G" if(phy_mem > 8) else "4G"
+        self.memsize = f"{int(phy_mem/2)}G" if(phy_mem > 8) else "4G"
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
