@@ -1,17 +1,17 @@
 {
 	"version": "2.0.0",
 	"windows": {
-			"options": {
-				"shell": {
-					"executable": "cmd.exe",
-					"args": [
-						"/C",
-						"\"C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/Common7/Tools/VsDevCmd.bat\"",
-						"&&"
-					]
-				}
+		"options": {
+			"shell": {
+				"executable": "cmd.exe",
+				"args": [
+					"/C",
+					"\"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/Tools/VsDevCmd.bat\"",
+					"&&"
+				]
 			}
-		},
+		}
+	},
 	"tasks": [
 		{
 			"type": "shell",
@@ -22,7 +22,8 @@
 				"/EHsc",
 				"/nologo",
 				"/std:c++latest",
-				"/Fe${fileDirname}\\${fileBasenameNoExtension}.exe",
+				"/Fe:",
+				"${fileDirname}\\${fileBasenameNoExtension}.exe",
 				"${file}"
 			],
 			"options": {
