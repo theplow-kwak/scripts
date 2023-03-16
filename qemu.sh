@@ -187,7 +187,7 @@ set_qemu()
     _numcore=$(($(nproc)/2))
     params+=(
         -m ${memsize} -smp ${_numcore},sockets=1,cores=${_numcore},threads=1 -nodefaults
-	-rtc base=localtime)
+        -rtc base=localtime)
 }
 
 set_uefi()
