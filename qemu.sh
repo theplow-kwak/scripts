@@ -62,13 +62,13 @@ init()
     args_machine="q35"
     home_folder="/home/$args_uname"
     phy_mem=$(($(awk '/MemTotal/ {print $2}' /proc/meminfo) / (1024*1000)))
-    [[ $phy_mem > 8 ]] && memsize="$(($phy_mem/2))G" || memsize="4G"
+    [[ $phy_mem -gt 8 ]] && memsize="$(($phy_mem/2))G" || memsize="4G"
 }
 
 set_args()
 {
     options=$(getopt --name ${0##*/} --options qa:d:n:u:i:h \
-                    --long bios,consol,noshare,qemu,rmssh,tpm,arch:,connect:,debug:,ipmi:,machine:,net:,uname:,vga:,stick:,images:,nvme:,kernel:,pci:,numns:,help -- "$@")
+                    --long bios,consol,noshare,nousb,qemu,rmssh,tpm,arch:,connect:,debug:,ipmi:,machine:,net:,uname:,vga:,stick:,images:,nvme:,kernel:,pci:,numns:,help -- "$@")
     [ $? != 0 ] && { 
         usage
         exit 1
