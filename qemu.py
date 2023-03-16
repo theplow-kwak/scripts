@@ -141,7 +141,8 @@ class QEMU():
                 self.opts += [f"-vga {self.args.vga}"]
         _numcore = int(os.cpu_count() / 2)
         self.params += [
-            f"-m {self.memsize} -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults"]
+            f"-m {self.memsize} -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults",
+            "-rtc base=localtime"]
 
     def set_uefi(self):
         match self.args.arch:
