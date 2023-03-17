@@ -130,7 +130,7 @@
                 <SynchronousCommand wcm:action="add">
                     <Order>2</Order>
                     <RequiresUserInput>false</RequiresUserInput>
-                    <CommandLine>cmd /C d:\winfsp-1.12.22301.msi /passive /quiet /norestart</CommandLine>
+                    <CommandLine>cmd /C d:\winfsp-2.msi /passive /quiet /norestart</CommandLine>
                 </SynchronousCommand>
                 <SynchronousCommand wcm:action="add">
                     <CommandLine>cmd /C powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c</CommandLine>
@@ -148,13 +148,8 @@
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>
                 <SynchronousCommand wcm:action="add">
-                    <Order>6</Order>
-                    <CommandLine>cmd /C reg import "d:\Utility\timezone.reg"</CommandLine>
-                    <RequiresUserInput>false</RequiresUserInput>
-                </SynchronousCommand>
-                <SynchronousCommand wcm:action="add">
                     <Order>7</Order>
-                    <CommandLine>cmd /C reg import "d:\Utility\hostfs.reg"</CommandLine>
+                    <CommandLine>cmd /C reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run /v hostfs /t REG_SZ /d "sc.exe start VirtioFsSvc"</CommandLine>
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>
             </FirstLogonCommands>
