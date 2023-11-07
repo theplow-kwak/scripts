@@ -3,6 +3,7 @@
 #include <linux/blk_types.h>
 #include <linux/nvme.h>
 #include <scsi/scsi_cmnd.h>
+#include <scsi/scsi_request.h>
 
 #ifndef SECTOR_SHIFT
 #define SECTOR_SHIFT 9
@@ -23,9 +24,10 @@ struct cmd_data_t {
     u8 cmnd;
     u64 slba;
     u32 len;
-    u64 latency_ns;
+    s64 latency_ns;
     u16 major;
     u16 minor;
+    u8 ata_cmd;
 };
 
 struct nvme_request {
@@ -235,6 +237,31 @@ scsi_trace_varlen(unsigned char* cdb, struct cmd_data_t *param)
 }
 
 static inline void
+scsi_trace_ata_pass_thru(unsigned char* cdb, struct cmd_data_t *param)
+{
+	if (cdb[0] == ATA_16) {
+		param->slba = (cdb[12] << 16);
+		param->slba |= (cdb[10] << 8);
+		param->slba |= cdb[8];
+		param->len = cdb[6];		
+		param->ata_cmd = cdb[14];
+	} else if (cdb[0] == ATA_12) {
+		param->slba = (cdb[7] << 16);
+		param->slba |= (cdb[6] << 8);
+		param->slba |= cdb[5];
+		param->len = cdb[4];		
+		param->ata_cmd = cdb[9];
+	} else {
+		param->slba = (cdb[17] << 16);
+		param->slba |= (cdb[18] << 8);
+		param->slba |= cdb[19];
+		param->len = cdb[23];		
+		param->ata_cmd = cdb[25];
+	}
+	return;
+}
+
+static inline void
 scsi_trace_parse_cdb(unsigned char* cdb, struct cmd_data_t *param)
 {
 	switch (cdb[0]) {
@@ -282,6 +309,13 @@ scsi_trace_parse_cdb(unsigned char* cdb, struct cmd_data_t *param)
 		scsi_trace_zbc_out(cdb, param);
 		break;
 #endif
+	case ATA_12:
+	case ATA_16:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+	case ATA_32:
+#endif
+		scsi_trace_ata_pass_thru(cdb, param);
+		break;
 	default:
 		param->slba = 0;
 		param->len = 0;
@@ -290,31 +324,29 @@ scsi_trace_parse_cdb(unsigned char* cdb, struct cmd_data_t *param)
 }
 
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,15,0)
-static inline int rq_op(u64 flags)
-{
-    if (flags & REQ_OP_DISCARD)
-        return REQ_OP_DISCARD;
-    else if (flags & REQ_OP_WRITE_SAME)
-        return REQ_OP_WRITE_SAME;
-    else if (flags & REQ_OP_WRITE)
-        return REQ_OP_WRITE;
-    else
-        return REQ_OP_READ;
-}
-
-#define req_data_dir(flag) (op_is_write(op_from_rq_bits(flag)) ? WRITE : READ)
-
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
 static inline int rq_op(u64 flags)
 {
     return flags & REQ_OP_MASK;
 }
+#else
+static inline int rq_op(u64 flags)
+{
+    if (flags & REQ_OP_DISCARD)
+        return 3;
+    else if (flags & REQ_OP_WRITE_SAME)
+        return 7;
+    else if (flags & REQ_OP_WRITE)
+        return 1;
+    else
+        return 0;
+}
+#define req_data_dir(flag) (op_is_write(op_from_rq_bits(flag)) ? WRITE : READ)
+
 #endif
 
 int blk_req_start(struct pt_regs *ctx, struct request *req)
 {
-    struct val_t *valp;
     struct val_t val = {};
 
     bpf_get_current_comm(&val.taskid, sizeof(val.taskid));
@@ -333,42 +365,38 @@ int blk_req_completion(struct pt_regs *ctx, struct request *req)
 
     valp = start.lookup(&req);
     if (valp == 0) {
-        // bpf_trace_printk("missed tracing issue %x %d %d \n", req, req->__sector, req->__data_len >> 9);
+        // bpf_trace_printk("missed tracing issue %d %d \n", _(req->__sector), _(req->__data_len) >> 9);
         return 0;
     }
 
-    bpf_probe_read_str(&data.taskid, sizeof(data.taskid), valp->taskid);
-    data.io_start_time_ns = valp->io_start_time_ns;
+    bpf_probe_read_str(data.taskid, sizeof(data.taskid), valp->taskid);
+    data.io_start_time_ns = _(valp->io_start_time_ns);
     data.latency_ns = bpf_ktime_get_ns() - data.io_start_time_ns;
     start.delete(&req);
 
-    data.opcode = rq_op(req->cmd_flags);
-    data.len = req->__data_len >> SECTOR_SHIFT;
+	unsigned int cmd_flags = _(req->cmd_flags);
+	
+    data.opcode = rq_op(cmd_flags);
+    data.len = _(req->__data_len) >> SECTOR_SHIFT;
     if(data.len)
     {
-        data.slba = req->__sector;
+        data.slba = _(req->__sector);
     }
+
+    rq_disk = _(req->rq_disk);
+    bpf_probe_read_str(data.disk_name, sizeof(data.disk_name), rq_disk->disk_name);
+	data.major = _(rq_disk->major);
+	data.minor = _(rq_disk->first_minor);
+	data.ata_cmd = 0;
 	
-    rq_disk = req->rq_disk;
-    bpf_probe_read_str(&data.disk_name, sizeof(data.disk_name), rq_disk->disk_name);
-	data.major = rq_disk->major;
-	data.minor = rq_disk->first_minor;
-	
-    if(data.major == 259) {
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,15,0)
-		if (req->cmd_type == REQ_TYPE_DRV_PRIV)
-			data.cmnd = ((struct nvme_command *)((struct nvme_request*)(req+1))->cmd)->common.opcode;
-		else if (req->cmd_flags & REQ_FLUSH)
-			data.cmnd = nvme_cmd_flush;
-		else if (req->cmd_flags & REQ_DISCARD)
-			data.cmnd = nvme_cmd_dsm;
-		else
-			data.cmnd = (req_data_dir(_(req->cmd_flags)) ? nvme_cmd_write : nvme_cmd_read);
-#else
-		switch (rq_op(req->cmd_flags)) {
+	if(data.major == 259) {
+		struct nvme_command *cmd;
+		cmd = _(((struct nvme_request *)(req+1))->cmd);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+		switch (rq_op(cmd_flags)) {
 			case REQ_OP_DRV_IN:
 			case REQ_OP_DRV_OUT:
-				data.cmnd = ((struct nvme_command *)((struct nvme_request*)(req+1))->cmd)->common.opcode;
+				data.cmnd = _(cmd->common.opcode);	
 				break;
 			case REQ_OP_FLUSH:
 				data.cmnd = nvme_cmd_flush;
@@ -380,27 +408,44 @@ int blk_req_completion(struct pt_regs *ctx, struct request *req)
 				break;
 			case REQ_OP_READ:
 			case REQ_OP_WRITE:
-				data.cmnd = (rq_op(req->cmd_flags) & 1) ? nvme_cmd_write : nvme_cmd_read;
+				data.cmnd = (rq_op(cmd_flags) & 1) ? nvme_cmd_write : nvme_cmd_read;
 				break;
 			default:
-				data.cmnd = ((struct nvme_command *)((struct nvme_request*)(req+1))->cmd)->common.opcode;
+				data.cmnd = _(cmd->common.opcode);	
 		}
-#endif
-    }else {
-		unsigned char *cmnd = ((struct scsi_cmnd *)req->special)->cmnd;
-		data.cmnd = cmnd[0];
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,15,0)
-		if( data.opcode == REQ_TYPE_DRV_PRIV )
 #else
+	if (_(req->cmd_type) == REQ_TYPE_DRV_PRIV)
+		data.cmnd = _(cmd->common.opcode);	
+	else if (cmd_flags & REQ_FLUSH)
+		data.cmnd = nvme_cmd_flush;
+	else if (cmd_flags & REQ_DISCARD)
+		data.cmnd = nvme_cmd_dsm;
+	else
+		data.cmnd = (req_data_dir(cmd_flags) ? nvme_cmd_write : nvme_cmd_read);
+#endif
+	}
+	else 
+	{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+		unsigned char *cmnd = _(((struct scsi_request *)(req+1))->cmd);
+		data.cmnd = _(cmnd[0]);
 		if( data.opcode == REQ_OP_SCSI_IN || data.opcode == REQ_OP_SCSI_OUT )
+#else
+		unsigned char *cmnd = _(((struct scsi_cmnd *)req->special)->cmnd);
+		data.cmnd = _(cmnd[0]);
+		if( data.cmnd == ATA_12 || data.cmnd == ATA_16 || data.opcode > 3 )
 #endif
 		{
 			#define MAX_CDB 32
 			unsigned char cdb[MAX_CDB];
-			unsigned short cmd_len = ((struct scsi_cmnd *)req->special)->cmd_len;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+			unsigned short cmd_len = _(((struct scsi_request *)(req+1))->cmd_len);  
+#else
+			unsigned short cmd_len = _(((struct scsi_cmnd *)req->special)->cmd_len);
+#endif
 			int len = cmd_len > MAX_CDB ? MAX_CDB : cmd_len;
-			
-			bpf_probe_read(&cdb, len, cmnd);	
+
+			bpf_probe_read(cdb, len, cmnd);	
 			scsi_trace_parse_cdb(cdb, &data);
 		} 
 	}

@@ -97,7 +97,7 @@ if [[ $removecnt ]] || [[ $removeimg ]]; then
 fi
 
 [[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { build_image ; usage ; docker images ; exit ;}
-[[ $(docker ps -aq --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
+[[ $(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
 [[ $(docker ps --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || docker start ${CONTAINER}
 
 docker attach ${CONTAINER}

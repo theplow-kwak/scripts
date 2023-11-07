@@ -36,6 +36,7 @@ make scripts
 make -j `getconf _NPROCESSORS_ONLN` bindeb-pkg LOCALVERSION=-nvme
 make -j `getconf _NPROCESSORS_ONLN` bzImage modules LOCALVERSION=-nvme
 sudo make headers_install modules_install install
+make INSTALL_PATH=./rootfs/boot INSTALL_MOD_PATH=./rootfs INSTALL_HDR_PATH=./rootfs/usr/src/$KVER headers_install modules_install install
 ```
 
 ## reference of module-signing 
@@ -123,6 +124,8 @@ sudo make -C /lib/modules/`uname -r`/build M=`pwd` modules_install install
 ```bash
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+
+# clear the buffer
 sudo sh -c 'echo 0 > /sys/kernel/debug/tracing/trace'
 
 sudo cat /sys/kernel/debug/tracing/trace_pipe | tee ./nvme.log

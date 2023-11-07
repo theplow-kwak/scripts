@@ -26,16 +26,17 @@ FormatDisk()
 MakeRootFS()
 {
     local _MOUNT_PATH=$1
-    local _DESTRO=${DESTRO:-"kinetic"}
-    local _MIRROR=${MIRROR:-"http://mirror.kakao.com/ubuntu/"}
+    local _DESTRO=${DESTRO:-"mantic"}
+    local _MIRROR=${MIRROR:-"https://mirror.kakao.com/ubuntu/"}
+    local _INCLUDE=${INCLUDE:-"--include=build-essential,flex,bison,libssl-dev,libelf-dev,liburing-dev,bc,openssh-server,cifs-utils,net-tools"}     # ,language-pack-ko
     
     if [[ ! $(findmnt $_MOUNT_PATH) ]]; then
         echo $_MOUNT_PATH does not mounted !! stop processing !
         exit 1
     fi
 
-    echo debootstrap --verbose --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
-    sudo debootstrap --verbose --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
+    echo debootstrap --verbose $_INCLUDE --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
+    sudo debootstrap --verbose $_INCLUDE --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
 
     pushd $_MOUNT_PATH
 
@@ -76,21 +77,28 @@ MakeRootFS()
     printf "%s\n" \
         "ln -fs /usr/share/zoneinfo/Asia/Seoul /etc/localtime" \
         "dpkg-reconfigure -f noninteractive tzdata" \
-        "apt update -y" \
-        "apt install -y language-pack-ko" \
-        "apt install -y openssh-server" \
-        "apt install -y tasksel net-tools nvme-cli" \
-        "tasksel install standard" \
-        "apt upgrade -y" \
-        "adduser $USER_NAME" \
+        "adduser --gecos \"\" --disabled-password $USER_NAME" \
+        "echo ${USER_NAME}:1 | chpasswd" \
         "usermod -aG sudo $USER_NAME" \
         | sudo dd of=./setupenv.sh
         sudo chmod +x ./setupenv.sh
     
-    LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash setupenv.sh
+    LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash setupenv.sh   
     sudo rm ./setupenv.sh
+
+    sudo cp ~/vm/share/.smb.cred ./etc/
+    sudo chmod 600 ./etc/.smb.cred
+    sudo mkdir ./home/$USER_NAME/wpc
+    sudo chown $USER_NAME:$USER_NAME ./home/$USER_NAME/wpc
     popd
-    
+
+    if [[ -n $KERNEL ]]; then
+        kernel_path=$(realpath ~/projects/${KERNEL})
+        pushd $kernel_path
+        bldkernel -i m -t $_MOUNT_PATH
+        popd
+    fi
+
     unMountFolder $_MOUNT_PATH
 }
 
@@ -126,18 +134,20 @@ CHROOT=0
 FORMAT=0
 MKROOT=0
 USER_NAME=${SUDO_USER:-$USER}
-MOUNT_PATH="$PWD/rootfs"
+IMGNAME="rootfs"
 
-while getopts ":ucfmn:d:s:t:" opt; do
+while getopts ":xu:cfmn:d:s:t:i:k:" opt; do
     case $opt in
-        u)  UNLOAD=1 ;;	
+        x)  UNLOAD=1 ;;	
         c)  CHROOT=1 ;;
         f)  FORMAT=1 ;;
         m)  MKROOT=1 ;;
-        n)  USER_NAME=$OPTARG ;;
+        k)	KERNEL=$OPTARG ;;
+		i)  IMGNAME=$OPTARG ;;
+        u)  USER_NAME=$OPTARG ;;
         d)  DESTRO=$OPTARG ;;
         s)  SIZE=$OPTARG ;;
-        t)  MOUNT_PATH=$OPTARG ;;
+        t)  MPATH=$OPTARG ;;
         \?) echo "Invalid option: -$OPTARG" >&2 
             exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2 
@@ -147,12 +157,12 @@ done
 
 shift $(($OPTIND-1)) 
 
-_TMP=$(echo $RANDOM|md5sum|sed 's/^\(....\).*$/\U\1/')
-HOST_NAME=${HOST_NAME:-"${USER_NAME}-QEMU-${_TMP}"}
+_TMP=$(echo -n ${boot_0} | md5sum)
+HOST_NAME=${HOST_NAME:-"${IMGNAME%.*}-VM-${_TMP::2}"}
 
-ROOTFS_FILE=${1:-"./rootfs.img"}
+ROOTFS_FILE=${1:-"./${IMGNAME}.img"}
 IMGSIZE=${SIZE:-"16g"}
-MOUNT_PATH=${2:-"$MOUNT_PATH"}
+MOUNT_PATH=${MPATH:-$(realpath $PWD/rootfs)}
 
 echo source $ROOTFS_FILE
 echo target $MOUNT_PATH
