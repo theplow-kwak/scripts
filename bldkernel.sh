@@ -41,7 +41,8 @@ MakeConfig()
         cp /usr/src/kernels/$(uname -r)/Module.symvers .
     fi
     make $KSRC olddefconfig
-    make $KSRC prepare && make $KSRC modules_prepare && make $KSRC scripts
+    make $KSRC prepare && make $KSRC modules_prepare && make $KSRC scripts && return 0
+    return 1
 }
 
 KernelBuild()
@@ -109,10 +110,10 @@ MKCONFIG=0
 
 while getopts ":b:i:t:cC:l:r" opt; do
     case $opt in
-        b)  [[ $OPTARG =~ 'k' ]] && BUILD+=" bzImage"
+        b)  [[ $OPTARG =~ 'b' ]] && BUILD+=" bindeb-pkg"
+            [[ $OPTARG =~ 'k' ]] && BUILD+=" bzImage"
             [[ $OPTARG =~ 'm' ]] && BUILD+=" modules"
-            [[ $OPTARG =~ 'd' ]] && BUILD+=" deb-pkg"
-            [[ $OPTARG =~ 'b' ]] && BUILD+=" bindeb-pkg" ;;
+            [[ $OPTARG =~ 'd' ]] && BUILD+=" deb-pkg" ;;
         i)  [[ $OPTARG =~ 'h' ]] && INSTALL+=" headers_install"
             [[ $OPTARG =~ 'm' ]] && INSTALL+=" modules_install"
             [[ $OPTARG =~ 'k' ]] && INSTALL+=" install" ;;
@@ -142,7 +143,7 @@ KVER=$(make kernelversion)-$LOCALVERSION
 echo $KVER
 
 [[ $RMKERNEL -eq 1 ]] && removeKernel
-[[ $MKCONFIG -eq 1 ]] && MakeConfig
+[[ $MKCONFIG -eq 1 ]] && { MakeConfig || exit; }
 [[ ! -z $BUILD ]] && KernelBuild  
 [[ ! -z $INSTALL ]] && Install
 
