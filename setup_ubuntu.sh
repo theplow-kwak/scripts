@@ -71,7 +71,7 @@ python() {
     sudo apt -y install python3-pip && \
     pip3 install --upgrade pip && \
     pip3 freeze | cut -d'=' -f1 | xargs pip3 install --upgrade
-    pip3 install jupyterlab
+    # pip3 install jupyterlab
 }
 
 jenkins() {
