@@ -72,11 +72,11 @@ config()
     CFG=" \
         --target-list=$TARGET --prefix=$PREFIX --enable-trace-backends=$TRACE \
         --enable-kvm --enable-linux-aio --enable-gtk --enable-spice \
-        --enable-virtfs --enable-vhost-net --enable-snappy --enable-mpath \
+        --enable-virtfs --enable-vhost-net --enable-snappy \
         --enable-libusb --enable-usb-redir --enable-plugins --enable-user \
         --enable-vhost-user --enable-slirp \
         "
-    # --disable-xen --enable-modules --sysconfdir=/etc --disable-stack-protector --disable-werror --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" \
+    # --disable-xen --enable-modules --sysconfdir=/etc --disable-stack-protector --disable-werror --enable-debug --extra-cflags="-g3" --extra-ldflags="-g3" --enable-mpath \
 
     echo $CFG
     if [[ -e ./configure ]]; then

@@ -27,8 +27,8 @@ MakeRootFS()
 {
     local _MOUNT_PATH=$1
     local _DESTRO=${DESTRO:-"mantic"}
-    local _MIRROR=${MIRROR:-"https://mirror.kakao.com/ubuntu/"}
-    local _INCLUDE=${INCLUDE:-"--include=build-essential,flex,bison,libssl-dev,libelf-dev,liburing-dev,bc,openssh-server,cifs-utils,net-tools"}     # ,language-pack-ko
+    local _MIRROR=${MIRROR:-"http://mirror.kakao.com/ubuntu/"}
+    local _INCLUDE=${INCLUDE:-"--include=build-essential,flex,bison,libssl-dev,libelf-dev,liburing-dev,bc,openssh-server,cifs-utils,net-tools,ca-certificates,gpg,wget,git"}     # ,language-pack-ko
     
     if [[ ! $(findmnt $_MOUNT_PATH) ]]; then
         echo $_MOUNT_PATH does not mounted !! stop processing !
@@ -77,6 +77,7 @@ MakeRootFS()
     printf "%s\n" \
         "ln -fs /usr/share/zoneinfo/Asia/Seoul /etc/localtime" \
         "dpkg-reconfigure -f noninteractive tzdata" \
+        "timedatectl set-local-rtc 1 --adjust-system-clock" \
         "adduser --gecos \"\" --disabled-password $USER_NAME" \
         "echo ${USER_NAME}:1 | chpasswd" \
         "usermod -aG sudo $USER_NAME" \
@@ -129,12 +130,28 @@ ChRoot() {
     LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash
 }
 
+usage()
+{
+cat << EOM
+Usage:
+ ${0##*/} [OPTIONS]
+
+Options:
+ -d, --docker       Path to the docker file
+ -s, --share        Path to the shared folder
+ -c, --container    Name of the container what you want to run
+ -r, --rm           Remove the container
+ -R, --rmi          Remove the docker image and associated containers.
+
+EOM
+}
+
 UNLOAD=0
 CHROOT=0
 FORMAT=0
 MKROOT=0
 USER_NAME=${SUDO_USER:-$USER}
-IMGNAME="rootfs"
+IMGNAME=${PWD##*/}
 
 while getopts ":xu:cfmn:d:s:t:i:k:" opt; do
     case $opt in

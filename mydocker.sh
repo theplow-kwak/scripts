@@ -3,7 +3,7 @@
 rm_container()
 {
     _CONTAINER=$1
-    if [[ $(docker ps -aq --filter "name=^/$_CONTAINER$" --format '{{.Names}}') == $_CONTAINER ]]; then
+    if [[ $(docker ps -a --filter "name=^/$_CONTAINER$" --format '{{.Names}}') == $_CONTAINER ]]; then
         printf "remove container ${_CONTAINER}\n"
         docker rm $_CONTAINER
     fi
@@ -13,14 +13,14 @@ rm_image()
 {
     _DOCKERNAME=$1
     printf "remove docker image ${_DOCKERNAME}\n"
-    docker rm -f $(docker ps -aq --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
+    docker rm -f $(docker ps -a --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
     docker image rm $_DOCKERNAME
 }
 
 build_image()
 {
     printf "docker build image ${DOCKERNAME}\n"
-    docker build -t ${DOCKERNAME} --network=host --build-arg NEWUSER=$(whoami) --build-arg NEWUID=$(id -u) $DOCKERPATH || exit 1
+    docker build -t ${DOCKERNAME} --network=host --build-arg NEWUSER=$(whoami) --build-arg NEWUID=$(id -u) "$DOCKERPATH" || exit 1
 }
 
 docker_run()
@@ -73,8 +73,9 @@ while true; do
 done 
 
 if [[ -n ${DOCKERPATH} ]]; then
-    _tmp=$(realpath ${DOCKERPATH})
+    _tmp=$(realpath "${DOCKERPATH}")
     DOCKERNAME=${_tmp##*/}
+    printf "Docker path: ${DOCKERPATH} \n"
 fi
 
 while (($#)); do
@@ -83,6 +84,8 @@ while (($#)); do
 done
 
 CONTAINER=${CONTAINER:-"${DOCKERNAME}_cnt"}
+printf "Docker name: ${DOCKERNAME} \n"
+printf "Container: ${CONTAINER} \n"
 
 if [[ -z ${DOCKERNAME} ]] && [[ "${CONTAINER}" == "_cnt" ]]; then
     usage

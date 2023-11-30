@@ -114,7 +114,7 @@ class QEMU:
         parser.add_argument(
             "--net",
             default="bridge",
-            choices=["user", "tap", "bridge"],
+            choices=["user", "tap", "bridge", "none"],
             help="Network interface model - 'user', 'tap', 'bridge'",
         )
         parser.add_argument(
@@ -482,6 +482,8 @@ class QEMU:
                     NET = [
                         f"-nic bridge,br=virbr0,model=virtio-net-pci,mac={self.macaddr}"
                     ]
+                case "none" | "n":
+                    NET = [""]
             self.params += NET
             try:
                 Path(f"/tmp/{self.vmprocid}_SSH").write_text(str(self.SSHPORT))
