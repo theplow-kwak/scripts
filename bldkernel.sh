@@ -105,6 +105,24 @@ removeKernel()
     fi
 }
 
+usage()
+{
+cat << EOM
+Usage:
+ ${0##*/} [OPTIONS] 
+ 
+Options:
+ -b, --build <b|k|m|d>      build - bindeb-pkg | kernel | modules | deb-pkg
+ -i, --install <h|m|k>      install - headers | modules | kernel
+ -t, --target <PATH>        target path where to installed
+ -l, --localver <version>   set the local version name
+ -c, --config               doing mkconfig.  
+ -C, --path <CFG_FILE>      doing mkconfig with CFG_FILE
+ -r, --rmkernel             remove the kernel 
+ -h, --help                 display help message
+EOM
+}
+
 MODULE_INSTALL=0
 MKCONFIG=0
 
@@ -124,8 +142,10 @@ while getopts ":b:i:t:cC:l:r" opt; do
             CFG_FILE=$OPTARG ;;
         r)  RMKERNEL=1 ;;
         \?) echo "Invalid option: -$OPTARG" >&2 
+            usage
             exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2 
+            usage
             exit 1 ;;
     esac
 done 
