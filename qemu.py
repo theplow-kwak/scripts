@@ -134,6 +134,9 @@ class QEMU:
         parser.add_argument(
             "--kernel", dest="vmkernel", help="Set the Linux Kernel image"
         )
+        parser.add_argument(
+            "--initrd", help="Set the initrd image"
+        )
         parser.add_argument("--pcihost", help="PCI passthrough")
         parser.add_argument(
             "--numns", type=int, help="Set the numbers of NVMe namespace"
@@ -367,7 +370,7 @@ class QEMU:
             + self.G_TERM
             + ["--geometry=80x24+5+5 --"]
             + [
-                f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"
+                f"/usr/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"
             ]
         )
         if self.args.debug == "cmd":
@@ -541,16 +544,20 @@ class QEMU:
 
     def set_kernel(self):
         self.KERNEL = [f"-kernel {self.args.vmkernel}"]
-        if "vmlinuz" in self.args.vmkernel:
+        if self.args.initrd:
+            self.KERNEL += [
+                f"-initrd {self.args.initrd}"
+            ]
+        elif "vmlinuz" in self.args.vmkernel:
             self.KERNEL += [
                 "-initrd",
                 self.args.vmkernel.replace("vmlinuz", "initrd.img"),
             ]
 
         if self.args.connect == "ssh":
-            self.KERNEL += ['-append "root=/dev/sda console=ttyS0"']
+            self.KERNEL += ['-append "root=/dev/sda1 console=ttyS0"']
         else:
-            self.KERNEL += ['-append "root=/dev/sda vga=0x300"']
+            self.KERNEL += ['-append "root=/dev/sda1 vga=0x300"']
 
     # def set_pcipass(self):
     #     [[ -z self.args.pcihost ]] && return
