@@ -55,95 +55,32 @@ class QEMU:
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
         # Command line argment parsing
-        parser.add_argument(
-            "--bios", action="store_true", help="Using legacy BIOS instead of UEFI"
-        )
-        parser.add_argument(
-            "--consol",
-            action="store_true",
-            help="Used the current terminal as the consol I/O",
-        )
-        parser.add_argument(
-            "--noshare", action="store_true", help="Do not support virtiofs"
-        )
-        parser.add_argument(
-            "--nousb", action="store_true", help="Do not support usb port"
-        )
-        parser.add_argument(
-            "--qemu", "-q", action="store_true", help="Use the qemu public distribution"
-        )
-        parser.add_argument(
-            "--rmssh", action="store_true", help="Remove existing SSH key"
-        )
-        parser.add_argument(
-            "--tpm", action="store_true", help="Support TPM device for windows 11"
-        )
-        parser.add_argument(
-            "--arch",
-            "-a",
-            default="x86_64",
-            choices=["x86_64", "aarch64", "arm"],
-            help="The architecture of target VM.",
-        )
-        parser.add_argument(
-            "--connect",
-            default="spice",
-            choices=["ssh", "spice", "qemu"],
-            help="Connection method - 'spice'(default)",
-        )
-        parser.add_argument(
-            "--debug",
-            "-d",
-            nargs="?",
-            const="info",
-            default="warning",
-            choices=["cmd", "debug", "info", "warning"],
-            help="Set the logging level. (default: 'warning')",
-        )
-        parser.add_argument(
-            "--ipmi",
-            choices=["internal", "external"],
-            help="IPMI model - 'external', 'internal'",
-        )
-        parser.add_argument(
-            "--machine",
-            default="q35",
-            choices=["q35", "ubuntu-q35", "pc", "ubuntu"],
-            help="IPMI model - 'external', 'internal'",
-        )
-        parser.add_argument(
-            "--net",
-            default="bridge",
-            choices=["user", "tap", "bridge", "none"],
-            help="Network interface model - 'user', 'tap', 'bridge'",
-        )
-        parser.add_argument(
-            "--uname", "-u", default=os.getlogin(), help="Set login user name"
-        )
-        parser.add_argument(
-            "--vga",
-            default="qxl",
-            help="Set the type of VGA graphic card. 'virtio', 'qxl'(default)",
-        )
+        parser.add_argument("--bios", action="store_true", help="Using legacy BIOS instead of UEFI")
+        parser.add_argument("--consol", action="store_true", help="Used the current terminal as the consol I/O")
+        parser.add_argument("--noshare", action="store_true", help="Do not support virtiofs")
+        parser.add_argument("--nousb", action="store_true", help="Do not support usb port")
+        parser.add_argument("--qemu", "-q", action="store_true", help="Use the qemu public distribution")
+        parser.add_argument("--rmssh", action="store_true", help="Remove existing SSH key")
+        parser.add_argument("--tpm", action="store_true", help="Support TPM device for windows 11")
+        parser.add_argument("--arch", "-a", default="x86_64", choices=["x86_64", "aarch64", "arm"], help="The architecture of target VM.",)
+        parser.add_argument("--connect", default="spice", choices=["ssh", "spice", "qemu"], help="Connection method - 'spice'(default)",)
+        parser.add_argument("--debug", "-d", nargs="?", const="info", default="warning", choices=["cmd", "debug", "info", "warning"], help="Set the logging level. (default: 'warning')")
+        parser.add_argument("--ipmi", choices=["internal", "external"], help="IPMI model - 'external', 'internal'")
+        parser.add_argument("--machine", default="q35", choices=["q35", "ubuntu-q35", "pc", "ubuntu"], help="IPMI model - 'external', 'internal'")
+        parser.add_argument("--net", default="bridge", choices=["user", "tap", "bridge", "none"], help="Network interface model - 'user', 'tap', 'bridge'")
+        parser.add_argument("--uname", "-u", default=os.getlogin(), help="Set login user name")
+        parser.add_argument("--vga", default="qxl", help="Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
         parser.add_argument("--stick", help="Set the USB storage image")
         parser.add_argument("--ip", help="Set local ip")
-        parser.add_argument(
-            "images", metavar="IMAGES", nargs="+", help="Set the VM images"
-        )
+        parser.add_argument("images", metavar="IMAGES", nargs="+", help="Set the VM images")
         parser.add_argument("--nvme", help="Set the NVMe images")
-        parser.add_argument(
-            "--kernel", dest="vmkernel", help="Set the Linux Kernel image"
-        )
-        parser.add_argument(
-            "--initrd", help="Set the initrd image"
-        )
+        parser.add_argument("--kernel", dest="vmkernel", help="Set the Linux Kernel image")
+        parser.add_argument("--rootdev", help="Set the rootfs dev")
+        parser.add_argument("--initrd", help="Set the initrd image")
         parser.add_argument("--pcihost", help="PCI passthrough")
-        parser.add_argument(
-            "--numns", type=int, help="Set the numbers of NVMe namespace"
-        )
-        parser.add_argument(
-            "--nssize", type=int, default=1, help="Set the size of NVMe namespace"
-        )
+        parser.add_argument("--numns", type=int, help="Set the numbers of NVMe namespace")
+        parser.add_argument("--nssize", type=int, default=1, help="Set the size of NVMe namespace")
+        parser.add_argument("--num_queues", type=int, default=32, help="Set the max num of queues")
         parser.add_argument("--vnum", default="", help="Set the vm copies")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
@@ -349,7 +286,7 @@ class QEMU:
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
-                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id}",
+                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},num_queues={self.args.num_queues}",
                 ]
                 _ctrl_id += 1
                 for _nsid in range(1, _num_ns + 1):
@@ -370,7 +307,8 @@ class QEMU:
             + self.G_TERM
             + ["--geometry=80x24+5+5 --"]
             + [
-                f"/usr/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"
+                f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}" if Path(f"{self.home_folder}/qemu/libexec/virtiofsd").exists() else 
+                f"/usr/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock --shared-dir={self.home_folder}"
             ]
         )
         if self.args.debug == "cmd":
@@ -487,6 +425,7 @@ class QEMU:
                     ]
                 case "none" | "n":
                     NET = [""]
+            print(f"mac: {self.macaddr}, ip: {self.localip}")
             self.params += NET
             try:
                 Path(f"/tmp/{self.vmprocid}_SSH").write_text(str(self.SSHPORT))
@@ -554,10 +493,16 @@ class QEMU:
                 self.args.vmkernel.replace("vmlinuz", "initrd.img"),
             ]
 
-        if self.args.connect == "ssh":
-            self.KERNEL += ['-append "root=/dev/sda1 console=ttyS0"']
+        if ".img" in self.vmimages[0]:
+            _root_dev = "sda"
         else:
-            self.KERNEL += ['-append "root=/dev/sda1 vga=0x300"']
+            _root_dev = "sda1"
+        if self.args.rootdev:
+            _root_dev = self.args.rootdev
+        if self.args.connect == "ssh":
+            self.KERNEL += [f'-append "root=/dev/{_root_dev} console=ttyS0"']
+        else:
+            self.KERNEL += [f'-append "root=/dev/{_root_dev} vga=0x300"']
 
     # def set_pcipass(self):
     #     [[ -z self.args.pcihost ]] && return

@@ -1447,6 +1447,8 @@ sudo rpm --import https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7-aarch64
 
 ## virbr dhcp 확인
 
+sudo virsh net-start default
+
 virsh net-list
 virsh net-info default
 virsh net-dhcp-leases default

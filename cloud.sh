@@ -14,6 +14,26 @@ users:
     shell: /bin/bash
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
 
+chpasswd:
+  list: |
+    root:Passw0rd
+    $USER_NAME:qwerasdf
+  expire: False
+
+write_files:
+  - path: /etc/netplan/01-network-all.yaml
+    owner: root:root
+    permissions: '0600'
+    content: |-
+      network:
+        version: 2
+        ethernets:
+          id0:
+            match:
+              name: "en*"
+            dhcp4: true
+      
+
 ssh_pwauth: false
 disable_root: false
 runcmd:
@@ -53,9 +73,13 @@ Usage:
  ${0##*/} [OPTIONS] 
 
 Options:
- -n, --name <NAME>          set the login USER name
- -H, --host <HOST_NAME>     set the HOST name
- -f, --fname <FILE_NAME>    set the cloud_init file name
+ -u, --uname <NAME>         The login USER name
+ -H, --host <HOST_NAME>     Set the HOST name
+ -b, --backing <BACKIMG>    qemu image backing file
+ -i, --image <IMGNAME>      qemu image name
+ -n, --net <NET>            qemu Network interface model
+ -k, --kernel <KERNEL>      Set the custom kernel 
+ -f, --fname <FILE_NAME>    The cloud_init file name (default:"_cloud_init.cfg")
 EOM
 }
 
@@ -91,7 +115,7 @@ set_args()
     QEMU=${QEMU:-"qemu"}
     NET=${NET:-"bridge"}
 
-    _TMP=$(echo -n ${boot_0} | md5sum)
+    _TMP=$(echo -n ${IMGNAME} | md5sum)
     USER_NAME=${USER_NAME:-$USER}
     HOST_NAME=${HOST_NAME:-"${IMGNAME%.*}-VM-${_TMP::2}"}
     CINIT_FILE=${CINIT_FILE:-"_cloud_init.cfg"}
@@ -112,6 +136,7 @@ fi
 [[ -n $KERNEL ]] && KERNEL="--kernel $(realpath ~/projects/${KERNEL}/arch/x86_64/boot/bzImage)"
 
 if [[ -e $IMGNAME ]]; then
-    echo $QEMU --bios --connect ssh --net $NET --uname $USER_NAME $KERNEL $IMGNAME $CLOUD_INIT $OPTIONS
-    $QEMU --bios --connect ssh --net $NET --uname $USER_NAME $KERNEL $IMGNAME $CLOUD_INIT $OPTIONS
+    _CMD=($QEMU --bios --connect ssh --net $NET --uname $USER_NAME $KERNEL $IMGNAME $CLOUD_INIT $OPTIONS)
+    echo "${_CMD[@]}"
+    ${_CMD[@]}
 fi
