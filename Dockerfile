@@ -16,10 +16,10 @@ RUN sed -i 's/https/http/' /etc/apk/repositories && \
     util-linux-dev \
     zlib-dev \
     zlib-static \
-    openssl-dev \
     openssl-libs-static \
     binutils-gold \
     libtool \
+    liburing-dev \
     bash \
     sudo
 

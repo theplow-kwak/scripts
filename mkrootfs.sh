@@ -55,7 +55,6 @@ MakeRootFS()
     printf "%s\n" \
         "network:" \
         "  version: 2" \
-        "  renderer: networkd" \
         "  ethernets:" \
         "    id0:" \
         "      match:" \
@@ -174,7 +173,7 @@ done
 
 shift $(($OPTIND-1)) 
 
-_TMP=$(echo -n ${boot_0} | md5sum)
+_TMP=$(echo -n ${IMGNAME} | md5sum)
 HOST_NAME=${HOST_NAME:-"${IMGNAME%.*}-VM-${_TMP::2}"}
 
 ROOTFS_FILE=${1:-"./${IMGNAME}.img"}
