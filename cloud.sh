@@ -36,7 +36,7 @@ write_files:
             match:
               name: "en*"
             dhcp4: true
- 
+       
 
 ssh_pwauth: false
 disable_root: false
@@ -45,7 +45,7 @@ runcmd:
   - mkdir /mnt/host
 
 mounts:
-  - [ hosts, /mnt/host, virtiofs ]
+  - [ hostfs, /mnt/host, virtiofs ]
 
 mount_default_fields: [ None, None, "auto", "defaults,nofail", "0", "2" ]
 
