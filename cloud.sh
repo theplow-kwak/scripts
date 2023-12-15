@@ -36,7 +36,7 @@ write_files:
             match:
               name: "en*"
             dhcp4: true
-      
+ 
 
 ssh_pwauth: false
 disable_root: false
