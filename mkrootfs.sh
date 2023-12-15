@@ -45,7 +45,7 @@ MakeRootFS()
         "# UNCONFIGURED FSTAB FOR BASE SYSTEM" \
         "#" \
         "/dev/sda       /               ext4    defaults        1 1" \
-        "# sharepoint     /mnt/host       9p      trans=virtio    0 0" \
+        "hostfs     /mnt/host       virtiofs      defaults,nofail,comment=cloudconfig    0 2" \
         | sudo dd of=./etc/fstab
 
     printf "%s\n" \
