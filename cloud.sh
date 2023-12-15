@@ -7,17 +7,21 @@ create_cfgfile()
 cat <<EOL > $CINIT_FILE
 #cloud-config
 hostname: $HOST_NAME
+
 users:
   - name: $USER_NAME
-    groups: wheel
     lock_passwd: false
     shell: /bin/bash
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
 
 chpasswd:
-  list: |
-    root:Passw0rd
-    $USER_NAME:qwerasdf
+  users:
+    - name: root
+      password: Passw0rd
+      type: text
+    - name: $USER_NAME
+      password: qwerasdf
+      type: text
   expire: False
 
 write_files:
@@ -38,6 +42,12 @@ ssh_pwauth: false
 disable_root: false
 runcmd:
   - [ sh, -c, 'touch /etc/cloud/cloud-init.disabled' ]
+  - mkdir /mnt/host
+
+mounts:
+  - [ hosts, /mnt/host, virtiofs ]
+
+mount_default_fields: [ None, None, "auto", "defaults,nofail", "0", "2" ]
 
 power_state:
   delay: 'now'
