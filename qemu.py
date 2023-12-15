@@ -392,7 +392,7 @@ class QEMU:
             f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}"
         )
         dhcp_chk = (
-            _result.stdout.rstrip().split("\n")[-1]
+            sorted(_result.stdout.rstrip().split("\n"))[-1]
             if _result.returncode == 0 and _result.stdout
             else []
         )
@@ -402,6 +402,7 @@ class QEMU:
             self.localip = dhcp_chk.split()[4].split("/")[0] if len(dhcp_chk) else None
         mylogger.info(f"localip: {self.localip}")
 
+        print(f"mac: {self.macaddr}, ip: {self.localip}")
         if _set:
             while (
                 not self.runshell(f"lsof -w -i :{self.SPICEPORT}").returncode
@@ -425,7 +426,6 @@ class QEMU:
                     ]
                 case "none" | "n":
                     NET = [""]
-            print(f"mac: {self.macaddr}, ip: {self.localip}")
             self.params += NET
             try:
                 Path(f"/tmp/{self.vmprocid}_SSH").write_text(str(self.SSHPORT))
