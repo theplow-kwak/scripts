@@ -6,7 +6,10 @@ create_cfgfile()
 
 cat <<EOL > $CINIT_FILE
 #cloud-config
+
+preserve_hostname: false
 hostname: $HOST_NAME
+fqdn: ${HOST_NAME}.lo
 
 users:
   - name: $USER_NAME
