@@ -307,7 +307,7 @@ class QEMU:
             + self.G_TERM
             + ["--geometry=80x24+5+5 --"]
             + [
-                f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}" if Path(f"{self.home_folder}/qemu/libexec/virtiofsd").exists() else 
+                # f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}" if Path(f"{self.home_folder}/qemu/libexec/virtiofsd").exists() else 
                 f"/usr/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock --shared-dir={self.home_folder}"
             ]
         )
