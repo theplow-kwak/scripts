@@ -56,11 +56,20 @@ tools() {
 
     sudo apt -y install build-essential git python3-pip
     sudo apt -y install net-tools krusader qemu-kvm virt-viewer cifs-utils 
-    sudo apt -y install libvirt-daemon-system # barrier
+    sudo apt -y install libvirt-daemon-system barrier cloud-image-utils
+    sudo apt -y install dbus-x11 openssh-server libxcb-cursor0 qemu-user-static curl gnupg
 }
 
 timeset() {
     timedatectl set-local-rtc 1 --adjust-system-clock
+}
+
+samba() {
+    sudo apt install samba -y
+    sudo usermod -aG sambashare $USER
+    sudo smbpasswd -a $USER
+    sudo smbpasswd -e $USER
+    net usershare add home /home/$USER/ "" Everyone:F guest_ok=no
 }
 
 python() {
@@ -106,9 +115,23 @@ typora() {
 
 docker() {
     echo install docker
-    sudo apt -y install docker.io docker-compose
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    printf "%s\n" \
+        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+        | sudo dd of=/etc/apt/sources.list.d/docker.list
+    sudo sh -c "echo 'Acquire { https::Verify-Peer false }' > /etc/apt/apt.conf.d/99verify-peer.conf"
+    sudo apt update
+    sudo apt -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     sudo groupadd docker
     sudo usermod -aG docker $USER
+    printf "%s\n" \
+        "{" \
+        "  \"bridge\": \"virbr0\"," \
+        "  \"iptables\": false" \
+        "}" \
+        | sudo dd of=/etc/docker/daemon.json
 }
 
 local_cmd() {

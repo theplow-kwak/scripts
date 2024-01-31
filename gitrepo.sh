@@ -16,8 +16,11 @@ git_init_local()
     fi
     if [[ -z $(git remote) ]] ; then
         git remote add main git@localhost:/home/git/${Repository}.git
-        git push --set-upstream main master
     fi
+    branch=($(git branch --remote --list))
+    branchs=(${branch//// })
+    echo ${branchs[@]}
+    git push --set-upstream ${branchs[0]} ${branchs[1]}
     popd
 }
 
@@ -29,8 +32,8 @@ git_init_server()
         return
     fi
 
-    if (sudo mkdir /home/git/${Repository}.git); then
-        pushd /home/git/${Repository}.git && sudo git init --bare && popd && sudo chown -R git.git /home/git/${Repository}.git
+    if (sudo -H -u git mkdir /home/git/${Repository}.git); then
+        sudo -H -u git git init --bare /home/git/${Repository}.git
     else
         echo "Can't make remode repository"
         exit 1
