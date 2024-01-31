@@ -299,6 +299,27 @@ tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 
 # Samba
 
+## Ubuntu
+
+[사용자 공유 기능 활성화](https://access.redhat.com/documentation/ko-kr/red_hat_enterprise_linux/8/html/deploying_different_types_of_servers/assembly_enabling-users-to-share-directories-on-a-samba-server_assembly_using-samba-as-a-server#doc-wrapper)
+
+```bash
+sudo apt install samba
+sudo usermod -aG sambashare $USER
+sudo smbpasswd -a $USER
+sudo smbpasswd -e $USER
+net usershare add home /home/$USER/ "" Everyone:F guest_ok=no
+```
+
+
+
+```bash
+net usershare info
+sudo smbstatus
+```
+
+
+
 ## CentOS / RHEL 7 : Eable To Start The Samba Service
 
 **Configure SELinux to allow SAMBA services**
@@ -445,16 +466,17 @@ The proper way fo changing address is using virsh. You can stop network (e.g. if
 sudo virsh net-destroy default
 ```
 
-And you can start it with: (option)
-
-```bash
-sudo virsh net-start default
-```
-
 As you edited default.xml file this should be enough. But for editing you can use: 
 
 ```bash
 sudo virsh net-edit default
+```
+
+And you can start it with: (option)
+
+```bash
+sudo virsh net-start default
+sudo virsh net-autostart default
 ```
 
 Find the IP addresses of VMs in KVM with virsh
@@ -545,6 +567,13 @@ mount virtiofs in linux:
 ```bash
 sudo mount -t virtiofs hostfs ~/host/
 ```
+
+## i386 apt
+
+- sudo dpkg --add-architecture i386
+- sudo dpkg --remove-architecture i386
+- dpkg --get-selections | awk '/i386/{print $1}'
+- sudo dpkg --purge --force-remove-protected {???,111,222}:i386
 
 
 
@@ -980,10 +1009,9 @@ Perforce's package repositories allow simplified installation of Perforce produc
 ### 1. Ubuntu
 
 ```bash
-wget -qO - https://package.perforce.com/perforce.pubkey | sudo apt-key add -
+wget -qO - https://package.perforce.com/perforce.pubkey | sudo gpg --dearmor -o /usr/share/keyrings/perforce-archive-keyring.gpg
 
-printf "deb http://package.perforce.com/apt/ubuntu $(lsb_release -sc) release\n" \
-    | sudo tee /etc/apt/sources.list.d/perforce.list
+echo "deb [signed-by=/usr/share/keyrings/perforce-archive-keyring.gpg] http://package.perforce.com/apt/ubuntu focal release" | sudo tee /etc/apt/sources.list.d/perforce.list
 
 sudo apt update && sudo apt install helix-cli
 ```
@@ -1437,7 +1465,34 @@ restorecon -r -v -F /home/centos/.ssh
 
 
 
-## Install Centos aarch64 GPG key 
+## Centos
+
+### cloud image
+
+- CentOS Stream EL9
+
+download CentOS Stream9 from https://www.centos.org/download/
+
+- Install Linux Kernel 6.5 on CentOS Stream EL9
+
+```bash
+sudo dnf upgrade --refresh
+sudo rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+sudo dnf install https://www.elrepo.org/elrepo-release-9.el9.elrepo.noarch.rpm -y
+dnf list available --disablerepo='*' --enablerepo=elrepo-kernel
+sudo dnf --enablerepo=elrepo-kernel install kernel-ml -y
+```
+
+- Disable SELinux Permanently
+
+```bash
+sudo grubby --update-kernel ALL --args selinux=0
+sudo reboot
+```
+
+
+
+### Install Centos aarch64 GPG key 
 
 ```bash
 sudo rpm --import https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7-aarch64
@@ -1467,6 +1522,7 @@ https://www.msys2.org/
    2. pacman -Su
    3. pacman -S --needed base-devel mingw-w64-x86_64-toolchain
    4. pacman -S mingw-w64-x86_64-rust
+   5. pacman -S git
 
 
 

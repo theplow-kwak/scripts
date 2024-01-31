@@ -82,6 +82,8 @@ class QEMU:
         parser.add_argument("--nssize", type=int, default=1, help="Set the size of NVMe namespace")
         parser.add_argument("--num_queues", type=int, default=32, help="Set the max num of queues")
         parser.add_argument("--vnum", default="", help="Set the vm copies")
+        parser.add_argument("--sriov", action="store_true", help="Set to use sriov")
+        parser.add_argument("--vwc", default="on", choices=["on", "off"], help="Set to vwc for nand")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
             mylogger.setLevel("INFO")
@@ -129,22 +131,29 @@ class QEMU:
         self.vmprocid = f"{self.vmname[0:12]}_{self.vmuid}"
         self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"]
 
-    def runshell(self, cmd, _async=False):
+    def runshell(self, cmd, _async=False, _consol=False):
         if isinstance(cmd, list):
             cmd = " ".join(cmd)
         _cmd = shlex.split(cmd)
         if _async:
             mylogger.debug(f"runshell Async: {cmd}")
-            completed = subprocess.Popen(_cmd)
+            if _consol:
+                completed = subprocess.run(_cmd, text=True)
+            else:
+                completed = subprocess.Popen(_cmd)
             sleep(1)
         else:
             mylogger.debug(f"\n>>>>\nrunshell: {cmd}")
-            completed = subprocess.run(
-                _cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
-            mylogger.debug(
-                f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n"
-            )
+            if _consol:
+                completed = subprocess.run(_cmd, text=True)
+            else:
+                completed = subprocess.run(
+                    _cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+            if completed.stdout:
+                mylogger.debug(
+                    f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n"
+                )
         return completed
 
     def set_qemu(self):
@@ -282,11 +291,23 @@ class QEMU:
                         f"-drive file={ns_backend},id={_NVME},format=raw,if=none,cache=none",
                         f"-device nvme,drive={_NVME},serial=beef{_NVME}",
                     ]
+            elif self.args.sriov:
+                NVME += [
+                    f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
+                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
+                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=256,msix_qsize=256,sriov_max_vfs={_num_ns},sriov_vq_flexible=252,sriov_vi_flexible=254,vwc={self.args.vwc}",
+                ]
+                ns_backend = f"{_NVME}n1.img"
+                if self.check_file(ns_backend, _ns_size):
+                    NVME += [
+                        f"-drive file={ns_backend},id={_NVME}ns,format=raw,if=none,cache=none",
+                        f"-device nvme-ns,drive={_NVME}ns,bus={_NVME},nsid=1",
+                    ]
             else:
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
-                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},num_queues={self.args.num_queues}",
+                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},num_queues={self.args.num_queues},vwc={self.args.vwc}",
                 ]
                 _ctrl_id += 1
                 for _nsid in range(1, _num_ns + 1):
@@ -307,8 +328,9 @@ class QEMU:
             + self.G_TERM
             + ["--geometry=80x24+5+5 --"]
             + [
-                # f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}" if Path(f"{self.home_folder}/qemu/libexec/virtiofsd").exists() else 
-                f"/usr/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock --shared-dir={self.home_folder}"
+                f"{self.home_folder}/qemu/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock -o source={self.home_folder}"
+                if Path(f"{self.home_folder}/qemu/libexec/virtiofsd").exists()
+                else f"/usr/libexec/virtiofsd --socket-path=/tmp/virtiofs_{self.vmuid}.sock --shared-dir={self.home_folder}"
             ]
         )
         if self.args.debug == "cmd":
@@ -447,7 +469,7 @@ class QEMU:
                 )
                 self.CHKPORT = self.SSHPORT
                 self.CONNECT = (
-                    self.G_TERM + ["--"] + [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
+                    ([] if self.args.consol else self.G_TERM + ["--"]) + [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
                 )
             case "spice":
                 self.opts += ["-monitor stdio"]
@@ -484,9 +506,7 @@ class QEMU:
     def set_kernel(self):
         self.KERNEL = [f"-kernel {self.args.vmkernel}"]
         if self.args.initrd:
-            self.KERNEL += [
-                f"-initrd {self.args.initrd}"
-            ]
+            self.KERNEL += [f"-initrd {self.args.initrd}"]
         elif "vmlinuz" in self.args.vmkernel:
             self.KERNEL += [
                 "-initrd",
@@ -554,7 +574,13 @@ class QEMU:
         if not self.findProc(self.vmprocid, 0):
             _qemu_command = (
                 self.sudo
-                + ([] if self.args.debug == "debug" else self.G_TERM + ["--"])
+                + (
+                    []
+                    if self.args.debug == "debug"
+                    else []
+                    if self.args.consol
+                    else self.G_TERM + ["--"]
+                )
                 + self.qemu_exe
                 + self.params
                 + self.opts
@@ -563,7 +589,7 @@ class QEMU:
             if self.args.debug == "cmd":
                 print(" ".join(_qemu_command))
             else:
-                completed = self.runshell(_qemu_command)
+                completed = self.runshell(_qemu_command, _consol=self.args.consol)
         if self.CONNECT:
             _qemu_connect = self.CONNECT
             if self.args.debug == "cmd":
@@ -572,7 +598,7 @@ class QEMU:
                 if completed.returncode == 0 and self.findProc(self.vmprocid):
                     if self.args.connect == "ssh":
                         self.checkConn(60)
-                    self.runshell(_qemu_connect, True)
+                    self.runshell(_qemu_connect, True, _consol=self.args.consol)
 
 
 def main():
