@@ -205,6 +205,42 @@ Say we want to remove commits 2 & 4 from the repo.
 
 
 
+# GIT Truncated history
+
+[git - How to push a shallow clone to a new repo? - Stack Overflow](https://stackoverflow.com/questions/50992188/how-to-push-a-shallow-clone-to-a-new-repo/50996201#50996201)
+
+```bash
+# First, shallow-clone the old repo to the depth we want to keep
+git clone --depth=50 https://...@bitbucket.org/....git
+
+# Go into the directory of the clone
+cd clonedrepo
+
+# Once in the clone's repo directory, remove the old origin
+git remote remove origin
+
+# Store the hash of the oldest commit (ie. in this case, the 50th) in a var
+START_COMMIT=$(git rev-list master|tail -n 1)
+
+# Checkout the oldest commit; detached HEAD
+git checkout $START_COMMIT
+
+# Create a new orphaned branch, which will be temporary
+git checkout --orphan temp_branch
+
+# Commit the initial commit for our new truncated history; it will be the state of the tree at the time of the oldest commit (the 50th)
+git commit -m "Initial commit"
+
+# Now that we have that initial commit, we're ready to replay all the other commits on top of it, in order, so rebase master onto it, except for the oldest commit whose parents don't exist in the shallow clone... it has been replaced by our 'initial commit'
+git rebase --onto temp_branch $START_COMMIT master
+
+# We're now ready to push this to the new remote repo... add the remote...
+git remote add origin https://gitlab.com/....git
+
+# ... and push.  We don't need to push the temp branch, only master, the beginning of whose commit chain will be our 'initial commit'
+git push -u origin master
+```
+
 
 
 # 레드햇에서 YUM 사용하는 방법
