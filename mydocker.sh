@@ -28,9 +28,9 @@ docker_run()
     printf "docker run ${CONTAINER}\n"
     docker_cmd=(
         docker run -it --user $(whoami) 
-        -v /etc/ssl/certs:/etc/ssl/certs:ro
         --hostname ${CONTAINER})
-    [[ -d /etc/pki/ca-trust ]] && docker_cmd+=(-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro)
+        # -v /etc/ssl/certs:/etc/ssl/certs:ro
+    # [[ -d /etc/pki/ca-trust ]] && docker_cmd+=(-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro)
     [[ -n $SHAREFOLDER ]] && docker_cmd+=(--mount type=bind,source="${SHAREFOLDER}",target=/host)
     docker_cmd+=(
         --name "${CONTAINER}" ${DOCKERNAME} /bin/bash)
