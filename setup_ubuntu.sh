@@ -1,5 +1,13 @@
 #!/bin/bash
 
+handle_error()
+{
+    echo "An error occurred on line $1"
+    exit 1
+}
+
+trap 'handle_error $LINENO' ERR
+
 usage()
 {
 cat << EOM
@@ -45,11 +53,13 @@ done
 
 PREFIX=${PREFIX:-$HOME/$NAME}
 
-set_mirror(){
+set_mirror()
+{
     sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
 }
 
-tools() {
+tools()
+{
     echo update
     sudo apt -y update
     sudo apt -y upgrade
@@ -60,11 +70,13 @@ tools() {
     sudo apt -y install dbus-x11 openssh-server libxcb-cursor0 qemu-user-static curl gnupg
 }
 
-timeset() {
+timeset()
+{
     timedatectl set-local-rtc 1 --adjust-system-clock
 }
 
-samba() {
+samba()
+{
     sudo apt install samba -y
     sudo usermod -aG sambashare $USER
     sudo smbpasswd -a $USER
@@ -72,10 +84,10 @@ samba() {
     net usershare add home /home/$USER/ "" Everyone:F guest_ok=no
 }
 
-python() {
+python()
+{
     echo install python3
-    sudo apt -y update
-    sudo apt -y upgrade
+    sudo apt -y update && sudo apt -y upgrade
 
     sudo apt -y install python3-pip && \
     pip3 install --upgrade pip && \
@@ -83,29 +95,34 @@ python() {
     # pip3 install jupyterlab
 }
 
-jenkins() {
+jenkins()
+{
     pip install jenkins python-jenkins wcmatch configobj
 }
 
-chrome() {
+chrome()
+{
     echo install google chrome
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
     sudo dpkg -i google-chrome-stable_current_amd64.deb
 }
 
-bcompare() {
+bcompare()
+{
     echo install byound compare
     wget https://www.scootersoftware.com/bcompare-4.4.4.27058_amd64.deb && \
     sudo apt install ./bcompare-4.4.4.27058_amd64.deb
 }
 
-gitkraken() {
+gitkraken()
+{
     echo install gitkraken
     wget https://release.gitkraken.com/linux/gitkraken-amd64.deb && \
     sudo dpkg -i gitkraken-amd64.deb
 }
 
-typora() {
+typora()
+{
     echo install typora
     wget -qO - https://typora.io/linux/public-key.asc | sudo tee /etc/apt/trusted.gpg.d/typora.asc
     sudo add-apt-repository 'deb https://typora.io/linux ./'
@@ -113,7 +130,8 @@ typora() {
     sudo apt -y install typora
 }
 
-docker() {
+docker()
+{
     echo install docker
     sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     sudo chmod a+r /etc/apt/keyrings/docker.asc
@@ -134,13 +152,23 @@ docker() {
         | sudo dd of=/etc/docker/daemon.json
 }
 
-local_cmd() {
+local_cmd()
+{
     [[ -d $HOME/.local/bin ]] || mkdir -p $HOME/.local/bin
     find $HOME/.local/bin/ -type l -delete
     pushd $HOME/.local/bin
     for file in ~/projects/scripts/*.py; do name=${file##*/}; [[ -e ${name%%.*} ]] || ln -s $file ${name%%.*}; done
     for file in ~/projects/scripts/*.sh; do name=${file##*/}; [[ -e ${name%%.*} ]] && ln -s $file ${name%%.*}2 || ln -s $file ${name%%.*}; done
     popd
+}
+
+upgrade()
+{
+    sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
+    sudo apt -y dist-upgrade
+    sudo apt -y install update-manager-core
+    sudo sed -i 's/=lts/=normal/g' /etc/update-manager/release-upgrades
+    do-release-upgrade
 }
 
 [[ -d $HOME/temp ]] || mkdir $HOME/temp
