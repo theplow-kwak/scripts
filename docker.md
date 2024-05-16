@@ -156,3 +156,15 @@ newgrp docker
 sudo usermod -aG docker $USER    
 ```
 
+
+
+# docker가 실행이 안될때 해결 방법
+
+``` bash
+systemctl stop docker
+sudo ls -la /var/lib/docker/network/files
+sudo rm -rf /var/lib/docker/network
+systemctl start docker
+systemctl status docker.service
+```
+

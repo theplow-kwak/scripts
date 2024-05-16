@@ -84,6 +84,7 @@ class QEMU:
         parser.add_argument("--vnum", default="", help="Set the vm copies")
         parser.add_argument("--sriov", action="store_true", help="Set to use sriov")
         parser.add_argument("--vwc", default="on", choices=["on", "off"], help="Set to vwc for nand")
+        parser.add_argument("--hvci", action="store_true", help="Hypervisor-Protected Code Integrity (HVCI).")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
             mylogger.setLevel("INFO")
@@ -171,10 +172,18 @@ class QEMU:
             case "aarch64":
                 self.params += ["-machine virt -cpu cortex-a72 -device ramfb"]
             case "x86_64":
-                self.params += [
-                    f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"
-                ]
-                self.params += ["-cpu host --enable-kvm"]
+                if self.args.hvci:
+                    self.params += [
+                        f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"
+                    ]
+                    self.params += [
+                        "-cpu Skylake-Client-v3,hv_stimer,hv_synic,hv_relaxed,hv_reenlightenment,hv_spinlocks=0xfff,hv_vpindex,hv_vapic,hv_time,hv_frequencies,hv_runtime,+kvm_pv_unhalt,+vmx --enable-kvm"
+                    ]
+                else:
+                    self.params += [
+                        f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"
+                    ]
+                    self.params += ["-cpu host --enable-kvm"]
                 self.params += [
                     "-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"
                 ]
@@ -188,8 +197,12 @@ class QEMU:
     def set_uefi(self):
         match self.args.arch:
             case "x86_64":
-                _OVMF_PATH = "/usr/share/OVMF"
-                _OVMF_CODE = f"{_OVMF_PATH}/OVMF_CODE.fd"
+                if self.args.hvci:
+                    _OVMF_PATH = "/usr/share/OVMF"
+                    _OVMF_CODE = f"/home/test/qemu/share/qemu/edk2-x86_64-code.fd"
+                else:
+                    _OVMF_PATH = "/usr/share/OVMF"
+                    _OVMF_CODE = f"{_OVMF_PATH}/OVMF_CODE.fd"                   
             case "aarch64":
                 _OVMF_PATH = "/usr/share/qemu-efi-aarch64"
                 _OVMF_CODE = f"{_OVMF_PATH}/QEMU_EFI.fd"
@@ -295,14 +308,15 @@ class QEMU:
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
-                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=256,msix_qsize=256,sriov_max_vfs={_num_ns},sriov_vq_flexible=252,sriov_vi_flexible=254,vwc={self.args.vwc}",
+                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=512,msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510,vwc={self.args.vwc}",
                 ]
                 ns_backend = f"{_NVME}n1.img"
                 if self.check_file(ns_backend, _ns_size):
                     NVME += [
                         f"-drive file={ns_backend},id={_NVME}ns,format=raw,if=none,cache=none",
-                        f"-device nvme-ns,drive={_NVME}ns,bus={_NVME},nsid=1",
+                        f"-device nvme-ns,drive={_NVME}ns,bus={_NVME},nsid=1,shared=false,detached=true",
                     ]
+                _ctrl_id += 1
             else:
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
@@ -336,10 +350,10 @@ class QEMU:
         if self.args.debug == "cmd":
             print(" ".join(virtiofsd))
         else:
-            self.runshell(virtiofsd, True)
+            self.runshell(virtiofsd)
             while not Path(f"/tmp/virtiofs_{self.vmuid}.sock").exists():
-                sleep(1)
                 mylogger.debug("wating for /tmp/virtiofs_{self.vmuid}.sock")
+                sleep(1)
         _virtiofs = [
             f"-chardev socket,id=char{self.vmuid},path=/tmp/virtiofs_{self.vmuid}.sock",
             f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
@@ -463,14 +477,12 @@ class QEMU:
                 self.SSH_CONNECT = (
                     f"{self.hostip} -p {self.SSHPORT}"
                     if self.args.net == "user"
-                    else self.localip
-                    if self.localip is not None
-                    else None
+                    else self.localip if self.localip is not None else None
                 )
                 self.CHKPORT = self.SSHPORT
-                self.CONNECT = (
-                    ([] if self.args.consol else self.G_TERM + ["--"]) + [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
-                )
+                self.CONNECT = ([] if self.args.consol else self.G_TERM + ["--"]) + [
+                    f"ssh {self.args.uname}@{self.SSH_CONNECT}"
+                ]
             case "spice":
                 self.opts += ["-monitor stdio"]
                 self.CHKPORT = self.SPICEPORT
@@ -577,9 +589,7 @@ class QEMU:
                 + (
                     []
                     if self.args.debug == "debug"
-                    else []
-                    if self.args.consol
-                    else self.G_TERM + ["--"]
+                    else [] if self.args.consol else self.G_TERM + ["--"]
                 )
                 + self.qemu_exe
                 + self.params

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+docker_history()
+{
+    docker history --human --format "{{.CreatedBy}}: {{.Size}}" ${DOCKERNAME}
+}
+
 rm_container()
 {
     _CONTAINER=$1
@@ -12,30 +17,48 @@ rm_container()
 rm_image()
 {
     _DOCKERNAME=$1
-    printf "remove docker image ${_DOCKERNAME}\n"
-    docker rm -f $(docker ps -a --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
-    docker image rm $_DOCKERNAME
+    _CONT=$(docker ps -a --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
+    printf "remove docker image ${_DOCKERNAME} - $_CONT\n"
+    [[ -n $_CONT ]] && docker rm -f $_CONT
+    docker rmi $_DOCKERNAME
 }
 
-build_image()
+docker_build()
 {
     printf "docker build image ${DOCKERNAME}\n"
-    docker build -t ${DOCKERNAME} --network=host --build-arg NEWUSER=$(whoami) --build-arg NEWUID=$(id -u) "$DOCKERPATH" || exit 1
+    [[ $FORCE ]] && _force="--no-cache" || _force=""
+    [[ $USER_NAME == "root" ]] && USER_NAME=$(whoami)
+
+    docker_cmd=(docker build $_force -t ${DOCKERNAME} --network=host --build-arg NEWUSER=$USER_NAME --build-arg NEWUID=$(id -u $USER_NAME) "$DOCKERPATH")
+    [[ -n $DOCKERFILE ]] && docker_cmd+=(-f "$DOCKERFILE")
+    echo "${docker_cmd[*]}"
+    ("${docker_cmd[@]}") || exit 1
 }
 
 docker_run()
 {
     printf "docker run ${CONTAINER}\n"
     docker_cmd=(
-        docker run -it --user $(whoami) 
-        --hostname ${CONTAINER})
-        # -v /etc/ssl/certs:/etc/ssl/certs:ro
-    # [[ -d /etc/pki/ca-trust ]] && docker_cmd+=(-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro)
-    [[ -n $SHAREFOLDER ]] && docker_cmd+=(--mount type=bind,source="${SHAREFOLDER}",target=/host)
+        docker run -it --user $USER_NAME
+        -v /etc/timezone:/etc/timezone:ro
+        -e TZ=Asia/Seoul
+        --hostname ${CONTAINER}
+        )
+    if [[ $share_cert ]]; then
+        [[ -d /etc/ssl/certs ]] && docker_cmd+=(-v /etc/ssl/certs:/etc/ssl/certs:ro)
+        [[ -d /etc/pki/ca-trust ]] && docker_cmd+=(-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro)
+    fi
+
+    for _bind in ${!SHARES[@]}; do
+        _path=${SHARES[$_bind]}
+        docker_cmd+=(--mount type=bind,source="${_path}",target=/$_bind)
+    done
+    [[ -n $WORKDIR ]] && docker_cmd+=(--workdir /$WORKDIR)
+
     docker_cmd+=(
         --name "${CONTAINER}" ${DOCKERNAME} /bin/bash)
 
-    echo "${docker_cmd[*]}"
+    echo "${docker_cmd[@]}"
     ("${docker_cmd[@]}")
 }
 
@@ -46,38 +69,63 @@ Usage:
  ${0##*/} [OPTIONS] dockerimage
 
 Options:
- -d, --docker       Path to the docker file
- -s, --share        Path to the shared folder
- -c, --container    Name of the container what you want to run
- -r, --rm           Remove the container
- -R, --rmi          Remove the docker image and associated containers.
+ -u, --uname <NAME>             The login USER name
+ -d, --docker <DOCKER>          Path to the docker file
+ -s, --share <SHARE>            Path to the shared folder
+ -c, --container <CONTAINER>    Name of the container what you want to run
+ -r, --rm                       Remove the container
+ -R, --rmi                      Remove the docker image and associated containers.
 
 EOM
 }
 
-options=$(getopt -n ${0##*/} -o s:d:c:rR \
-                --long help,docker:,container:,share,rm,rmi -- "$@")
+options=$(getopt -n ${0##*/} -o u:d:s:c:rRf \
+                --long help,uname:,docker:,share:,container:,rm,rmi,force,cert -- "$@")
 [ $? -eq 0 ] || { usage; exit 1; }
 eval set -- "$options"
 
 while true; do
     case $1 in
-        -d | --docker )     DOCKERPATH=${2} ;       shift ;;
-        -s | --share )      SHAREFOLDER=${2} ;      shift ;;
-        -c | --container )  CONTAINER=${2} ;        shift ;;
+        -u | --uname )      USER_NAME=$2 ;              shift ;;    # set login user name
+        -d | --docker )     DOCKERPATH=$2 ;             shift ;;
+        -s | --share )      SHAREFOLDERS+=(${2//,/ }) ; shift ;;
+        -c | --container )  CONTAINER=$2 ;              shift ;;
+        -f | --force )      FORCE=1 ;;
         -r | --rm )         removecnt=1 ;;
         -R | --rmi )        removeimg=1 ;;
-        -h | --help )       usage ;                 exit ;;
-        --)                 shift ;                 break ;;
+             --cert )       share_cert=1 ;;
+        -h | --help )       usage ;                     exit ;;
+        --)                 shift ;                     break ;;
     esac
     shift
 done 
 
+[[ -z $USER_NAME ]] && USER_NAME=$(whoami)
+
 if [[ -n ${DOCKERPATH} ]]; then
-    _tmp=$(realpath "${DOCKERPATH}")
-    DOCKERNAME=${_tmp##*/}
-    printf "Docker path: ${DOCKERPATH} \n"
+    DOCKERPATH=$(realpath "${DOCKERPATH}")
+    if [[ -f $DOCKERPATH ]]; then
+        DOCKERFILE=${DOCKERPATH}
+        DOCKERPATH=${DOCKERPATH%/*}
+    fi
+    DOCKERNAME=${DOCKERPATH##*/}
+    printf "Docker path: $DOCKERPATH\n"
+    printf "Docker file: $DOCKERFILE\n"
 fi
+
+declare -A SHARES
+for SHAREFOLDER in ${SHAREFOLDERS[@]};
+do
+    IFS=":" read -ra _split <<< "$SHAREFOLDER"
+    _tmp=$(realpath "${_split[0]}")
+    _path=${_tmp%/}
+    _bind=${_split[1]}
+    [[ -z $_bind ]] && _bind=${_path##*/}
+    printf "bind ${_path} to $_bind\n"
+    
+    SHARES[${_bind}]=$_path
+    WORKDIR=${WORKDIR:-$_bind}
+done
 
 while (($#)); do
     DOCKERNAME=$1
@@ -86,10 +134,12 @@ done
 
 CONTAINER=${CONTAINER:-"${DOCKERNAME}_cnt"}
 printf "Docker name: ${DOCKERNAME} \n"
-printf "Container: ${CONTAINER} \n"
+printf "Container: ${CONTAINER} \n\n"
 
 if [[ -z ${DOCKERNAME} ]] && [[ "${CONTAINER}" == "_cnt" ]]; then
     usage
+    docker images
+    echo ""
     docker ps -a
     exit
 fi
@@ -100,7 +150,7 @@ if [[ $removecnt ]] || [[ $removeimg ]]; then
     exit
 fi
 
-[[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { build_image ; usage ; docker images ; exit ;}
+[[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { docker_build ; docker images ; exit ;}
 [[ $(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
 [[ $(docker ps --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || docker start ${CONTAINER}
 

@@ -70,9 +70,9 @@ tools()
     sudo apt -y install dbus-x11 openssh-server libxcb-cursor0 qemu-user-static curl gnupg
 }
 
-timeset()
-{
-    timedatectl set-local-rtc 1 --adjust-system-clock
+timeset() {
+    sudo timedatectl set-local-rtc 1 --adjust-system-clock
+    sudo timedatectl set-timezone Asia/Seoul
 }
 
 samba()
