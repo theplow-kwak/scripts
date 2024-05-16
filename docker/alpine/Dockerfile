@@ -21,6 +21,7 @@ RUN sed -i 's/https/http/' /etc/apk/repositories && \
     libtool \
     liburing-dev \
     bash \
+    tzdata \
     sudo
 
 ARG NEWUSER=test

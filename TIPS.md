@@ -559,6 +559,9 @@ First create the configuration file /etc/docker/daemon.json as suggested in the 
 Than you stop the containers and restart the docker daemon service:
 
 ```bash
+sudo virsh net-destroy default
+virsh net-edit default
+virsh net-start default
 systemctl restart docker
 ```
 

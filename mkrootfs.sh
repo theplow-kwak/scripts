@@ -11,34 +11,49 @@ isEmptyFolder()
 
 FormatDisk() 
 {
-    local _ROOTFS_FILE=$1
-
-    if [ ! -e $_ROOTFS_FILE ]; then
-        qemu-img create $_ROOTFS_FILE $IMGSIZE
+    if [ ! -e $ROOTFS_FILE ]; then
+        qemu-img create $ROOTFS_FILE $IMGSIZE
     fi
-    if [ -O $_ROOTFS_FILE ]; then
-        mkfs.ext4 $_ROOTFS_FILE
+    if [ -O $ROOTFS_FILE ]; then
+        mkfs.ext4 $ROOTFS_FILE
     else
-        sudo mkfs.ext4 $_ROOTFS_FILE
+        sudo mkfs.ext4 $ROOTFS_FILE
+    fi
+}
+
+InstallModules()
+{
+    echo install kernel module dirvers of $KERNEL
+    if [[ ! $(findmnt $MOUNT_PATH) ]]; then
+        echo $MOUNT_PATH does not mounted !! stop processing !
+        exit 1
+    fi
+    if [[ -n $KERNEL ]]; then
+        kernel_path=$(realpath ~/projects/${KERNEL})
+        if [[ -d $kernel_path ]]; then
+            pushd $kernel_path
+            bldkernel -ihm -t $MOUNT_PATH
+            popd
+        fi
     fi
 }
 
 MakeRootFS()
 {
-    local _MOUNT_PATH=$1
     local _DESTRO=${DESTRO:-"mantic"}
     local _MIRROR=${MIRROR:-"http://mirror.kakao.com/ubuntu/"}
     local _INCLUDE=${INCLUDE:-"--include=build-essential,flex,bison,libssl-dev,libelf-dev,liburing-dev,bc,openssh-server,cifs-utils,net-tools,ca-certificates,gpg,wget,git"}     # ,language-pack-ko
     
-    if [[ ! $(findmnt $_MOUNT_PATH) ]]; then
-        echo $_MOUNT_PATH does not mounted !! stop processing !
+    if [[ ! $(findmnt $MOUNT_PATH) ]]; then
+        echo $MOUNT_PATH does not mounted !! stop processing !
         exit 1
     fi
 
-    echo debootstrap --verbose $_INCLUDE --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
-    sudo debootstrap --verbose $_INCLUDE --arch amd64 $_DESTRO $_MOUNT_PATH $_MIRROR
+    if ! command -v debootstrap &> /dev/null; then echo "debootstrap is not supported!"; return; fi
+    echo debootstrap --verbose $_INCLUDE --arch amd64 $_DESTRO $MOUNT_PATH $_MIRROR
+    sudo debootstrap --verbose $_INCLUDE --arch amd64 $_DESTRO $MOUNT_PATH $_MIRROR
 
-    pushd $_MOUNT_PATH
+    pushd $MOUNT_PATH
 
     sudo mkdir ./mnt/host
     printf "%s\n" \
@@ -83,7 +98,7 @@ MakeRootFS()
         | sudo dd of=./setupenv.sh
         sudo chmod +x ./setupenv.sh
     
-    LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash setupenv.sh   
+    LANG=C.UTF-8 sudo chroot $MOUNT_PATH /bin/bash setupenv.sh   
     sudo rm ./setupenv.sh
 
     sudo cp ~/vm/share/.smb.cred ./etc/
@@ -92,41 +107,35 @@ MakeRootFS()
     sudo chown $USER_NAME:$USER_NAME ./home/$USER_NAME/wpc
     popd
 
-    if [[ -n $KERNEL ]]; then
-        kernel_path=$(realpath ~/projects/${KERNEL})
-        pushd $kernel_path
-        bldkernel -i m -t $_MOUNT_PATH
-        popd
-    fi
-
-    unMountFolder $_MOUNT_PATH
+    InstallModules
 }
 
 MountFolder() {
-    local _ROOTFS_FILE=$1
-    local _MOUNT_PATH=$2
-
-    if (isEmptyFolder $_MOUNT_PATH ); then
-        echo mount $_ROOTFS_FILE to $_MOUNT_PATH
-        sudo mount -o loop $_ROOTFS_FILE $_MOUNT_PATH
+    if (isEmptyFolder $MOUNT_PATH ); then
+        echo mount $ROOTFS_FILE to $MOUNT_PATH
+        sudo mount -o loop $ROOTFS_FILE $MOUNT_PATH
     else
-        echo "$_MOUNT_PATH was not empty. can't mount $_ROOTFS_FILE"
+        echo "$MOUNT_PATH was not empty. can't mount $ROOTFS_FILE"
         MKROOT=0
     fi
 }
 
 unMountFolder() {
-    local _MOUNT_PATH=$1
-
-    echo umount $_MOUNT_PATH
-    sudo umount $_MOUNT_PATH
+    if [[ ! $(findmnt $MOUNT_PATH) ]]; then
+        echo $MOUNT_PATH does not mounted !!
+        exit 1
+    fi
+    echo umount $MOUNT_PATH
+    sudo umount $MOUNT_PATH
     exit 1
 }
 
-ChRoot() {
-    local _MOUNT_PATH=$1
-    
-    LANG=C.UTF-8 sudo chroot $_MOUNT_PATH /bin/bash
+ChRoot() {  
+    if [[ ! $(findmnt $MOUNT_PATH) ]]; then
+        echo $MOUNT_PATH does not mounted !! stop processing !
+        exit 1
+    fi
+    LANG=C.UTF-8 sudo chroot $MOUNT_PATH /bin/bash
 }
 
 usage()
@@ -149,15 +158,17 @@ UNLOAD=0
 CHROOT=0
 FORMAT=0
 MKROOT=0
+MODULE=0
 USER_NAME=${SUDO_USER:-$USER}
 IMGNAME=${PWD##*/}
 
-while getopts ":xu:cfmn:d:s:t:i:k:" opt; do
+while getopts ":xcfmMk:i:u:d:s:t:n:" opt; do
     case $opt in
         x)  UNLOAD=1 ;;	
         c)  CHROOT=1 ;;
         f)  FORMAT=1 ;;
         m)  MKROOT=1 ;;
+        M)  MODULE=1 ;;
         k)	KERNEL=$OPTARG ;;
 		i)  IMGNAME=$OPTARG ;;
         u)  USER_NAME=$OPTARG ;;
@@ -178,20 +189,18 @@ HOST_NAME=${HOST_NAME:-"${IMGNAME%.*}-VM-${_TMP::2}"}
 
 ROOTFS_FILE=${1:-"./${IMGNAME}.img"}
 IMGSIZE=${SIZE:-"16g"}
-MOUNT_PATH=${MPATH:-$(realpath $PWD/rootfs)}
+_MOUNT_PATH=${MPATH:-$PWD/rootfs}
+MOUNT_PATH=$(realpath $_MOUNT_PATH)
 
 echo source $ROOTFS_FILE
 echo target $MOUNT_PATH
 
-[ $UNLOAD -eq 1 ] && unMountFolder $MOUNT_PATH
-
-[ $FORMAT -eq 1 ] && FormatDisk $ROOTFS_FILE $MOUNT_PATH
-
-MountFolder $ROOTFS_FILE $MOUNT_PATH
-
-[ $MKROOT -eq 1 ] && MakeRootFS $MOUNT_PATH
-
-[ $CHROOT -eq 1 ] && ChRoot $MOUNT_PATH
+[ $FORMAT -eq 1 ] && FormatDisk
+MountFolder
+[ $MKROOT -eq 1 ] && { MakeRootFS; unMountFolder; }
+[ $MODULE -eq 1 ] && { InstallModules; unMountFolder; }
+[ $CHROOT -eq 1 ] && chroot
+[ $UNLOAD -eq 1 ] && unMountFolder
 
 echo " end of work"
 

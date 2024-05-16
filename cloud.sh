@@ -44,6 +44,7 @@ write_files:
 ssh_pwauth: false
 disable_root: false
 runcmd:
+  - [ timedatectl, set-local-rtc, 1, --adjust-system-clock ]
   - [ sh, -c, 'touch /etc/cloud/cloud-init.disabled' ]
   - mkdir /mnt/host
 
@@ -58,6 +59,8 @@ power_state:
   message: Bye Bye
   timeout: 30
   condition: True
+
+timezone: Asia/Seoul
 
 EOL
 
@@ -112,7 +115,7 @@ set_args()
             -i | --image)       IMGNAME=$2 ;        shift ;;
             -q | --qemu)        QEMU=$2 ;           shift ;;	
             -n | --net)         NET=$2 ;            shift ;;
-            -k | --kernel)		KERNEL=$2 ;         shift ;;
+            -k | --kernel)      KERNEL=$2 ;         shift ;;
             -u | --uname )      USER_NAME=$2 ;      shift ;;    # set login user name
             -H | --host )       HOST_NAME=$2 ;      shift ;;    
             -f | --fname )      CINIT_FILE=$2 ;     shift ;;
