@@ -166,7 +166,7 @@ upgrade()
 {
     sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
     sudo apt -y dist-upgrade
-    sudo apt -y install update-manager-core
+    sudo apt -y install ubuntu-release-upgrader-core
     sudo sed -i 's/=lts/=normal/g' /etc/update-manager/release-upgrades
     do-release-upgrade
 }
