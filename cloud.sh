@@ -23,7 +23,7 @@ chpasswd:
       password: Passw0rd
       type: text
     - name: $USER_NAME
-      password: qwerasdf
+      password: q
       type: text
   expire: False
 
