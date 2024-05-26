@@ -51,9 +51,9 @@ docker_run()
 
     for _bind in ${!SHARES[@]}; do
         _path=${SHARES[$_bind]}
-        docker_cmd+=(--mount type=bind,source="${_path}",target=/$_bind)
+        docker_cmd+=(--mount type=bind,source="${_path}",target=$HOME_FOLDER/$_bind)
     done
-    [[ -n $WORKDIR ]] && docker_cmd+=(--workdir /$WORKDIR)
+    [[ -n $WORKDIR ]] && docker_cmd+=(--workdir $HOME_FOLDER/$WORKDIR)
 
     docker_cmd+=(
         --name "${CONTAINER}" ${DOCKERNAME} /bin/bash)
@@ -101,6 +101,7 @@ while true; do
 done 
 
 [[ -z $USER_NAME ]] && USER_NAME=$(whoami)
+[[ $USER_NAME == "root" ]] && HOME_FOLDER="/$USER_NAME" || HOME_FOLDER="/home/$USER_NAME" 
 
 if [[ -n ${DOCKERPATH} ]]; then
     DOCKERPATH=$(realpath "${DOCKERPATH}")
