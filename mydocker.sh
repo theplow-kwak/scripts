@@ -1,5 +1,14 @@
 #!/bin/bash
 
+function join() 
+{
+    local separator="$1"
+    shift
+    local first="$1"
+    shift
+    printf "%s" "$first" "${@/#/$separator}"
+}
+
 docker_history()
 {
     docker history --human --format "{{.CreatedBy}}: {{.Size}}" ${DOCKERNAME}
@@ -18,7 +27,7 @@ rm_image()
 {
     _DOCKERNAME=$1
     _CONT=$(docker ps -a --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
-    printf "remove docker image ${_DOCKERNAME} - $_CONT\n"
+    echo "remove docker image ${_DOCKERNAME} /" $(join , ${_CONT[@]}) 
     [[ -n $_CONT ]] && docker rm -f $_CONT
     docker rmi $_DOCKERNAME
 }
@@ -53,7 +62,7 @@ docker_run()
         _path=${SHARES[$_bind]}
         docker_cmd+=(--mount type=bind,source="${_path}",target=$HOME_FOLDER/$_bind)
     done
-    [[ -n $WORKDIR ]] && docker_cmd+=(--workdir $HOME_FOLDER/$WORKDIR)
+    docker_cmd+=(--workdir $HOME_FOLDER/$WORKDIR)
 
     docker_cmd+=(
         --name "${CONTAINER}" ${DOCKERNAME} /bin/bash)
