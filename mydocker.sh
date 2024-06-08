@@ -98,61 +98,66 @@ Options:
 EOM
 }
 
-options=$(getopt -n ${0##*/} -o u:d:s:c:rRf \
-                --long help,uname:,docker:,share:,container:,rm,rmi,force,cert,history,inspect -- "$@")
-[ $? -eq 0 ] || { usage; exit 1; }
-eval set -- "$options"
+function set_args()
+{
+    options=$(getopt -n ${0##*/} -o u:d:s:c:rRf \
+                    --long help,uname:,docker:,share:,container:,rm,rmi,force,cert,history,inspect -- "$@")
+    [ $? -eq 0 ] || { usage; exit 1; }
+    eval set -- "$options"
 
-while true; do
-    case $1 in
-        -u | --uname )      USER_NAME=$2 ;              shift ;;    # set login user name
-        -d | --docker )     DOCKERPATH=$2 ;             shift ;;
-        -s | --share )      SHAREFOLDERS+=(${2//,/ }) ; shift ;;
-        -c | --container )  CONTAINER=$2 ;              shift ;;
-        -f | --force )      FORCE=1 ;;
-        -r | --rm )         removecnt=1 ;;
-        -R | --rmi )        removeimg=1 ;;
-             --cert )       share_cert=1 ;;
-             --history )    do_history=1 ;;
-             --inspect )    do_inspect=1 ;;
-        -h | --help )       usage ;                     exit ;;
-        --)                 shift ;                     break ;;
-    esac
-    shift
-done 
+    while true; do
+        case $1 in
+            -u | --uname )      USER_NAME=$2 ;              shift ;;    # set login user name
+            -d | --docker )     DOCKERPATH=$2 ;             shift ;;
+            -s | --share )      SHAREFOLDERS+=(${2//,/ }) ; shift ;;
+            -c | --container )  CONTAINER=$2 ;              shift ;;
+            -f | --force )      FORCE=1 ;;
+            -r | --rm )         removecnt=1 ;;
+            -R | --rmi )        removeimg=1 ;;
+                --cert )       share_cert=1 ;;
+                --history )    do_history=1 ;;
+                --inspect )    do_inspect=1 ;;
+            -h | --help )       usage ;                     exit ;;
+            --)                 shift ;                     break ;;
+        esac
+        shift
+    done 
 
-[[ -z $USER_NAME ]] && USER_NAME=$(whoami)
-[[ $USER_NAME == "root" ]] && HOME_FOLDER="/$USER_NAME" || HOME_FOLDER="/home/$USER_NAME" 
+    [[ -z $USER_NAME ]] && USER_NAME=$(whoami)
+    [[ $USER_NAME == "root" ]] && HOME_FOLDER="/$USER_NAME" || HOME_FOLDER="/home/$USER_NAME" 
 
-if [[ -n ${DOCKERPATH} ]]; then
-    DOCKERPATH=$(realpath "${DOCKERPATH}")
-    if [[ -f $DOCKERPATH ]]; then
-        DOCKERFILE=${DOCKERPATH}
-        DOCKERPATH=${DOCKERPATH%/*}
+    if [[ -n ${DOCKERPATH} ]]; then
+        DOCKERPATH=$(realpath "${DOCKERPATH}")
+        if [[ -f $DOCKERPATH ]]; then
+            DOCKERFILE=${DOCKERPATH}
+            DOCKERPATH=${DOCKERPATH%/*}
+        fi
+        DOCKERNAME=${DOCKERPATH##*/}
+        printf "Docker path: $DOCKERPATH\n"
+        printf "Docker file: $DOCKERFILE\n"
     fi
-    DOCKERNAME=${DOCKERPATH##*/}
-    printf "Docker path: $DOCKERPATH\n"
-    printf "Docker file: $DOCKERFILE\n"
-fi
 
-declare -A SHARES
-for SHAREFOLDER in ${SHAREFOLDERS[@]};
-do
-    IFS=":" read -ra _split <<< "$SHAREFOLDER"
-    _tmp=$(realpath "${_split[0]}")
-    _path=${_tmp%/}
-    _bind=${_split[1]}
-    [[ -z $_bind ]] && _bind=${_path##*/}
-    printf "bind ${_path} to $_bind\n"
-    
-    SHARES[${_bind}]=$_path
-    WORKDIR=${WORKDIR:-$_bind}
-done
+    declare -A SHARES
+    for SHAREFOLDER in ${SHAREFOLDERS[@]};
+    do
+        IFS=":" read -ra _split <<< "$SHAREFOLDER"
+        _tmp=$(realpath "${_split[0]}")
+        _path=${_tmp%/}
+        _bind=${_split[1]}
+        [[ -z $_bind ]] && _bind=${_path##*/}
+        printf "bind ${_path} to $_bind\n"
+        
+        SHARES[${_bind}]=$_path
+        WORKDIR=${WORKDIR:-$_bind}
+    done
 
-while (($#)); do
-    DOCKERNAME=$1
-    shift
-done
+    while (($#)); do
+        DOCKERNAME=$1
+        shift
+    done
+}
+
+set_args $@
 
 CONTAINER=${CONTAINER:-"${DOCKERNAME}_cnt"}
 printf "Docker name: ${DOCKERNAME} \n"
