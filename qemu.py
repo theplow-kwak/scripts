@@ -195,21 +195,17 @@ class QEMU:
         ]
 
     def set_uefi(self):
+        _OVMF_PATH = f"{self.home_folder}/qemu/share/qemu"
         match self.args.arch:
             case "x86_64":
-                if self.args.hvci:
-                    _OVMF_PATH = "/usr/share/OVMF"
-                    _OVMF_CODE = f"/home/test/qemu/share/qemu/edk2-x86_64-code.fd"
-                else:
-                    _OVMF_PATH = "/usr/share/OVMF"
-                    _OVMF_CODE = f"{_OVMF_PATH}/OVMF_CODE.fd"                   
+                _OVMF_CODE = f"{_OVMF_PATH}/edk2-x86_64-code.fd"                   
             case "aarch64":
-                _OVMF_PATH = "/usr/share/qemu-efi-aarch64"
-                _OVMF_CODE = f"{_OVMF_PATH}/QEMU_EFI.fd"
+                _OVMF_CODE = f"{_OVMF_PATH}/edk2-aarch64-code.fd"
             case _:
                 return
 
-        _UEFI = [f"-bios {_OVMF_CODE}"]
+        # _UEFI = [f"-bios {_OVMF_CODE}"]
+        _UEFI = [f"-drive if=pflash,format=raw,readonly=on,file={_OVMF_CODE}"]
         self.params += _UEFI
 
     def set_usb3(self):
