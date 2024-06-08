@@ -9,30 +9,40 @@ function join()
     printf "%s" "$first" "${@/#/$separator}"
 }
 
-docker_history()
+function docker_history()
 {
     docker history --human --format "{{.CreatedBy}}: {{.Size}}" ${DOCKERNAME}
+    exit
 }
 
-rm_container()
+function docker_inspect()
+{
+    docker inspect --format '{{join .Args ", "}}' ${CONTAINER}
+    docker inspect --format '{{range .Mounts}}{{println .Source "\t->" .Destination}}{{end}}' ${CONTAINER}
+    exit
+}
+
+function rm_container()
 {
     _CONTAINER=$1
     if [[ $(docker ps -a --filter "name=^/$_CONTAINER$" --format '{{.Names}}') == $_CONTAINER ]]; then
         printf "remove container ${_CONTAINER}\n"
         docker rm $_CONTAINER
     fi
+    exit
 }
 
-rm_image()
+function rm_image()
 {
     _DOCKERNAME=$1
     _CONT=$(docker ps -a --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
     echo "remove docker image ${_DOCKERNAME} /" $(join , ${_CONT[@]}) 
     [[ -n $_CONT ]] && docker rm -f $_CONT
     docker rmi $_DOCKERNAME
+    exit
 }
 
-docker_build()
+function docker_build()
 {
     printf "docker build image ${DOCKERNAME}\n"
     [[ $FORCE ]] && _force="--no-cache" || _force=""
@@ -44,7 +54,7 @@ docker_build()
     ("${docker_cmd[@]}") || exit 1
 }
 
-docker_run()
+function docker_run()
 {
     printf "docker run ${CONTAINER}\n"
     docker_cmd=(
@@ -71,7 +81,7 @@ docker_run()
     ("${docker_cmd[@]}")
 }
 
-usage()
+function usage()
 {
 cat << EOM
 Usage:
@@ -89,7 +99,7 @@ EOM
 }
 
 options=$(getopt -n ${0##*/} -o u:d:s:c:rRf \
-                --long help,uname:,docker:,share:,container:,rm,rmi,force,cert -- "$@")
+                --long help,uname:,docker:,share:,container:,rm,rmi,force,cert,history,inspect -- "$@")
 [ $? -eq 0 ] || { usage; exit 1; }
 eval set -- "$options"
 
@@ -103,6 +113,8 @@ while true; do
         -r | --rm )         removecnt=1 ;;
         -R | --rmi )        removeimg=1 ;;
              --cert )       share_cert=1 ;;
+             --history )    do_history=1 ;;
+             --inspect )    do_inspect=1 ;;
         -h | --help )       usage ;                     exit ;;
         --)                 shift ;                     break ;;
     esac
@@ -156,9 +168,8 @@ fi
 
 [[ $removecnt ]] && rm_container ${CONTAINER}
 [[ $removeimg ]] && rm_image ${DOCKERNAME}
-if [[ $removecnt ]] || [[ $removeimg ]]; then
-    exit
-fi
+[[ $do_history ]] && docker_history ${DOCKERNAME}
+[[ $do_inspect ]] && docker_inspect ${DOCKERNAME}
 
 [[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { docker_build ; docker images ; exit ;}
 [[ $(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
