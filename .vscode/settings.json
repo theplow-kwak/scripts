@@ -1,6 +1,3 @@
 {
-    "docker.commands.attach": [
-        "${containerCommand} start ${containerId}", 
-        "${containerCommand} attach ${containerId}"
-    ]
+    "docker.commands.attach": "${containerCommand} start ${containerId}; ${containerCommand} attach ${containerId}",
 }
