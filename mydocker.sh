@@ -17,8 +17,11 @@ function docker_history()
 
 function docker_inspect()
 {
-    docker inspect --format '{{join .Args ", "}}' ${CONTAINER}
-    docker inspect --format '{{range .Mounts}}{{println .Source "\t->" .Destination}}{{end}}' ${CONTAINER}
+    docker inspect --format 'User:       {{.Config.User}}' ${CONTAINER}
+    docker inspect --format 'Args:       {{join .Args " "}}' ${CONTAINER}
+    docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}' ${CONTAINER}
+    echo "Mounts:"
+    docker inspect --format '{{range .Mounts}}{{println " " .Source "\t->" .Destination}}{{end}}' ${CONTAINER}
     exit
 }
 
@@ -137,7 +140,6 @@ function set_args()
         printf "Docker file: $DOCKERFILE\n"
     fi
 
-    declare -A SHARES
     for SHAREFOLDER in ${SHAREFOLDERS[@]};
     do
         IFS=":" read -ra _split <<< "$SHAREFOLDER"
@@ -157,10 +159,11 @@ function set_args()
     done
 }
 
+declare -A SHARES
 set_args $@
 
 CONTAINER=${CONTAINER:-"${DOCKERNAME}_cnt"}
-printf "Docker name: ${DOCKERNAME} \n"
+printf "ImageName: ${DOCKERNAME} \n"
 printf "Container: ${CONTAINER} \n\n"
 
 if [[ -z ${DOCKERNAME} ]] && [[ "${CONTAINER}" == "_cnt" ]]; then
