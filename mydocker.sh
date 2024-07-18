@@ -117,9 +117,9 @@ function set_args()
             -f | --force )      FORCE=1 ;;
             -r | --rm )         removecnt=1 ;;
             -R | --rmi )        removeimg=1 ;;
-                --cert )       share_cert=1 ;;
-                --history )    do_history=1 ;;
-                --inspect )    do_inspect=1 ;;
+                --cert )        share_cert=1 ;;
+                --history )     do_history=1 ;;
+                --inspect )     do_inspect=1 ;;
             -h | --help )       usage ;                     exit ;;
             --)                 shift ;                     break ;;
         esac
@@ -163,8 +163,8 @@ declare -A SHARES
 set_args $@
 
 CONTAINER=${CONTAINER:-"${DOCKERNAME}_cnt"}
-printf "ImageName: ${DOCKERNAME} \n"
-printf "Container: ${CONTAINER} \n\n"
+printf "DockerName: ${DOCKERNAME} \n"
+printf "Container : ${CONTAINER} \n\n"
 
 if [[ -z ${DOCKERNAME} ]] && [[ "${CONTAINER}" == "_cnt" ]]; then
     usage
