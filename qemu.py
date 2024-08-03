@@ -85,6 +85,7 @@ class QEMU:
         parser.add_argument("--sriov", action="store_true", help="Set to use sriov")
         parser.add_argument("--vwc", default="on", choices=["on", "off"], help="Set to vwc for nand")
         parser.add_argument("--hvci", action="store_true", help="Hypervisor-Protected Code Integrity (HVCI).")
+        parser.add_argument("--memsize", help="Set the memory size")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
             mylogger.setLevel("INFO")
@@ -189,6 +190,8 @@ class QEMU:
                 ]
                 self.opts += [f"-vga {self.args.vga}"]
         _numcore = int(os.cpu_count() / 2)
+        if self.args.memsize:
+            self.memsize = self.args.memsize
         self.params += [
             f"-m {self.memsize} -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults",
             "-rtc base=localtime",
