@@ -168,3 +168,67 @@ systemctl start docker
 systemctl status docker.service
 ```
 
+
+
+# docker 용량 증가시 대처
+
+참고: [docker 배포 시 디스크 용량 정리](https://shg-engineer.tistory.com/18)
+
+docker root의 디렉터리 확인.
+
+```bash
+docker info | grep -i "docker root dir"
+```
+
+docker가 차지하는 용량 확인.
+
+```bash
+sudo du -h --max-depth=1 /var/lib/docker | sort -rh
+```
+
+docker cache 제거. 참고: [docker 용량 정리](https://soundprovider.tistory.com/entry/Docker-Docker-%EC%9A%A9%EB%9F%89-%EC%A0%95%EB%A6%AC#2.%20Docker%20cache%20%EC%A0%95%EB%A6%AC-1)
+
+```bash
+# 1) build시 사용된 cache 제거
+docker builder prune
+
+# 2) 사용되지 않는 container 제거
+docker ps --filter status=exited --filter status=dead -q
+docker rm $(docker ps --filter=status=exited --filter=status=dead -q)
+
+# 3) 여러 prune 옵션들
+# prune을 여러 사용자가 있는 서버에서 실행하는 것은 매우 위험하므로, 조심해서 사용하자
+docker container prune
+docker image prune
+docker volume prune
+docker network prune
+docker system prune
+```
+
+
+
+# 다른 스토리지 사용하기
+
+/etc/docker/daemon.json
+
+```json
+{
+    "graph": "/ext/docker/"
+}
+```
+
+재기동하기
+
+```
+# 해당 폴더 생성
+sudo mkdir -p /ext/docker
+
+# 재기동
+sudo systemctl stop docker
+sudo systemctl start docker
+
+# 위 방식이 안되면 service 명령을 써서 재기동한다
+# sudo service docker stop
+# sudo service docker start
+```
+

@@ -18,10 +18,28 @@ function docker_history()
 function docker_inspect()
 {
     docker inspect --format 'User:       {{.Config.User}}' ${CONTAINER}
-    docker inspect --format 'Args:       {{join .Args " "}}' ${CONTAINER}
+    docker inspect --format 'Args:       {{.Path}} {{join .Args " "}}' ${CONTAINER}   
     docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}' ${CONTAINER}
     echo "Mounts:"
     docker inspect --format '{{range .Mounts}}{{println " " .Source "\t->" .Destination}}{{end}}' ${CONTAINER}
+    exit
+}
+
+function docker_import()
+{
+    [[ -f $DOCKERFILE ]] || exit
+    [[ -z $EXT_CMD ]] && docker_cmd=(docker import $DOCKERFILE ${DOCKERNAME}) || docker_cmd=(docker import $DOCKERFILE ${DOCKERNAME} --change "CMD [${EXT_CMD}]")
+    echo "${docker_cmd[@]}"
+    ("${docker_cmd[@]}")
+    exit
+}
+
+function docker_export()
+{
+    [[ -n $DOCKERFILE ]] || DOCKERFILE=$DOCKERPATH
+    docker_cmd=(docker export ${CONTAINER} --output $DOCKERFILE)
+    echo "${docker_cmd[@]}"
+    ("${docker_cmd[@]}")
     exit
 }
 
@@ -47,7 +65,6 @@ function rm_image()
 
 function docker_build()
 {
-    printf "docker build image ${DOCKERNAME}\n"
     [[ $FORCE ]] && _force="--no-cache" || _force=""
     [[ $USER_NAME == "root" ]] && USER_NAME=$(whoami)
 
@@ -59,7 +76,6 @@ function docker_build()
 
 function docker_run()
 {
-    printf "docker run ${CONTAINER}\n"
     docker_cmd=(
         docker run -it --user $USER_NAME
         -v /etc/timezone:/etc/timezone:ro
@@ -77,8 +93,10 @@ function docker_run()
     done
     docker_cmd+=(--workdir $HOME_FOLDER/$WORKDIR)
 
+    [[ -z $EXT_CMD ]] && EXT_CMD=/bin/bash || EXT_CMD=(${EXT_CMD//,/ })
+
     docker_cmd+=(
-        --name "${CONTAINER}" ${DOCKERNAME} /bin/bash)
+        --name "${CONTAINER}" ${DOCKERNAME} "${EXT_CMD[@]}")
 
     echo "${docker_cmd[@]}"
     ("${docker_cmd[@]}")
@@ -104,7 +122,7 @@ EOM
 function set_args()
 {
     options=$(getopt -n ${0##*/} -o u:d:s:c:rRf \
-                    --long help,uname:,docker:,share:,container:,rm,rmi,force,cert,history,inspect -- "$@")
+                    --long help,uname:,docker:,share:,container:,rm,rmi,force,cert,history,inspect,import,export,cmd: -- "$@")
     [ $? -eq 0 ] || { usage; exit 1; }
     eval set -- "$options"
 
@@ -120,6 +138,9 @@ function set_args()
                 --cert )        share_cert=1 ;;
                 --history )     do_history=1 ;;
                 --inspect )     do_inspect=1 ;;
+                --import )      do_import=1 ;;
+                --export )      do_export=1 ;;
+                --cmd )         EXT_CMD=$2 ;                shift ;;
             -h | --help )       usage ;                     exit ;;
             --)                 shift ;                     break ;;
         esac
@@ -178,6 +199,8 @@ fi
 [[ $removeimg ]] && rm_image ${DOCKERNAME}
 [[ $do_history ]] && docker_history ${DOCKERNAME}
 [[ $do_inspect ]] && docker_inspect ${DOCKERNAME}
+[[ $do_import ]] && docker_import ${DOCKERNAME}
+[[ $do_export ]] && docker_export ${DOCKERNAME}
 
 [[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { docker_build ; docker images ; exit ;}
 [[ $(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
