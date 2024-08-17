@@ -13,6 +13,23 @@
             "intelliSenseMode": "windows-msvc-x64",
             "cStandard": "c17",
             "cppStandard": "c++23"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/Tools/DAL/Development/src/nvme/include",
+                "${workspaceFolder}/Tools/3rd-party/**",
+                "${workspaceFolder}/Tools/3rd-party/expected-lite/include",
+                "/opt/qt_5.15.5/**",
+                "/home/test/.conan/data/fmt/8.1.1/_/_/source/src/include",
+                "/opt/rh/**"		
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
         }
     ],
     "version": 4

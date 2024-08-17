@@ -2,6 +2,84 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "(gdb) Launch dish2",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Tools/CustommerTools/Apple/_install/dish2",
+            "sourceFileMap": {
+                "/home/test/": "/home/test/projects/"
+            },
+            "args": [
+                "s",
+                "--path=./GetVendorLog.txt"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/Tools/CustommerTools/Apple/dish2",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/Tools/CustommerTools/Apple/_install/lib64"
+                }
+            ],
+            "externalConsole": true,
+            "miDebuggerPath": "${workspaceFolder}/.vscode/gdb.sh",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch lazarus",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Tools/CustommerTools/Apple/lazarus/lazarus",
+            "sourceFileMap": {
+                "/home/test/": "/home/test/projects/"
+            },
+            "args": [
+                "-n",
+                "/dev/nvme0",
+                "-o",
+                "get_vendor_log",
+                "-p",
+                "/tmp/lazarus",
+                "--i-have-qualfied-this-command-on-test-system",
+                "-v"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/Tools/CustommerTools/Apple/lazarus",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/Tools/CustommerTools/Apple/_install/lib64"
+                }
+            ],
+            "externalConsole": true,
+            "miDebuggerPath": "${workspaceFolder}/.vscode/gdb.sh",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "name": "C/C++: cl.exe luncher active file",
             "type": "cppvsdbg",
             "request": "launch",

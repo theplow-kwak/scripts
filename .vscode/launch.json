@@ -1,0 +1,24 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "cwd": "${userHome}/vm/windows",
+            "name": "Python: 현재 파일",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "/dev/nvme1n1", 
+            ],
+            // "args": ["/dev/nvme0", "CentOS-Stream-GenericCloud-8-20220913.0.aarch64.qcow2",
+            //     "cloud_init.iso", "alpine.qcow2", "kinetic-server-cloudimg-arm64.img", "/dev/sda", "nvme1", "testnvme", "-d", "info", 
+            //     "--connect", "ssh", "--net", "bridge"
+            // ],
+        }
+    ]
+}
