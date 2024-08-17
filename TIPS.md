@@ -205,7 +205,29 @@ Say we want to remove commits 2 & 4 from the repo.
 
 
 
-# GIT Truncated history
+# GIT 
+
+## Setup a Private Git Server on Ubuntu
+
+1. Install Git: ``` sudo apt install git ```
+
+2. Git Shell Path: add git-shell located path to the /etc/shells. (`which git-shell`)
+
+3. Setup a dedicated (non-sudo) git user
+   ```bash
+   sudo adduser git
+   git: ~$ mkdir ~/.ssh && chmod 700 ~/.ssh
+   ```
+
+4. copy the public key to our git user SSH directory: 
+
+   ```bash
+   ssh-copy-id -i ~/.ssh/id_rsa.pub git@192.168.1.58
+   ```
+
+   
+
+## GIT Truncated history
 
 [git - How to push a shallow clone to a new repo? - Stack Overflow](https://stackoverflow.com/questions/50992188/how-to-push-a-shallow-clone-to-a-new-repo/50996201#50996201)
 
@@ -1027,6 +1049,12 @@ pip upgrade 도중 library가 없어 에러가 발생하는 경우 아래 packag
 ```bash
 sudo apt install libgirepository1.0-dev libcairo2-dev librsync-dev libcups2-dev libgpgme-dev swig
 sudo apt install build-essential libdbus-glib-1-dev libgirepository1.0-dev
+```
+
+error: externally-managed-environment 발생시
+
+```bash
+python3 -m pip config set global.break-system-packages true
 ```
 
 
