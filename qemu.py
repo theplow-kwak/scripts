@@ -9,6 +9,7 @@ import subprocess
 import platform
 import hashlib
 import getpass
+import functools
 from pathlib import Path
 from time import sleep
 
@@ -62,11 +63,11 @@ class QEMU:
         parser.add_argument("--qemu", "-q", action="store_true", help="Use the qemu public distribution")
         parser.add_argument("--rmssh", action="store_true", help="Remove existing SSH key")
         parser.add_argument("--tpm", action="store_true", help="Support TPM device for windows 11")
-        parser.add_argument("--arch", "-a", default="x86_64", choices=["x86_64", "aarch64", "arm"], help="The architecture of target VM.",)
+        parser.add_argument("--arch", "-a", default="x86_64", choices=["x86_64", "aarch64", "arm", "riscv64"], help="The architecture of target VM.",)
         parser.add_argument("--connect", default="spice", choices=["ssh", "spice", "qemu"], help="Connection method - 'spice'(default)",)
         parser.add_argument("--debug", "-d", nargs="?", const="info", default="warning", choices=["cmd", "debug", "info", "warning"], help="Set the logging level. (default: 'warning')")
         parser.add_argument("--ipmi", choices=["internal", "external"], help="IPMI model - 'external', 'internal'")
-        parser.add_argument("--machine", default="q35", choices=["q35", "ubuntu-q35", "pc", "ubuntu"], help="IPMI model - 'external', 'internal'")
+        parser.add_argument("--machine", default="q35", choices=["q35", "ubuntu-q35", "pc", "ubuntu", "virt", "sifive_u"], help="IPMI model - 'external', 'internal'")
         parser.add_argument("--net", default="bridge", choices=["user", "tap", "bridge", "none"], help="Network interface model - 'user', 'tap', 'bridge'")
         parser.add_argument("--uname", "-u", default=os.getlogin(), help="Set login user name")
         parser.add_argument("--vga", default="qxl", help="Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
@@ -85,6 +86,9 @@ class QEMU:
         parser.add_argument("--sriov", action="store_true", help="Set to use sriov")
         parser.add_argument("--vwc", default="on", choices=["on", "off"], help="Set to vwc for nand")
         parser.add_argument("--hvci", action="store_true", help="Hypervisor-Protected Code Integrity (HVCI).")
+        parser.add_argument("--did", type=functools.partial(int, base=0), default=0x2a49, help="Set the NVMe device ID")
+        parser.add_argument("--mn", help="Set the model name")
+        parser.add_argument("--ext", help="Set the extra params")
         parser.add_argument("--memsize", help="Set the memory size")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
@@ -168,6 +172,8 @@ class QEMU:
         self.params = [f"-name {self.vmname},process={self.vmprocid}"]
 
         match self.args.arch:
+            case "riscv64":
+                self.params += ["-machine virt -bios none"]
             case "arm":
                 self.params += ["-machine virt -cpu cortex-a53 -device ramfb"]
             case "aarch64":
@@ -236,9 +242,12 @@ class QEMU:
         self.params += _USB
 
     def set_disks(self):
-        _SCSI = [
-            "-object iothread,id=iothread0 -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
-        ]
+        if self.args.arch == "riscv64":
+            _SCSI = []
+        else:
+            _SCSI = [
+                "-object iothread,id=iothread0 -device virtio-scsi-pci,id=scsi0,iothread=iothread0"
+            ]
         _DISKS = []
         for _image in self.vmimages:
             match _image.split("."):
@@ -320,7 +329,7 @@ class QEMU:
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
-                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},num_queues={self.args.num_queues},vwc={self.args.vwc}",
+                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},num_queues={self.args.num_queues},vwc={self.args.vwc},did={self.args.did},mn={self.args.mn}",
                 ]
                 _ctrl_id += 1
                 for _nsid in range(1, _num_ns + 1):
@@ -516,6 +525,8 @@ class QEMU:
 
     def set_kernel(self):
         self.KERNEL = [f"-kernel {self.args.vmkernel}"]
+        if self.args.arch == "riscv64":
+            return
         if self.args.initrd:
             self.KERNEL += [f"-initrd {self.args.initrd}"]
         elif "vmlinuz" in self.args.vmkernel:
