@@ -1,0 +1,36 @@
+FROM oraclelinux:8
+
+RUN yum -y install \
+            sudo \
+            which \
+            wget \
+            perl \
+            python3 \
+            python3-pip \
+            git \
+            cmake \
+            clang \
+            libudev-devel \
+            openssl-devel \
+            readline-devel \
+            sqlite-devel \
+            zlib-devel \
+            xz \
+            gcc-toolset-13
+
+ENTRYPOINT [ "scl", "enable", "gcc-toolset-13" ]
+CMD [ "/bin/bash" ]
+
+ARG NEWUSER=test
+ARG NEWUID=1000
+RUN adduser --uid $NEWUID --comment "${NEWUSER}" ${NEWUSER} && \
+    echo "$NEWUSER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$NEWUSER && chmod 0440 /etc/sudoers.d/$NEWUSER
+
+RUN python3 -m pip install --upgrade pip && \
+    python3 -m pip install conan Cheetah3 && \
+    conan profile detect && \
+    echo "core.net.http:cacert_path = {{conan_home_folder}}/cacert.pem" >> ${HOME}/.conan2/global.conf
+
+USER ${NEWUSER}
+RUN conan profile detect && \
+    echo "core.net.http:cacert_path = {{conan_home_folder}}/cacert.pem" >> ${HOME}/.conan2/global.conf
