@@ -14,7 +14,6 @@ sudo apt install openjdk-8-jdk
 ```bash
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
 sudo keytool -import -trustcacerts -storepass changeit -noprompt -keystore ${JAVA_HOME}/jre/lib/security/cacerts -file /usr/share/ca-certificates/mozilla/cert.crt
-sudo keytool -import -trustcacerts -storepass changeit -noprompt -keystore ${JAVA_HOME}/jre/lib/security/cacerts -file /usr/share/ca-certificates/mozilla/certadca.crt
 ```
 
 * 인증서가 제대로 추가되었는지 확인
