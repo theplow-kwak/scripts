@@ -214,7 +214,7 @@ class QEMU:
                 return
 
         # _UEFI = [f"-bios {_OVMF_CODE}"]
-        _UEFI = [f"-drive if=pflash,format=raw,readonly=on,file={_OVMF_CODE}"]
+        _UEFI = [f"-drive if=pflash,format=raw,file={_OVMF_CODE}"]
         self.params += _UEFI
 
     def set_usb3(self):
@@ -384,7 +384,7 @@ class QEMU:
     def set_spice(self):
         SPICE = [
             f"-spice port={self.SPICEPORT},disable-ticketing=on",
-            "-audiodev spice,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0,mixer=off ",
+            "-audiodev spice,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0,mixer=off",
         ]
         SPICE_AGENT = [
             "-chardev spicevmc,id=vdagent,name=vdagent",
