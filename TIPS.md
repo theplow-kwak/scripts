@@ -225,7 +225,21 @@ Say we want to remove commits 2 & 4 from the repo.
    ssh-copy-id -i ~/.ssh/id_rsa.pub git@192.168.1.58
    ```
 
-   
+
+
+
+## git clone into an existing folder
+
+```bash
+rm -fr .git
+git init
+git remote add origin your-git-url
+git fetch origin
+git reset --mixed origin/master --no-refresh
+git branch --set-upstream-to=origin/master master
+```
+
+
 
 ## GIT Truncated history
 
