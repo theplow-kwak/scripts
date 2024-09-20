@@ -24,29 +24,6 @@ git_init_local()
     popd
 }
 
-git_init_local2()
-{
-    Repository=$1
-    [[ -e ${Repository} ]] || { echo "Local repository ${Repository} does not exist"; exit 1; }
-
-    pushd ${Repository}
-    if [[ ! -e .git ]]; then
-        git init
-        git config user.email $USER
-        git config user.name $USER
-        git add *
-        git commit -m "Initial Commit"
-    fi
-    if [[ -z $(git remote) ]] ; then
-        git remote add $REMOTE git@localhost:/home/git/${Repository}.git
-    fi
-    branch=($(git branch --remote --list))
-    branchs=(${branch//// })
-    echo ${branchs[@]}
-    git push --set-upstream ${branchs[0]} ${branchs[1]}
-    popd
-}
-
 git_init_server()
 {
     Repository=$1
