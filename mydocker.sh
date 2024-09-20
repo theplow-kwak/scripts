@@ -11,7 +11,7 @@ function join()
 
 function docker_history()
 {
-    docker history --human --format "{{.CreatedBy}}: {{.Size}}" ${DOCKERNAME}
+    docker history --human --format "{{.CreatedBy}}: {{.Size}}" ${REPOSITORY}
     exit
 }
 
@@ -28,7 +28,7 @@ function docker_inspect()
 function docker_import()
 {
     [[ -f $DOCKERFILE ]] || exit
-    [[ -z $EXT_CMD ]] && docker_cmd=(docker import $DOCKERFILE ${DOCKERNAME}) || docker_cmd=(docker import $DOCKERFILE ${DOCKERNAME} --change "CMD [${EXT_CMD}]")
+    [[ -z $EXT_CMD ]] && docker_cmd=(docker import $DOCKERFILE ${REPOSITORY}) || docker_cmd=(docker import $DOCKERFILE ${REPOSITORY} --change "CMD [${EXT_CMD}]")
     echo "${docker_cmd[@]}"
     ("${docker_cmd[@]}")
     exit
@@ -55,11 +55,11 @@ function rm_container()
 
 function rm_image()
 {
-    _DOCKERNAME=$1
-    _CONT=$(docker ps -a --filter "ancestor=${_DOCKERNAME}" --format '{{.Names}}')
-    echo "remove docker image ${_DOCKERNAME} /" $(join , ${_CONT[@]}) 
+    _IMAGE=$1
+    _CONT=$(docker ps -a --filter "ancestor=${_IMAGE}" --format '{{.Names}}')
+    echo "remove docker image ${_IMAGE} /" $(join , ${_CONT[@]}) 
     [[ -n $_CONT ]] && docker rm -f $_CONT
-    docker rmi $_DOCKERNAME
+    docker rmi $_IMAGE
     exit
 }
 
@@ -68,7 +68,7 @@ function docker_build()
     [[ $FORCE ]] && _force="--no-cache" || _force=""
     [[ $USER_NAME == "root" ]] && USER_NAME=$(whoami)
 
-    docker_cmd=(docker build $_force -t ${DOCKERNAME} --network=host --build-arg NEWUSER=$USER_NAME --build-arg NEWUID=$(id -u $USER_NAME) "$DOCKERPATH")
+    docker_cmd=(docker build $_force -t ${REPOSITORY} --network=host --build-arg NEWUSER=$USER_NAME --build-arg NEWUID=$(id -u $USER_NAME) "$DOCKERPATH")
     [[ -n $DOCKERFILE ]] && docker_cmd+=(-f "$DOCKERFILE")
     echo "${docker_cmd[*]}"
     ("${docker_cmd[@]}") || exit 1
@@ -96,7 +96,7 @@ function docker_run()
     [[ -z $EXT_CMD ]] && EXT_CMD=/bin/bash || EXT_CMD=(${EXT_CMD//,/ })
 
     docker_cmd+=(
-        --name "${CONTAINER}" ${DOCKERNAME} "${EXT_CMD[@]}")
+        --name "${CONTAINER}" ${REPOSITORY} "${EXT_CMD[@]}")
 
     echo "${docker_cmd[@]}"
     ("${docker_cmd[@]}")
@@ -106,7 +106,7 @@ function usage()
 {
 cat << EOM
 Usage:
- ${0##*/} [OPTIONS] dockerimage
+ ${0##*/} [OPTIONS] name
 
 Options:
  -u, --uname <NAME>             The login USER name
@@ -156,7 +156,7 @@ function set_args()
             DOCKERFILE=${DOCKERPATH}
             DOCKERPATH=${DOCKERPATH%/*}
         fi
-        DOCKERNAME=${DOCKERPATH##*/}
+        REPOSITORY=${DOCKERPATH##*/}
         printf "Docker path: $DOCKERPATH\n"
         printf "Docker file: $DOCKERFILE\n"
     fi
@@ -175,19 +175,25 @@ function set_args()
     done
 
     while (($#)); do
-        DOCKERNAME=$1
+        PARAM_NAME=$1
         shift
     done
 }
 
+IMAGES=($(docker images --format '{{.Repository}}'))
+CONTAINERS=($(docker ps -a --format '{{.Names}}'))
+echo "IMAGES: ${IMAGES[@]}"
+echo "CONTAINERS: ${CONTAINERS[@]}"
+
 declare -A SHARES
 set_args $@
 
-CONTAINER=${CONTAINER:-"${DOCKERNAME}_cnt"}
-printf "DockerName: ${DOCKERNAME} \n"
+[[ $(echo ${IMAGES[@]} | grep -ow "$PARAM_NAME") ]] && REPOSITORY=$PARAM_NAME
+[[ $(echo ${CONTAINERS[@]} | grep -ow "$PARAM_NAME") ]] && CONTAINER=$PARAM_NAME
+printf "Repository: ${REPOSITORY} \n"
 printf "Container : ${CONTAINER} \n\n"
 
-if [[ -z ${DOCKERNAME} ]] && [[ "${CONTAINER}" == "_cnt" ]]; then
+if [[ -z ${REPOSITORY} ]] && [[ -z ${CONTAINER} ]]; then
     usage
     docker images
     echo ""
@@ -196,13 +202,13 @@ if [[ -z ${DOCKERNAME} ]] && [[ "${CONTAINER}" == "_cnt" ]]; then
 fi
 
 [[ $removecnt ]] && rm_container ${CONTAINER}
-[[ $removeimg ]] && rm_image ${DOCKERNAME}
-[[ $do_history ]] && docker_history ${DOCKERNAME}
-[[ $do_inspect ]] && docker_inspect ${DOCKERNAME}
-[[ $do_import ]] && docker_import ${DOCKERNAME}
-[[ $do_export ]] && docker_export ${DOCKERNAME}
+[[ $removeimg ]] && rm_image ${REPOSITORY}
+[[ $do_history ]] && docker_history ${REPOSITORY}
+[[ $do_inspect ]] && docker_inspect ${REPOSITORY}
+[[ $do_import ]] && docker_import ${REPOSITORY}
+[[ $do_export ]] && docker_export ${REPOSITORY}
 
-[[ -n $DOCKERNAME ]] && [[ -z $(docker images -q --filter reference=$DOCKERNAME) ]] && { docker_build ; docker images ; exit ;}
+[[ -n $REPOSITORY ]] && [[ -z $(docker images -q --filter reference=$REPOSITORY) ]] && { docker_build ; docker images ; exit ;}
 [[ $(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
 [[ $(docker ps --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || docker start ${CONTAINER}
 
