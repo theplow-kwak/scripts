@@ -189,7 +189,8 @@ declare -A SHARES
 set_args $@
 
 [[ $(echo ${IMAGES[@]} | grep -ow "$PARAM_NAME") ]] && REPOSITORY=$PARAM_NAME
-[[ $(echo ${CONTAINERS[@]} | grep -ow "$PARAM_NAME") ]] && CONTAINER=$PARAM_NAME
+[[ $(echo ${CONTAINERS[@]} | grep -ow "$PARAM_NAME") ]] && CONTAINER=${CONTAINER:-$PARAM_NAME}
+CONTAINER=${CONTAINER:-$REPOSITORY}
 printf "Repository: ${REPOSITORY} \n"
 printf "Container : ${CONTAINER} \n\n"
 
