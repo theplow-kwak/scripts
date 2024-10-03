@@ -11,6 +11,7 @@ function join()
 
 function docker_history()
 {
+    [[ -z ${REPOSITORY} ]] && REPOSITORY=$(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Image}}')
     docker history --human --format "{{.CreatedBy}}: {{.Size}}" ${REPOSITORY}
     exit
 }
@@ -56,9 +57,9 @@ function rm_container()
 function rm_image()
 {
     _IMAGE=$1
-    _CONT=$(docker ps -a --filter "ancestor=${_IMAGE}" --format '{{.Names}}')
-    echo "remove docker image ${_IMAGE} /" $(join , ${_CONT[@]}) 
-    [[ -n $_CONT ]] && docker rm -f $_CONT
+    _CONTAINERS=$(docker ps -a --filter "ancestor=${_IMAGE}" --format '{{.Names}}')
+    echo "remove docker image ${_IMAGE} /" $(join , ${_CONTAINERS[@]}) 
+    [[ -n $_CONTAINERS ]] && docker rm -f $_CONTAINERS
     docker rmi $_IMAGE
     exit
 }
@@ -150,13 +151,18 @@ function set_args()
     [[ -z $USER_NAME ]] && USER_NAME=$(whoami)
     [[ $USER_NAME == "root" ]] && HOME_FOLDER="/$USER_NAME" || HOME_FOLDER="/home/$USER_NAME" 
 
+    while (($#)); do
+        PARAM_NAME=$1
+        shift
+    done
+
     if [[ -n ${DOCKERPATH} ]]; then
         DOCKERPATH=$(realpath "${DOCKERPATH}")
         if [[ -f $DOCKERPATH ]]; then
             DOCKERFILE=${DOCKERPATH}
             DOCKERPATH=${DOCKERPATH%/*}
         fi
-        REPOSITORY=${DOCKERPATH##*/}
+        REPOSITORY=${PARAM_NAME:-${DOCKERPATH##*/}}
         printf "Docker path: $DOCKERPATH\n"
         printf "Docker file: $DOCKERFILE\n"
     fi
@@ -172,11 +178,6 @@ function set_args()
         
         SHARES[${_bind}]=$_path
         WORKDIR=${WORKDIR:-$_bind}
-    done
-
-    while (($#)); do
-        PARAM_NAME=$1
-        shift
     done
 }
 
@@ -204,10 +205,10 @@ fi
 
 [[ $removecnt ]] && rm_container ${CONTAINER}
 [[ $removeimg ]] && rm_image ${REPOSITORY}
-[[ $do_history ]] && docker_history ${REPOSITORY}
-[[ $do_inspect ]] && docker_inspect ${REPOSITORY}
-[[ $do_import ]] && docker_import ${REPOSITORY}
-[[ $do_export ]] && docker_export ${REPOSITORY}
+[[ $do_history ]] && docker_history
+[[ $do_inspect ]] && docker_inspect
+[[ $do_import ]] && docker_import
+[[ $do_export ]] && docker_export
 
 [[ -n $REPOSITORY ]] && [[ -z $(docker images -q --filter reference=$REPOSITORY) ]] && { docker_build ; docker images ; exit ;}
 [[ $(docker ps -a --filter "name=^/$CONTAINER$" --format '{{.Names}}') == $CONTAINER ]] || { docker_run ; exit ; }
