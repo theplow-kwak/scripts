@@ -218,14 +218,13 @@ class QEMU:
         self.params += _UEFI
 
     def set_usb3(self):
-        _USB = ["-device qemu-xhci,id=usb3"]
+        _USB = ["-device qemu-xhci,id=xhci1"]
         _USB_REDIR = [
-            "-chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,chardev=usbredirchardev1,id=usbredirdev1",
-            "-chardev spicevmc,name=usbredir,id=usbredirchardev2 -device usb-redir,chardev=usbredirchardev2,id=usbredirdev2",
-            "-chardev spicevmc,name=usbredir,id=usbredirchardev3 -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3",
-            "-chardev spicevmc,name=usbredir,id=usbredirchardev4 -device usb-redir,chardev=usbredirchardev4,id=usbredirdev4",
+            "-chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,bus=xhci1.0,chardev=usbredirchardev1,id=usbredirdev1",
+            "-chardev spicevmc,name=usbredir,id=usbredirchardev2 -device usb-redir,bus=xhci1.0,chardev=usbredirchardev2,id=usbredirdev2",
+            "-chardev spicevmc,name=usbredir,id=usbredirchardev3 -device usb-redir,bus=xhci1.0,chardev=usbredirchardev3,id=usbredirdev3",
         ]
-        _USB_PT = ["-device qemu-xhci,id=xhci", "-device usb-host,bus=xhci.0,vendorid=0x04e8,productid=0x6860"]
+        _USB_PT = ["-device qemu-xhci,id=xhci2", "-device usb-host,bus=xhci2.0,vendorid=0x04e8,productid=0x6860"]
         self.params += _USB + _USB_REDIR + _USB_PT
 
     def set_usb_storage(self):
