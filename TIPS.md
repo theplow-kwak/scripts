@@ -277,6 +277,9 @@ git remote add origin https://gitlab.com/....git
 git push -u origin master
 ```
 
+## tag list
+
+git for-each-ref --sort=-creatordate --format '%(refname)%09 %(creatordate)' refs/tags --count=5
 
 
 # 레드햇에서 YUM 사용하는 방법
