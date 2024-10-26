@@ -207,7 +207,7 @@ class QEMU:
         _OVMF_PATH = f"{self.home_folder}/qemu/share/qemu"
         match self.args.arch:
             case "x86_64":
-                _OVMF_CODE = f"{_OVMF_PATH}/edk2-x86_64-code.fd"                   
+                _OVMF_CODE = f"{_OVMF_PATH}/edk2-x86_64-code.fd"
             case "aarch64":
                 _OVMF_CODE = f"{_OVMF_PATH}/edk2-aarch64-code.fd"
             case _:
@@ -225,8 +225,8 @@ class QEMU:
             "-chardev spicevmc,name=usbredir,id=usbredirchardev3 -device usb-redir,chardev=usbredirchardev3,id=usbredirdev3",
             "-chardev spicevmc,name=usbredir,id=usbredirchardev4 -device usb-redir,chardev=usbredirchardev4,id=usbredirdev4",
         ]
-        _USB_PT = ["-device usb-host,hostbus=3,hostport=1"]
-        self.params += _USB + _USB_REDIR
+        _USB_PT = ["-device qemu-xhci,id=xhci", "-device usb-host,bus=xhci.0,vendorid=0x04e8,productid=0x6860"]
+        self.params += _USB + _USB_REDIR + _USB_PT
 
     def set_usb_storage(self):
         if self.args.stick and Path(self.args.stick).exists():
@@ -251,6 +251,11 @@ class QEMU:
         _DISKS = []
         for _image in self.vmimages:
             match _image.split("."):
+                case ["wiftest", *ext]:
+                    _DISKS += [
+                        f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{_image},format=qcow2,id=drive-{self.index}",
+                        f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}"
+                    ]
                 case [*name, "qcow2" | "QCOW2"]:
                     _DISKS += [
                         f"-drive file={_image},cache=writeback,id=drive-{self.index}"
