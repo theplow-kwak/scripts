@@ -73,8 +73,9 @@ class QEMU:
         parser.add_argument("--vga", default="qxl", help="Set the type of VGA graphic card. 'virtio', 'qxl'(default)")
         parser.add_argument("--stick", help="Set the USB storage image")
         parser.add_argument("--ip", help="Set local ip")
-        parser.add_argument("images", metavar="IMAGES", nargs="+", help="Set the VM images")
+        parser.add_argument("images", metavar="IMAGES", nargs="*", help="Set the VM images")
         parser.add_argument("--nvme", help="Set the NVMe images")
+        parser.add_argument("--vender", help="Set the PC vender")
         parser.add_argument("--kernel", dest="vmkernel", help="Set the Linux Kernel image")
         parser.add_argument("--rootdev", help="Set the rootfs dev")
         parser.add_argument("--initrd", help="Set the initrd image")
@@ -95,6 +96,11 @@ class QEMU:
             mylogger.setLevel("INFO")
         else:
             mylogger.setLevel(self.args.debug.upper())
+        if self.args.nvme:
+            _result = self.runshell(f"lsblk -d -o NAME,MODEL")
+            if _result.returncode == 0:
+                _images = [line.split()[0] for line in _result.stdout.splitlines() if self.args.nvme.lower() in line.lower()]
+                for _image in _images: self.args.images.append(f"/dev/{_image}") 
         if self.args.numns:
             self.use_nvme = 1
 
@@ -188,8 +194,11 @@ class QEMU:
                     ]
                 else:
                     self.params += [
-                        f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"
-                    ]
+                        f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"                    ]
+                    if self.args.vender:
+                        self.params += [
+                            f"-smbios type=1,manufacturer={self.args.vender},product='{self.args.vender} Notebook PC'"
+                        ]
                     self.params += ["-cpu host --enable-kvm"]
                 self.params += [
                     "-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"
