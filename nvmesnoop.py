@@ -23,6 +23,7 @@ import argparse
 
 import numpy as np
 import pandas as pd
+
 # import matplotlib.pyplot as plt
 import threading
 
@@ -140,42 +141,43 @@ TASK_COMM_LEN = 16  # linux/sched.h
 DISK_NAME_LEN = 32  # linux/genhd.h
 
 nvme_cmd_opcode = {
-    0 : 'read',
-    1 : 'write',
-    2 : 'flush',
-    3 : 'discard',
-    4 : 'ZONE_REPORT',
-    5 : 'SECURE_ERASE',
-    6 : 'ZONE_RESET',
-    7 : 'WRITE_SAME',
-    9 : 'write_zeroes',
-    32: 'SCSI_IN',
-    33: 'SCSI_OUT',
-    34: 'DRV_IN',
-    35: 'DRV_OUT',
-    0x100: 'delete_sq',
-    0x101: 'create_sq',
-    0x102: 'get_log_page',
-    0x104: 'delete_cq',
-    0x105: 'create_cq',
-    0x106: 'identify',
-    0x108: 'abort_cmd',
-    0x109: 'set_features',
-    0x10a: 'get_features',
-    0x10c: 'async_event',
-    0x10d: 'ns_mgmt',
-    0x110: 'activate_fw',
-    0x111: 'download_fw',
-    0x115: 'ns_attach',
-    0x118: 'keep_alive',
-    0x119: 'directive_send',
-    0x11a: 'directive_recv',
-    0x17C: 'dbbuf',
-    0x180: 'format_nvm',
-    0x181: 'security_send',
-    0x182: 'security_recv',
-    0x184: 'sanitize_nvm',
+    0: "read",
+    1: "write",
+    2: "flush",
+    3: "discard",
+    4: "ZONE_REPORT",
+    5: "SECURE_ERASE",
+    6: "ZONE_RESET",
+    7: "WRITE_SAME",
+    9: "write_zeroes",
+    32: "SCSI_IN",
+    33: "SCSI_OUT",
+    34: "DRV_IN",
+    35: "DRV_OUT",
+    0x100: "delete_sq",
+    0x101: "create_sq",
+    0x102: "get_log_page",
+    0x104: "delete_cq",
+    0x105: "create_cq",
+    0x106: "identify",
+    0x108: "abort_cmd",
+    0x109: "set_features",
+    0x10A: "get_features",
+    0x10C: "async_event",
+    0x10D: "ns_mgmt",
+    0x110: "activate_fw",
+    0x111: "download_fw",
+    0x115: "ns_attach",
+    0x118: "keep_alive",
+    0x119: "directive_send",
+    0x11A: "directive_recv",
+    0x17C: "dbbuf",
+    0x180: "format_nvm",
+    0x181: "security_send",
+    0x182: "security_recv",
+    0x184: "sanitize_nvm",
 }
+
 
 class Data(ct.Structure):
     _fields_ = [
@@ -209,14 +211,15 @@ class StreamInfo:
 
 from bmcore import *
 
+
 class CaptureNvme(CaptureThread):
-    name = 'nvme'
+    name = "nvme"
     interval = 1
-    logformat = '{:>8} {:<20} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'
-    header = ['index', 'timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
+    logformat = "{:>8} {:<20} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}"
+    header = ["index", "timestamp", "taskid", "nvme", "opcode", "stream", "slba", "len", "latency"]
     nvmedata = RingBuffer(200000)
 
-    def __init__(self, dev=None, filename=None, verbose='t'):
+    def __init__(self, dev=None, filename=None, verbose="t"):
         super(CaptureNvme, self).__init__(filename, verbose)
         self.count = 0
 
@@ -225,93 +228,94 @@ class CaptureNvme(CaptureThread):
         global prog
         prog = prog.replace("FILTER_ADMIN", "")
         if dev is not None:
-            prog = prog.replace('FILTER_NVME', '{}'.format(dev))
+            prog = prog.replace("FILTER_NVME", "{}".format(dev))
         else:
             prog = prog.replace("FILTER_NVME", "")
         prog = prog.replace("FILTER_OPCODE", "")
 
-        self.bcc = BPF(text=prog, cflags=['-w'])
+        self.bcc = BPF(text=prog, cflags=["-w"])
         self.bcc.attach_kprobe(event="nvme_setup_cmd", fn_name="trace_req_start")
         self.bcc.attach_kprobe(event="nvme_complete_rq", fn_name="trace_req_completion")
 
     def run(self):
         # loop with callback to print_event
-        self.bcc["events"].open_perf_buffer(self.get_event, page_cnt=4096 * 64 )
+        self.bcc["events"].open_perf_buffer(self.get_event, page_cnt=4096 * 64)
         super(CaptureNvme, self).run()
 
     # process event
     def get_event(self, cpu, data, size):
         event = ct.cast(data, ct.POINTER(Data)).contents
 
-        self.result = [round(float(event.ts) / 1000000000, 6), event.taskid.decode('UTF-8'), event.disk_name.decode('UTF-8'),
-                  nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xff).rstrip("L")),
-                  event.stream, int(event.slba), int(event.len), round(float(event.latency) / 1000000000, 6)]
+        self.result = [
+            round(float(event.ts) / 1000000000, 6),
+            event.taskid.decode("UTF-8"),
+            event.disk_name.decode("UTF-8"),
+            nvme_cmd_opcode.get(event.opcode, hex(event.opcode & 0xFF).rstrip("L")),
+            event.stream,
+            int(event.slba),
+            int(event.len),
+            round(float(event.latency) / 1000000000, 6),
+        ]
         self.count += 1
-        #self.nvmedata.append(self.result)
+        # self.nvmedata.append(self.result)
         self.logging([self.count] + self.result)
 
-        if nvme_cmd_opcode.get(event.opcode) is 'write':
+        if nvme_cmd_opcode.get(event.opcode) is "write":
             self.streaminfo.add(event.stream, event.len)
-
 
     def work(self):
         self.bcc.perf_buffer_poll(1000)
 
-
     def summary(self):
         print()
-        print('Total operation count: ', self.count)
-        print(' Write count: {}, written data: {}'.format(*self.streaminfo.total()))
+        print("Total operation count: ", self.count)
+        print(" Write count: {}, written data: {}".format(*self.streaminfo.total()))
         info = self.streaminfo.summary()
         for n in range(len(info)):
-            print(' stream {} counts {} written {}'.format(n, info[n][0], info[n][1]))
+            print(" stream {} counts {} written {}".format(n, info[n][0], info[n][1]))
 
     def getdata(self):
         return self.nvmedata.get()
 
 
-
 def Statistics(trace_datas):
-    print("\n\n Operation counts and data size: \n",
-          trace_datas.pivot_table(values='len', index='stream', columns=['opcode'], aggfunc=['count', 'sum'],
-                                  fill_value=0))
-    print("\n\n LBA describes per each stream: \n", trace_datas.groupby('stream')['slba'].describe())
-    print("\n\n length describes per each stream: \n", trace_datas.groupby('stream')['len'].describe())
-    print("\n\n latency describes per each stream: \n", trace_datas.groupby('stream')['latency'].describe())
+    print("\n\n Operation counts and data size: \n", trace_datas.pivot_table(values="len", index="stream", columns=["opcode"], aggfunc=["count", "sum"], fill_value=0))
+    print("\n\n LBA describes per each stream: \n", trace_datas.groupby("stream")["slba"].describe())
+    print("\n\n length describes per each stream: \n", trace_datas.groupby("stream")["len"].describe())
+    print("\n\n latency describes per each stream: \n", trace_datas.groupby("stream")["latency"].describe())
 
 
 def graph(chunk, ax_slba, ax_latency):
 
-    nStreams = chunk['stream'].max() + 1
+    nStreams = chunk["stream"].max() + 1
 
-    datas = chunk[['slba', 'latency']] # .set_index(p_trace['timestamp'])
-    streams = np.array(chunk['stream'])
-    opcodes = chunk['opcode']
+    datas = chunk[["slba", "latency"]]  # .set_index(p_trace['timestamp'])
+    streams = np.array(chunk["stream"])
+    opcodes = chunk["opcode"]
 
     ax_slba.clear()
-    key = 'slba'
-    #ax_slba.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
+    key = "slba"
+    # ax_slba.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
     for n in range(nStreams):
-        ax_slba.plot(datas[list(opcodes == 'write') & (streams == n)][key], '.', label="stream=%d " % (n))
+        ax_slba.plot(datas[list(opcodes == "write") & (streams == n)][key], ".", label="stream=%d " % (n))
         ax_slba.set_ylabel(key)
 
     ax_latency.clear()
-    key = 'latency'
-    #ax_latency.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
+    key = "latency"
+    # ax_latency.plot(datas[list(opcodes != 'write')][key], '.', color='silver', label="others")
     for n in range(nStreams):
-        ax_latency.plot(datas[list(opcodes == 'write') & (streams == n)][key], '.', label="stream=%d " % (n))
+        ax_latency.plot(datas[list(opcodes == "write") & (streams == n)][key], ".", label="stream=%d " % (n))
         ax_latency.set_ylabel(key)
 
-    plt.xlabel('time')
+    plt.xlabel("time")
     plt.legend()
     plt.draw()
     plt.pause(1e-17)
 
 
-Display_Format = '{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}'
-NVMe_dtype = {'timestamp': 'float64', 'taskid': 'category', 'nvme': 'category', 'opcode': 'category', 'stream': 'uint8',
-         'slba': 'uint32', 'len': 'uint16', 'latency': 'float16'}
-NVMe_Columns = ['timestamp', 'taskid', 'nvme', 'opcode', 'stream', 'slba', 'len', 'latency']
+Display_Format = "{:>8} {:>16} {:^16} {:^10} {:^16} {:^6} {:>14} {:>7} {:>16}"
+NVMe_dtype = {"timestamp": "float64", "taskid": "category", "nvme": "category", "opcode": "category", "stream": "uint8", "slba": "uint32", "len": "uint16", "latency": "float16"}
+NVMe_Columns = ["timestamp", "taskid", "nvme", "opcode", "stream", "slba", "len", "latency"]
 
 
 def ViewResult(filename):
@@ -323,9 +327,8 @@ def ViewResult(filename):
     # trace_datas = pd.DataFrame()
     # trace_datas = pd.read_csv(filename, header=0, dtype=dtype)
     chunks = pd.read_csv(filename, index_col=0, header=0, dtype=NVMe_dtype, chunksize=1000000)
-    #, skiprows= skiprows, nrows=nrows)
-    print('elaps {} seconds'.format(time.time()-start))
-
+    # , skiprows= skiprows, nrows=nrows)
+    print("elaps {} seconds".format(time.time() - start))
 
     fig = plt.figure(figsize=(15, 9))
     ax_slba = plt.subplot(211)
@@ -346,10 +349,10 @@ def ViewResult(filename):
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('-d', '--display', action='store_true', help='display the reports')
-    argparser.add_argument('-o', '--outfile', help='output file')
-    argparser.add_argument('-f', '--filename', help='trace data file (csv)')  # nargs='+',
-    argparser.add_argument('-v', '--verbose', nargs='?', default='s', help='verbose display')
+    argparser.add_argument("-d", "--display", action="store_true", help="display the reports")
+    argparser.add_argument("-o", "--outfile", help="output file")
+    argparser.add_argument("-f", "--filename", help="trace data file (csv)")  # nargs='+',
+    argparser.add_argument("-v", "--verbose", nargs="?", default="s", help="verbose display")
     args = argparser.parse_args()
 
     outfilename = "nvme" + time.strftime("-%m%d-%H%M") + ".csv"
@@ -360,20 +363,19 @@ def main():
     if args.filename:
         ViewResult(args.filename)
     else:
-        #app = QtGui.QApplication(sys.argv)
-        #thisapp = App()
-        #thisapp.show()
+        # app = QtGui.QApplication(sys.argv)
+        # thisapp = App()
+        # thisapp.show()
 
-        #sys.exit(app.exec_())
-
+        # sys.exit(app.exec_())
 
         nvmesnoop = CaptureNvme(filename=outfilename, verbose=args.verbose)
         nvmesnoop.start()
 
         try:
             while 1:
-                #datas = np.array(nvmesnoop.getdata())
-                #if len(datas):
+                # datas = np.array(nvmesnoop.getdata())
+                # if len(datas):
                 #    print(datas[-10:,5])
                 time.sleep(0.1)
         except KeyboardInterrupt:
@@ -381,9 +383,8 @@ def main():
 
         nvmesnoop.shutdown()
         nvmesnoop.join()
-        #print(nvmesnoop.getdata())
+        # print(nvmesnoop.getdata())
         nvmesnoop.summary()
-
 
         if args.display:
             ViewResult([outfilename])
@@ -391,4 +392,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
