@@ -1,3 +1,6 @@
 {
     "docker.commands.attach": "${containerCommand} start ${containerId}; ${containerCommand} attach ${containerId}",
+    "black-formatter.args": [
+        "--line-length", "180"
+    ],
 }
