@@ -29,7 +29,7 @@ function docker_inspect()
 function docker_import()
 {
     [[ -f $DOCKERFILE ]] || exit
-    [[ -z $EXT_CMD ]] && docker_cmd=(docker import $DOCKERFILE ${REPOSITORY}) || docker_cmd=(docker import $DOCKERFILE ${REPOSITORY} --change "CMD [${EXT_CMD}]")
+    [[ -z $EXT_CMD ]] && docker_cmd=(docker import $DOCKERFILE ${REPOSITORY}) || docker_cmd=(docker import $DOCKERFILE ${REPOSITORY} --change "CMD [${EXT_CMD[@]}]")
     echo "${docker_cmd[@]}"
     ("${docker_cmd[@]}")
     exit
@@ -94,7 +94,7 @@ function docker_run()
     done
     docker_cmd+=(--workdir $HOME_FOLDER/$WORKDIR)
 
-    [[ -z $EXT_CMD ]] && EXT_CMD=/bin/bash || EXT_CMD=(${EXT_CMD//,/ })
+    [[ -z $EXT_CMD ]] && EXT_CMD=/bin/bash
 
     docker_cmd+=(
         --name "${CONTAINER}" ${REPOSITORY} "${EXT_CMD[@]}")
@@ -141,7 +141,7 @@ function set_args()
                 --inspect )     do_inspect=1 ;;
                 --import )      do_import=1 ;;
                 --export )      do_export=1 ;;
-                --cmd )         EXT_CMD=$2 ;                shift ;;
+                --cmd )         EXT_CMD+=(${2//,/ }) ;      shift ;;
             -h | --help )       usage ;                     exit ;;
             --)                 shift ;                     break ;;
         esac

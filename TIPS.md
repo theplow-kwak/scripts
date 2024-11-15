@@ -279,7 +279,10 @@ git push -u origin master
 
 ## tag list
 
+```bash
 git for-each-ref --sort=-creatordate --format '%(refname)%09 %(creatordate)' refs/tags --count=5
+```
+
 
 
 # 레드햇에서 YUM 사용하는 방법
@@ -975,6 +978,16 @@ String value DefaultUserName, DefaultPassword
 
 [Boot to a virtual hard disk: Add a VHDX or VHD to the boot menu]: https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/boot-to-vhd--native-boot--add-a-virtual-hard-disk-to-the-boot-menu?view=windows-11
 [Native Boot Windows 11 Virtual Hard Disk (VHDX)]: https://www.elevenforum.com/t/native-boot-windows-11-virtual-hard-disk-vhdx.611/
+
+## How to bypass TPM 2.0 requirements when upgrading to Windows 11
+
+```powershell
+reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\CompatMarkers" /f
+reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Shared" /f
+reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TargetVersionUpgradeExperienceIndicators" /f
+reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t REG_MULTI_SZ /s ',' /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192,"
+reg.exe add "HKLM\SYSTEM\Setup\MoSetup" /f /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1
+```
 
 
 
