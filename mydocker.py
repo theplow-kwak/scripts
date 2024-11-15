@@ -75,8 +75,8 @@ class DockerMaster(object):
         self.parser.add_argument("--force", "-f", action="store_true", help="Do not use cache when building the image")
         self.args = self.parser.parse_args()
 
-        _method = self.args.name[0] if self.args.name else ""
-        self.name = self.args.name[-1] if self.args.name else ""
+        _method = self.args.name.pop(0) if self.args.name and self.args.name[0] in self.method_list else ""
+        self.name = self.args.name[0] if self.args.name else ""
         self.method = getattr(self, _method, self._default)
 
     def _start(self):
@@ -150,11 +150,16 @@ class DockerMaster(object):
         print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}").stdout.rstrip())
 
     def imports(self):
+        if not self.args.docker:
+            mylogger.error("Docker import: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            return
+        _name = self.args.name[0] if self.args.name else self.docker_file.split('.')[0]
+        docker_cmd = [f"docker import {self.args.docker} {_name}"]
         if self.args.extcmd:
             _EXT_CMD = ",".join(f'"{cmd}"' for cmd in self.args.extcmd)
-            runshell(f"docker import {self.args.docker} {self.name} --change 'ENTRYPOINT [{_EXT_CMD}]'", _consol=True)
-        else:
-            runshell(f"docker import {self.args.docker} {self.name}", _consol=True)
+            docker_cmd += [f"--change 'ENTRYPOINT [{_EXT_CMD}]'"]
+        print(" ".join(docker_cmd))
+        runshell(docker_cmd, _consol=True)
 
     def export(self):
         runshell(f"docker export {self.container} --output {self.args.docker}", _consol=True)
