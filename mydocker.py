@@ -49,6 +49,12 @@ def get_image(image):
     return next((item for item in images if item == image), None)
 
 
+def get_image_id(image):
+    _result = runshell("docker images --format '{{.ID}}'")
+    images = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
+    return next((item for item in images if item == image), None)
+
+
 def get_containers(image):
     _result = runshell(f"docker ps -a --filter 'ancestor={image}'" + " --format '{{.Names}}'")
     containers = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
@@ -57,6 +63,12 @@ def get_containers(image):
 
 def get_container(container):
     _result = runshell("docker ps -a --format '{{.Names}}'")
+    containers = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
+    return next((item for item in containers if item == container), None)
+
+
+def get_container_id(container):
+    _result = runshell("docker ps -a --format '{{.ID}}'")
     containers = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
     return next((item for item in containers if item == container), None)
 
@@ -91,7 +103,11 @@ class DockerMaster(object):
             if not self.name:
                 self.name = self.docker_dir.name
         self.container = get_container(self.args.container) if self.args.container else get_container(self.name)
+        if not self.container:
+            self.container = get_container_id(self.name)
         self.image = get_image(self.name)
+        if not self.image:
+            self.image = get_image_id(self.name)
         if not self.image and self.container:
             self.image = runshell(f"docker ps -a --filter 'name=^/{self.container}$'" + " --format '{{.Image}}'").stdout.rsplit()[0]
         print(f"Image    : {self.image}")
@@ -143,17 +159,22 @@ class DockerMaster(object):
         print(runshell("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}").stdout.rstrip())
 
     def inspect(self):
-        print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}").stdout.rstrip())
-        print(runshell("docker inspect --format 'Args:       {{.Path}} {{join .Args \" \"}}'" + f" {self.container}").stdout.rstrip())
-        print(runshell("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}").stdout.rstrip())
-        print("Mounts:")
-        print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}").stdout.rstrip())
+        if self.container:
+            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}").stdout.rstrip())
+            print(runshell("docker inspect --format 'Args:       {{.Path}} {{join .Args \" \"}}'" + f" {self.container}").stdout.rstrip())
+            print(runshell("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}").stdout.rstrip())
+            print("Mounts:")
+            print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}").stdout.rstrip())
+        elif self.image:
+            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.image}").stdout.rstrip())
+            print(runshell("docker inspect --format 'Cmd:        {{join .Config.Cmd \" \"}}'" + f" {self.image}").stdout.rstrip())
+            print(runshell("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}}'" + f" {self.image}").stdout.rstrip())
 
     def imports(self):
         if not self.args.docker:
             mylogger.error("Docker import: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
             return
-        _name = self.args.name[0] if self.args.name else self.docker_file.split('.')[0]
+        _name = self.args.name[0] if self.args.name else self.docker_file.split(".")[0]
         docker_cmd = [f"docker import {self.args.docker} {_name}"]
         if self.args.extcmd:
             _EXT_CMD = ",".join(f'"{cmd}"' for cmd in self.args.extcmd)
@@ -162,6 +183,9 @@ class DockerMaster(object):
         runshell(docker_cmd, _consol=True)
 
     def export(self):
+        if not self.args.docker:
+            mylogger.error("Docker export: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            return
         runshell(f"docker export {self.container} --output {self.args.docker}", _consol=True)
 
     def rm(self):
