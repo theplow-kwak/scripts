@@ -156,12 +156,13 @@ class DockerMaster(object):
         runshell(docker_cmd, _consol=True)
 
     def history(self):
-        print(runshell("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}").stdout.rstrip())
+        if self.image:
+            print(runshell("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}").stdout.rstrip())
 
     def inspect(self):
         if self.container:
             print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}").stdout.rstrip())
-            print(runshell("docker inspect --format 'Args:       {{.Path}} {{join .Args \" \"}}'" + f" {self.container}").stdout.rstrip())
+            print(runshell("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}} {{join .Config.Cmd \" \"}}'" + f" {self.container}").stdout.rstrip())
             print(runshell("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}").stdout.rstrip())
             print("Mounts:")
             print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}").stdout.rstrip())
@@ -194,7 +195,7 @@ class DockerMaster(object):
             runshell(f"docker rm {self.container}", _consol=True)
 
     def rmi(self):
-        if self.image is not None:
+        if self.image:
             _containers = " ".join(get_containers(self.image))
             print(f"remove docker image {self.image} / {_containers}")
             if _containers:
