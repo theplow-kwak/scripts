@@ -49,6 +49,8 @@ class QEMU:
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
         # Command line argment parsing
+        # parser.add_argument("--secboot", default="", action="store_const", const=".secboot", help="Using secureboot of UEFI")
+        parser.add_argument("--secboot", default="", help="Using secureboot of UEFI")
         parser.add_argument("--bios", action="store_true", help="Using legacy BIOS instead of UEFI")
         parser.add_argument("--consol", action="store_true", help="Used the current terminal as the consol I/O")
         parser.add_argument("--noshare", action="store_true", help="Do not support virtiofs")
@@ -193,14 +195,15 @@ class QEMU:
         _OVMF_PATH = f"{self.home_folder}/qemu/share/qemu"
         match self.args.arch:
             case "x86_64":
-                _OVMF_CODE = f"{_OVMF_PATH}/edk2-x86_64-code.fd"
+                _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file={_OVMF_PATH}/edk2-x86_64-{self.args.secboot}code.fd"
+                # _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M{self.args.secboot}.fd"
+                _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.fd"
             case "aarch64":
                 _OVMF_CODE = f"{_OVMF_PATH}/edk2-aarch64-code.fd"
+                _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.fd"
             case _:
                 return
-
-        # _UEFI = [f"-bios {_OVMF_CODE}"]
-        _UEFI = [f"-drive if=pflash,format=raw,file={_OVMF_CODE}"]
+        _UEFI = [f"{_OVMF_CODE}", f"{_OVMF_VAR}"]
         self.params += _UEFI
 
     def set_usb3(self):
