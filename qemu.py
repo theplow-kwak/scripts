@@ -92,9 +92,12 @@ class QEMU:
         if self.args.nvme:
             _result = self.runshell(f"lsblk -d -o NAME,MODEL")
             if _result.returncode == 0:
-                _images = [line.split()[0] for line in _result.stdout.splitlines() if self.args.nvme.lower() in line.lower()]
+                _nvme_param = self.args.nvme.lower().split(":")
+                _nvme = _nvme_param.pop(0)
+                _images = [line.split()[0] for line in _result.stdout.splitlines() if _nvme in line.lower()]
                 for _image in _images:
-                    self.args.images.append(f"/dev/{_image}")
+                    _part = _nvme_param.pop(0) if _nvme_param else ""
+                    self.args.images.append(f"/dev/{_image}{_part}")
         if self.args.numns:
             self.use_nvme = 1
 
@@ -120,7 +123,9 @@ class QEMU:
                     case _:
                         pass
 
-        _boot_dev = self.vmimages + self.vmnvme + self.vmcdimages + [self.args.vmkernel] if self.args.vmkernel else []
+        _boot_dev = self.vmimages + self.vmnvme + self.vmcdimages
+        if self.args.vmkernel:
+            _boot_dev.append(self.args.vmkernel)
         mylogger.info(f"vmimages {self.vmimages} ")
         mylogger.info(f"vmcdimages {self.vmcdimages} ")
         mylogger.info(f"vmnvme {self.vmnvme} ")
