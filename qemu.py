@@ -78,9 +78,9 @@ class QEMU:
         parser.add_argument("--num_queues", type=int, default=32, help="Set the max num of queues")
         parser.add_argument("--vnum", default="", help="Set the vm copies")
         parser.add_argument("--sriov", action="store_true", help="Set to use sriov")
-        parser.add_argument("--vwc", default="on", choices=["on", "off"], help="Set to vwc for nand")
+        parser.add_argument("--vwc", choices=["on", "off"], help="Set to vwc for nand")
         parser.add_argument("--hvci", action="store_true", help="Hypervisor-Protected Code Integrity (HVCI).")
-        parser.add_argument("--did", type=functools.partial(int, base=0), default=0x2A49, help="Set the NVMe device ID")
+        parser.add_argument("--did", type=functools.partial(int, base=0), help="Set the NVMe device ID")
         parser.add_argument("--mn", help="Set the model name")
         parser.add_argument("--ext", help="Set the extra params")
         parser.add_argument("--memsize", help="Set the memory size")
@@ -315,10 +315,13 @@ class QEMU:
                     ]
                 _ctrl_id += 1
             else:
+                _vwc = f",vwc={self.args.vwc}" if self.args.vwc else ""
+                _did = f",did={self.args.did}" if self.args.did else ""
+                _mn = f",mn={self.args.mn}" if self.args.mn else ""
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
-                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},num_queues={self.args.num_queues},vwc={self.args.vwc},did={self.args.did},mn={self.args.mn}",
+                    f"-device nvme,serial=beef{_NVME},id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs={self.args.num_queues}{_vwc}{_did}{_mn}",
                 ]
                 _ctrl_id += 1
                 for _nsid in range(1, _num_ns + 1):
