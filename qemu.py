@@ -48,7 +48,7 @@ class QEMU:
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-        parser.add_argument("--secboot", default="", action="store_const", const="secure-", help="Using secureboot of UEFI")
+        parser.add_argument("--secboot", default="", action="store_const", const=".secboot", help="Using secureboot of UEFI")
         parser.add_argument("--bios", action="store_true", help="Using legacy BIOS instead of UEFI")
         parser.add_argument("--consol", action="store_true", help="Used the current terminal as the consol I/O")
         parser.add_argument("--noshare", action="store_true", help="Do not support virtiofs")
@@ -172,7 +172,7 @@ class QEMU:
             case "arm":
                 self.params += ["-machine virt -cpu cortex-a53 -device ramfb"]
             case "aarch64":
-                self.params += ["-machine virt -cpu cortex-a72 -device ramfb"]
+                self.params += ["-machine virt,virtualization=true -cpu cortex-a72 -device ramfb"]
             case "x86_64":
                 if self.args.hvci:
                     self.params += [f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"]
@@ -198,11 +198,11 @@ class QEMU:
         _OVMF_PATH = f"{self.home_folder}/qemu/share/qemu"
         match self.args.arch:
             case "x86_64":
-                _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file={_OVMF_PATH}/edk2-x86_64-{self.args.secboot}code.fd"
+                _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M{self.args.secboot}.fd"
                 _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.ms.fd"
             case "aarch64":
                 _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file={_OVMF_PATH}/edk2-aarch64-code.fd"
-                _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.ms.fd"
+                _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/edk2-arm-vars.fd"
             case _:
                 return
         _UEFI = [f"{_OVMF_CODE}", f"{_OVMF_VAR}"]
@@ -465,7 +465,7 @@ class QEMU:
             case "qemu":
                 self.opts += ["-monitor stdio"]
                 self.CHKPORT = self.SPICEPORT
-                self.CONNECT = [""]
+                self.CONNECT = None
         mylogger.info(self.CONNECT)
 
     def findProc(self, _PROCID, _timeout=10):
@@ -593,14 +593,7 @@ if __name__ == "__main__":
         mylogger.error("Keyboard Interrupted")
     except Exception as e:
         mylogger.error(f"QEMU terminated abnormally. {e}")
-
-        # Get current system exception
         ex_type, ex_value, ex_traceback = sys.exc_info()
-
-        # Extract unformatter stack traces as tuples
         trace_back = traceback.extract_tb(ex_traceback)
-        trace = trace_back[-1]
-        mylogger.error(f"  File {trace[0]}, {trace[2]}\n    {trace[1]}: ... {trace[3]}")
-
-        # for trace in trace_back:
-        #     mylogger.error(f"  File {trace[0]}, {trace[2]}\n    {trace[1]}: ... {trace[3]}")
+        for trace in trace_back[1:]:
+            mylogger.error(f"  File {trace[0]}, line {trace[1]}, in {trace[2]}")
