@@ -90,7 +90,7 @@ class QEMU:
         else:
             mylogger.setLevel(self.args.debug.upper())
         if self.args.nvme:
-            _result = self.runshell(f"lsblk -d -o NAME,MODEL")
+            _result = self.runshell(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n")
             if _result.returncode == 0:
                 _nvme_param = self.args.nvme.lower().split(":")
                 _nvme = _nvme_param.pop(0)
