@@ -133,6 +133,7 @@ class QEMU:
         mylogger.info(f"boot_dev {_boot_dev} ")
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
+        self.bootype = "1" if self.vmnvme[0] == _boot_dev[0] else ""
         boot_0 = Path(_boot_dev[0]).resolve()
         self.vmname = boot_0.stem
         self.vmguid = hashlib.md5(("".join([x for x in _boot_dev if x is not None])).encode()).hexdigest()
@@ -199,7 +200,7 @@ class QEMU:
         match self.args.arch:
             case "x86_64":
                 _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M{self.args.secboot}.fd"
-                _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.ms.fd"
+                _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.ms{self.bootype}.fd"
             case "aarch64":
                 _OVMF_CODE = f"-drive if=pflash,format=raw,readonly=on,file={_OVMF_PATH}/edk2-aarch64-code.fd"
                 _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/edk2-arm-vars.fd"
@@ -282,7 +283,6 @@ class QEMU:
     def set_nvme(self):
         if not self.use_nvme:
             return
-        _num_ns = self.args.numns if self.args.numns else 1
         _ns_size = self.args.nssize
         if not self.vmnvme:
             self.vmnvme.append(f"nvme{self.vmuid}")
@@ -293,7 +293,10 @@ class QEMU:
             "-device x3130-upstream,bus=root1.0,id=upstream1.0",
         ]
 
-        for _NVME in self.vmnvme:
+        for item in self.vmnvme:
+            parts = item.split(":")
+            _NVME = parts[0]
+            _num_ns = int(parts[1]) if len(parts) > 1 else self.args.numns if self.args.numns else 1
             if self.args.qemu:
                 ns_backend = f"{_NVME}n1.img"
                 if self.check_file(ns_backend, _ns_size):
