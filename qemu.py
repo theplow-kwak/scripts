@@ -133,7 +133,7 @@ class QEMU:
         mylogger.info(f"boot_dev {_boot_dev} ")
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
-        self.bootype = "1" if self.vmnvme[0] == _boot_dev[0] else ""
+        self.bootype = "1" if self.vmnvme and self.vmnvme[0] == _boot_dev[0] else ""
         boot_0 = Path(_boot_dev[0]).resolve()
         self.vmname = boot_0.stem
         self.vmguid = hashlib.md5(("".join([x for x in _boot_dev if x is not None])).encode()).hexdigest()
