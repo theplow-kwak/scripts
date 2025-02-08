@@ -46,7 +46,7 @@
             "cwd": "${fileDirname}",
             "environment": [],
             "console": "externalTerminal",
-            "preLaunchTask": "C/C++latest: cl.exe build active file"
+            "preLaunchTask": "C/C++: cl.exe build active file"
         }
     ]
 }
