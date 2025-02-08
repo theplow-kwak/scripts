@@ -134,6 +134,7 @@ class QEMU:
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
         self.bootype = "1" if self.vmnvme and self.vmnvme[0] == _boot_dev[0] else ""
+        self.vmboot = _boot_dev[0]
         boot_0 = Path(_boot_dev[0]).resolve()
         self.vmname = boot_0.stem
         self.vmguid = hashlib.md5(("".join([x for x in _boot_dev if x is not None])).encode()).hexdigest()
@@ -431,7 +432,6 @@ class QEMU:
             self.localip = dhcp_chk.split()[4].split("/")[0] if len(dhcp_chk) else None
         mylogger.info(f"localip: {self.localip}")
 
-        print(f"mac: {self.macaddr}, ip: {self.localip}")
         if _set:
             while not self.runshell(f"lsof -w -i :{self.SPICEPORT}").returncode or not self.runshell(f"lsof -w -i :{self.SSHPORT}").returncode:
                 self.SSHPORT += 2
@@ -560,6 +560,7 @@ class QEMU:
             self.RemoveSSH()
 
     def run(self):
+        print(f"Boot: {self.vmboot:<15} mac: {self.macaddr}, ip: {self.localip}")
         completed = subprocess.CompletedProcess(0, 0)
         if not self.findProc(self.vmprocid, 0):
             _qemu_command = (
