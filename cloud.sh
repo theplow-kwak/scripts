@@ -110,8 +110,8 @@ EOM
 
 set_args()
 {
-    options=$(getopt -n ${0##*/} -o u:H:f:c:hb:i:q:n:k: \
-                    --long uname:,host:,fname:,cert:,backing:,image:,qemu:,net:,kernel:,bios,help -- "$@")
+    options=$(getopt -n ${0##*/} -o u:H:f:c:hb:i:q:n:k:s: \
+                    --long uname:,host:,fname:,cert:,backing:,image:,qemu:,net:,kernel:,size:,bios,help -- "$@")
     [ $? -eq 0 ] || { 
         usage
         exit 1
@@ -129,6 +129,7 @@ set_args()
             -H | --host )       HOST_NAME=$2 ;      shift ;;    
             -f | --fname )      CINIT_FILE=$2 ;     shift ;;
             -c | --cert )       _CERT_FILE+=(${2//,/ }) ;     shift ;;
+            -s | --size )       IMAGE_SIZE=$2 ;     shift ;;
                  --bios )       BIOS="--bios" ;;
             -h | --help )       usage ;             exit ;;
             --)                 shift ;             break ;;
@@ -145,6 +146,7 @@ set_args()
     USER_NAME=${USER_NAME:-$USER}
     HOST_NAME=${HOST_NAME:-"${IMGNAME%.*}-VM-${_TMP::2}"}
     CINIT_FILE=${CINIT_FILE:-"_cloud_init.cfg"}
+    IMAGE_SIZE=${IMAGE_SIZE:-"30G"}
 
     OPTIONS=$@
 }
@@ -155,12 +157,11 @@ if [[ ! -e $IMGNAME ]]; then
     [[ $USER_NAME == "root" ]] && USER_NAME=$(whoami)
     create_cfgfile
     cloud-localds -v cloud_init.iso $CINIT_FILE
-    qemu-img create -f qcow2 $IMGNAME -F qcow2 -b $BACKIMG
-    qemu-img resize $IMGNAME 30G
+    qemu-img create -f qcow2 -F qcow2 -b $BACKIMG $IMGNAME $IMAGE_SIZE
     CLOUD_INIT="cloud_init.iso"
 fi
 
-[[ -n $KERNEL ]] && KERNEL="--kernel $(realpath ~/projects/${KERNEL}/arch/x86_64/boot/bzImage)"
+[[ -n $KERNEL ]] && { [[ -e $KERNEL ]] && KERNEL="--kernel $KERNEL" || KERNEL="--kernel $(realpath ~/projects/${KERNEL}/arch/x86_64/boot/bzImage)"; }
 
 if [[ -e $IMGNAME ]]; then
     _CMD=($QEMU $BIOS --connect ssh --net $NET --uname $USER_NAME $KERNEL $IMGNAME $CLOUD_INIT $OPTIONS)

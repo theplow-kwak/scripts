@@ -134,8 +134,8 @@ class QEMU:
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
         self.bootype = "1" if self.vmnvme and self.vmnvme[0] == _boot_dev[0] else ""
-        self.vmboot = _boot_dev[0]
         boot_0 = Path(_boot_dev[0]).resolve()
+        self.vmboot = _boot_dev[0]
         self.vmname = boot_0.stem
         self.vmguid = hashlib.md5(("".join([x for x in _boot_dev if x is not None])).encode()).hexdigest()
         self.vmuid = self.vmguid[0:2]

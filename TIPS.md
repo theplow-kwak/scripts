@@ -1041,7 +1041,7 @@ Create this file:
 ```py
 $HOME/.pip/pip.conf (Linux)
 
-%HOME%\pip\pip.ini (Windows)
+%HOME%\AppData\Roaming\pip\pip.ini (Windows)
 ```
 
 and add these lines:
