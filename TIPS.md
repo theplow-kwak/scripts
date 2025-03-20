@@ -1008,7 +1008,7 @@ Create this file:
 ```py
 $HOME/.pip/pip.conf (Linux)
 
-%HOME%\pip\pip.ini (Windows)
+%HOME%\AppData\Roaming\pip\pip.ini (Windows)
 ```
 
 and add these lines:
@@ -1651,5 +1651,43 @@ sudo dhclient eth0
 
 
 
-# VS Code
+# VS Code in termux
+
+https://myprogramming.tistory.com/94
+
+```bash
+pkg upgrade
+pkg install nodejs python yarn binutils argon2
+v=$(node -v); v=${v#v}; v=${v%%.*};
+mkdir ~/.gyp && echo "{'variables':{'android_ndk_path':''}}" > ~/.gyp/include.gypi
+FORCE_NODE_VERSION="$v" yarn global add code-server@4.98.2 --ignore-engines;
+```
+
+connect:
+
+```bash
+adb forward tcp:8022 tcp:8022 && adb forward tcp:8080 tcp:8080
+ssh localhost -p 8022
+http://localhost:8080/
+```
+
+
+
+standalone version:
+
+```bash
+wget https://github.com/coder/code-server/releases/download/v4.96.2/code-server-4.96.2-linux-arm64.tar.gz
+tar -zxvf code-server-4.96.2-linux-arm64.tar.gz
+rm code-server-4.96.2-linux-arm64.tar.gz
+```
+
+vscode.sh
+
+```
+cd code-server-4.96.2-linux-arm64/bin/
+export PASSWORD="1"
+./code-server
+```
+
+
 

@@ -98,13 +98,18 @@ Usage:
  ${0##*/} [OPTIONS] 
 
 Options:
- -u, --uname <NAME>         The login USER name
- -H, --host <HOST_NAME>     Set the HOST name
  -b, --backing <BACKIMG>    qemu image backing file
  -i, --image <IMGNAME>      qemu image name
+ -q, --qemu <QEMU_PATH>     Path to qemu binary
  -n, --net <NET>            qemu Network interface model
  -k, --kernel <KERNEL>      Set the custom kernel 
+ -u, --uname <NAME>         The login USER name
+ -H, --host <HOST_NAME>     Set the HOST name
  -f, --fname <FILE_NAME>    The cloud_init file name (default:"_cloud_init.cfg")
+ -c, --cert <CERT_FILE>     Certificate file for cloud-init
+ -s, --size <SIZE>          Size of the qemu image
+     --bios                 Use BIOS instead of UEFI
+ -h, --help                 Show this help message and exit
 EOM
 }
 
@@ -153,17 +158,19 @@ set_args()
 
 set_args $@
 
-if [[ ! -e $IMGNAME ]]; then
+[[ "$IMGNAME" == nvme* ]] && _IMGNAME="${IMGNAME%%:*}n1.qcow2" || _IMGNAME="$IMGNAME"
+echo $IMGNAME, $_IMGNAME
+if [[ ! -e $_IMGNAME ]]; then
     [[ $USER_NAME == "root" ]] && USER_NAME=$(whoami)
     create_cfgfile
     cloud-localds -v cloud_init.iso $CINIT_FILE
-    qemu-img create -f qcow2 -F qcow2 -b $BACKIMG $IMGNAME $IMAGE_SIZE
+    qemu-img create -f qcow2 -F qcow2 -b $BACKIMG $_IMGNAME $IMAGE_SIZE
     CLOUD_INIT="cloud_init.iso"
 fi
 
 [[ -n $KERNEL ]] && { [[ -e $KERNEL ]] && KERNEL="--kernel $KERNEL" || KERNEL="--kernel $(realpath ~/projects/${KERNEL}/arch/x86_64/boot/bzImage)"; }
 
-if [[ -e $IMGNAME ]]; then
+if [[ -e $IMGNAME || -e $_IMGNAME ]]; then
     _CMD=($QEMU $BIOS --connect ssh --net $NET --uname $USER_NAME $KERNEL $IMGNAME $CLOUD_INIT $OPTIONS)
     echo "${_CMD[@]}"
     ${_CMD[@]}
