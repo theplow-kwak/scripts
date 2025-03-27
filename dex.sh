@@ -61,17 +61,6 @@ list_screen()
     adb shell dumpsys display | grep "  Display " | cut -d' ' -f4 | grep -v "0:" | sed -e 's/://'
 }
 
-get_display()
-{
-    local _display=$(adb shell 'dumpsys display displays | grep mDisplayId= | tail -n 1 | cut -d = -f2 | grep -v "^0$"')
-    if [[ $_display ]]; then
-        echo $_display
-        return 0
-    else
-        return 1
-    fi
-}
-
 launch_app()
 {
     # adb shell dumpsys package com.farmerbb.taskbar > temp/taskbar.txt
@@ -94,22 +83,108 @@ set_secondscreen()
     # adb shell pm set-home-activity "com.farmerbb.taskbar/.activity.SecondaryHomeActivity"
 }
 
-if ! (adb devices | grep ".*device$"); then
-    echo "There is no device!!"
-    exit  1
+function check_adb()
+{
+    if ! command -v adb &> /dev/null
+    then
+        echo "adb could not be found"
+        exit 1
+    fi
+    if ! (adb devices | grep ".*device$"); then
+        echo "There is no device!!"
+        exit  1
+    fi
+}
+
+function launch_app()
+{
+    adb shell am start -n $1
+    echo "Launched app $1"
+}
+
+function old_run()
+{
+    if ! display=$(get_display); then
+        echo "None"
+        change_secondary_display_behaviour
+        enable_screen
+        display=$(get_display)
+    else
+        echo "Display: $display"
+    fi
+
+    [[ "$1" == "off" ]] && { disable_screen ; exit ; }
+    [[ "$1" == "con" ]] && { connect_screen $2 ; launch_app ; exit ; }
+    [[ "$1" == "app" ]] && { launch_app $2 ; exit ; }
+    [[ "$1" == "add" ]] && { enable_screen ; display=$(get_display) ; exit ; }
+    [[ "_$1" != "_" ]] && { display=$1 ; connect_screen ; exit ; }
+}
+
+function get_display() {
+    local output
+    output=$(scrcpy --list-displays)
+    local last_display_id
+    last_display_id=$(echo "$output" | grep --only-matching --regexp='--display-id=[0-9]\+' | awk -F= '{ if ($2 > 2) print $2 }' | tail -n 1)
+    if [ -n "$last_display_id" ]; then
+        echo $last_display_id
+        return 0
+    else
+        return 1
+    fi
+}
+
+function get_apps()
+{
+    output=$(scrcpy --list-apps)
+    start_processing=0
+
+    while IFS= read -r line; do
+        line=$(echo "$line" | xargs)
+        if [[ $line =~ ^[*-] ]]; then
+            line=$(echo "$line" | sed 's/^[*]\s*/- /')
+            words=($line)
+            package=${words[-1]}
+            name=$(echo "${words[@]:0:${#words[@]}-1}" | tr -d '*-/\n[:space:]' | xargs)
+            [[ -n $name ]] && app_list[$name]=$package
+        fi
+    done <<< "$output"
+}
+
+function run()
+{
+    local package=$1
+    # if display=$(get_vdisplay); then
+    #     scrcpy --display-id=$display --stay-awake --keyboard=uhid --start-app=$package &>/dev/null & disown
+    # else
+        scrcpy --new-display=2560x1440/240 --stay-awake --keyboard=uhid --start-app=$package &>/dev/null & disown
+    # fi
+}
+
+function get_package()
+{
+    local name=$1
+    for key in "${!app_list[@]}"; do
+        if [[ ${key,,} =~ ${name,,} ]]; then
+            echo "${app_list[$key]}"
+            return
+        fi
+    done
+    echo "No package found for $name"
+}
+
+function adb_ssh()
+{
+    adb forward tcp:8022 tcp:8022 && adb forward tcp:8080 tcp:8080
+    ssh localhost -p 8022
+}
+
+check_adb
+
+if [[ -n $1 ]]; then
+    declare -A app_list
+    get_apps
+    package=$(get_package $1)
+    echo "Running $1 - $package"
 fi
 
-if ! display=$(get_display); then
-    echo "None"
-    change_secondary_display_behaviour
-    enable_screen
-    display=$(get_display)
-else
-    echo "Display: $display"
-fi
-
-[[ "$1" == "off" ]] && { disable_screen ; exit ; }
-[[ "$1" == "con" ]] && { connect_screen $2 ; launch_app ; exit ; }
-[[ "$1" == "app" ]] && { launch_app $2 ; exit ; }
-[[ "$1" == "add" ]] && { enable_screen ; display=$(get_display) ; exit ; }
-[[ "_$1" != "_" ]] && { display=$1 ; connect_screen ; exit ; }
+[[ -n $package ]] && run $package

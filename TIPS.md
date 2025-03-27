@@ -1653,6 +1653,10 @@ sudo dhclient eth0
 
 # VS Code in termux
 
+```bash
+scrcpy --new-display=1920x1080/210 --start-app=com.termux
+```
+
 https://myprogramming.tistory.com/94
 
 ```bash

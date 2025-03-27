@@ -78,6 +78,7 @@ class QEMU:
         parser.add_argument("--num_queues", type=int, default=32, help="Set the max num of queues")
         parser.add_argument("--vnum", default="", help="Set the vm copies")
         parser.add_argument("--sriov", action="store_true", help="Set to use sriov")
+        parser.add_argument("--fdp", action="store_true", help="Set to use fdp")
         parser.add_argument("--hvci", action="store_true", help="Hypervisor-Protected Code Integrity (HVCI).")
         parser.add_argument("--did", type=functools.partial(int, base=0), help="Set the NVMe device ID")
         parser.add_argument("--mn", help="Set the model name")
@@ -320,9 +321,11 @@ class QEMU:
             else:
                 _did = f",did={self.args.did}" if self.args.did else ""
                 _mn = f",mn={self.args.mn}" if self.args.mn else ""
+                _fdp = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
+                _fdp_nsid = ",fdp.ruhs=1-15" if self.args.fdp else ""
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
-                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
+                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp }",
                     f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs={self.args.num_queues}{_did}{_mn}",
                 ]
                 _ctrl_id += 1
@@ -331,7 +334,7 @@ class QEMU:
                     if self.check_file(ns_backend, _ns_size):
                         NVME += [
                             f"-drive file={ns_backend},id={_NVME}{_nsid},if=none,cache=none",
-                            f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}",
+                            f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}{_fdp_nsid if _nsid == 1 else ''}",
                         ]
         if Path("./events").exists():
             NVME += ["--trace events=./events"]
