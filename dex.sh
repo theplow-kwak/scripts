@@ -122,9 +122,10 @@ function old_run()
 
 function get_display() {
     local output
-    output=$(scrcpy --list-displays)
+    output=$(scrcpy --list-displays | grep --only-matching --regexp='--display-id=[0-9]\+')
+    [[ $1 == "verbose" ]] && { echo ${output[@]} ; }
     local last_display_id
-    last_display_id=$(echo "$output" | grep --only-matching --regexp='--display-id=[0-9]\+' | awk -F= '{ if ($2 > 2) print $2 }' | tail -n 1)
+    last_display_id=$(echo "$output" | awk -F= '{ if ($2 > 2) print $2 }' | tail -n 1)
     if [ -n "$last_display_id" ]; then
         echo $last_display_id
         return 0
@@ -137,23 +138,31 @@ function get_apps()
 {
     output=$(scrcpy --list-apps)
     start_processing=0
-
+set -x
     while IFS= read -r line; do
         line=$(echo "$line" | xargs)
         if [[ $line =~ ^[*-] ]]; then
             line=$(echo "$line" | sed 's/^[*]\s*/- /')
             words=($line)
             package=${words[-1]}
-            name=$(echo "${words[@]:0:${#words[@]}-1}" | tr -d '*-/\n[:space:]' | xargs)
-            [[ -n $name ]] && app_list[$name]=$package
+            name=$(echo "${words[@]:0:${#words[@]}-1}" | tr -d '*-/\n[:space:]' | xargs )
+            [[ -n $name ]] && app_list["$name"]=$package
         fi
     done <<< "$output"
+
+    if [[ $1 == "verbose" ]]; then
+        for key in "${!app_list[@]}"; do
+            echo "$key - ${app_list[$key]}"
+        done
+    fi
+set +x
+    echo "Apps loaded"    
 }
 
 function run()
 {
     local package=$1
-    # if display=$(get_vdisplay); then
+    # if display=$(get_display); then
     #     scrcpy --display-id=$display --stay-awake --keyboard=uhid --start-app=$package &>/dev/null & disown
     # else
         scrcpy --new-display=2560x1440/240 --stay-awake --keyboard=uhid --start-app=$package &>/dev/null & disown
@@ -179,6 +188,9 @@ function adb_ssh()
 }
 
 check_adb
+
+[[ "$1" == "list" ]] && { get_display "verbose" ; exit ; }
+[[ "$1" == "applist" ]] && { get_apps "verbose" ; exit ; }
 
 if [[ -n $1 ]]; then
     declare -A app_list

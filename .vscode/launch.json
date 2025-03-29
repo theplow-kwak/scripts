@@ -9,10 +9,10 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal",
+            "console": "externalTerminal",
             "justMyCode": true,
             "args": [
-                "/dev/nvme1n1", 
+                "인터넷", 
             ],
         }
     ]
