@@ -12,6 +12,7 @@ import re
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+
 class DexManager:
     ADB_COMMAND = "adb"
     SCRCPY_COMMAND = "scrcpy"
@@ -30,10 +31,7 @@ class DexManager:
                 subprocess.Popen(cmd_list, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return None
             else:
-                result = subprocess.run(
-                    cmd_list, check=True, text=True,
-                    stdout=subprocess.PIPE if capture_output else None
-                )
+                result = subprocess.run(cmd_list, check=True, text=True, stdout=subprocess.PIPE if capture_output else None)
                 return result.stdout.strip() if capture_output else None
         except subprocess.CalledProcessError as e:
             logging.error(f"Command failed: {e}")
@@ -45,7 +43,7 @@ class DexManager:
             f"{self.ADB_COMMAND} shell settings put global force_desktop_mode_on_external_displays 1",
             f"{self.ADB_COMMAND} shell settings put global force_allow_on_external 1",
             f"{self.ADB_COMMAND} shell settings put global overlay_display_devices none",
-            f"{self.ADB_COMMAND} shell sync"
+            f"{self.ADB_COMMAND} shell sync",
         ]
         for cmd in commands:
             self.run_command(cmd)
@@ -64,7 +62,7 @@ class DexManager:
         commands = [
             f"{self.ADB_COMMAND} shell pm grant com.farmerbb.taskbar android.permission.WRITE_SECURE_SETTINGS",
             f"{self.ADB_COMMAND} shell settings put global force_resizable_activities 1",
-            f"{self.ADB_COMMAND} shell settings put global enable_freeform_support 1"
+            f"{self.ADB_COMMAND} shell settings put global enable_freeform_support 1",
         ]
         for cmd in commands:
             self.run_command(cmd)
@@ -100,7 +98,7 @@ class DexManager:
         """Grant permissions for secondary screen apps."""
         commands = [
             f"{self.ADB_COMMAND} shell pm grant com.farmerbb.taskbar android.permission.WRITE_SECURE_SETTINGS",
-            f"{self.ADB_COMMAND} shell pm grant com.farmerbb.secondscreen.free android.permission.WRITE_SECURE_SETTINGS"
+            f"{self.ADB_COMMAND} shell pm grant com.farmerbb.secondscreen.free android.permission.WRITE_SECURE_SETTINGS",
         ]
         for cmd in commands:
             self.run_command(cmd)
@@ -121,9 +119,9 @@ class DexManager:
     def get_display(self, verbose: bool = False) -> Optional[int]:
         """Get the ID of the last available display."""
         output = self.run_command(f"{self.SCRCPY_COMMAND} --list-displays", capture_output=True)
-        display_ids = [int(match.group(1)) for match in re.finditer(r'--display-id=(\d+)', output)]
+        display_ids = [int(match.group(1)) for match in re.finditer(r"--display-id=(\d+)", output)]
         if verbose:
-            logging.info(" ".join([f"display-id={display_id}" for display_id in display_ids]))
+            logging.info("\n".join([f"display-id={display_id}" for display_id in display_ids]))
         return max(display_ids, default=None)
 
     def get_apps(self, verbose: bool = False) -> Dict[str, str]:
@@ -153,7 +151,9 @@ class DexManager:
 
     def run_app(self, package: str) -> None:
         """Run an app using scrcpy."""
-        self.run_command(f"{self.SCRCPY_COMMAND} --new-display={self.DEFAULT_DISPLAY_MODE} --stay-awake --keyboard=uhid --start-app={package} --window-title='DexOnLinux'", demon_mode=True)
+        self.run_command(
+            f"{self.SCRCPY_COMMAND} --new-display={self.DEFAULT_DISPLAY_MODE} --stay-awake --keyboard=uhid --start-app={package} --window-title='DexOnLinux'", demon_mode=True
+        )
 
     def adb_ssh(self) -> None:
         """Forward ports and start an SSH session."""
@@ -161,9 +161,10 @@ class DexManager:
         self.run_command(f"{self.ADB_COMMAND} forward tcp:8080 tcp:8080")
         self.run_command("ssh localhost -p 8022")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage Dex mode and related operations.")
-    parser.add_argument("command", type=str, help="Command to execute (e.g., 'list', 'applist', or app name).")
+    parser.add_argument("command", type=str, nargs="?", default=None, help="Command to execute (e.g., 'list', 'applist', or app name).")
     args = parser.parse_args()
 
     dex_manager = DexManager()
@@ -172,6 +173,8 @@ if __name__ == "__main__":
         dex_manager.get_display(verbose=True)
     elif args.command == "applist":
         dex_manager.get_apps(verbose=True)
+    elif args.command == "adbssh":
+        dex_manager.adb_ssh()
     else:
         app_list = dex_manager.get_apps()
         package = dex_manager.get_package(app_list, args.command)

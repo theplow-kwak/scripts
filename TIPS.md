@@ -1651,6 +1651,52 @@ sudo dhclient eth0
 
 
 
+# Termux
+
+## Install Ubuntu in termux
+
+```bash
+apt update
+apt upgrade
+apt install proot-distro
+apt update
+proot-distro install ubuntu
+termux-setup-storage
+pkg install openssh
+proot-distro login --user test ubuntu
+proot-distro login --user test ubuntu -- bash "/home/test/vscode.sh"
+```
+
+## Ubuntu in termux
+
+proot-distro login ubuntu
+
+```bash
+apt update && apt upgrade -y
+adduser test
+```
+
+proot-distro login --user test ubuntu
+
+```bash
+sudo apt install python3 git wget vim sudo -y
+wget https://github.com/coder/code-server/releases/download/v4.98.2/code-server-4.98.2-linux-arm64.tar.gz
+tar -zxvf code-server-4.98.2-linux-arm64.tar.gz
+rm code-server-4.98.2-linux-arm64.tar.gz
+```
+
+
+
+### vscode.sh 
+
+```bash
+cd code-server-4.98.2-linux-arm64/bin/
+export PASSWORD="1"
+./code-server
+```
+
+
+
 # VS Code in termux
 
 ```bash
