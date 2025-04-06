@@ -43,8 +43,12 @@ class QEMU:
         self.KERNEL = []
         self.index = self.use_nvme = 0
         self.home_folder = f"/home/{os.getlogin()}"
+        self.memsize = self._calculate_memory_size()
+
+    def _calculate_memory_size(self):
+        """Calculate memory size based on physical memory."""
         phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 * 1024 * 1000))
-        self.memsize = "8G" if (phy_mem > 8) else "4G"
+        return "8G" if phy_mem > 8 else "4G"
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -143,58 +147,53 @@ class QEMU:
         self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"]
 
     def runshell(self, cmd, _async=False, _consol=False):
+        """Run shell commands with optional async and console output."""
         if isinstance(cmd, list):
             cmd = " ".join(cmd)
         _cmd = shlex.split(cmd)
+        mylogger.debug(f"runshell {'Async' if _async else ''}: {cmd}")
         if _async:
-            mylogger.debug(f"runshell Async: {cmd}")
-            if _consol:
-                completed = subprocess.run(_cmd, text=True)
-            else:
-                completed = subprocess.Popen(_cmd)
+            completed = subprocess.Popen(_cmd) if not _consol else subprocess.run(_cmd, text=True)
             sleep(1)
         else:
-            mylogger.debug(f"\n>>>>\nrunshell: {cmd}")
-            if _consol:
-                completed = subprocess.run(_cmd, text=True)
-            else:
-                completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) if not _consol else subprocess.run(_cmd, text=True)
             if completed.stdout:
-                mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n")
+                mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}")
         return completed
 
     def set_qemu(self):
+        """Set QEMU executable and base parameters."""
         self.sudo = ["sudo"] if os.getuid() else []
         self.qemu_exe = [f"qemu-system-{self.args.arch}"] if self.args.qemu else [f"{self.home_folder}/qemu/bin/qemu-system-{self.args.arch}"]
         self.params = [f"-name {self.vmname},process={self.vmprocid}"]
 
-        match self.args.arch:
-            case "riscv64":
-                self.params += ["-machine virt -bios none"]
-            case "arm":
-                self.params += ["-machine virt -cpu cortex-a53 -device ramfb"]
-            case "aarch64":
-                self.params += ["-machine virt,virtualization=true -cpu cortex-a72 -device ramfb"]
-            case "x86_64":
-                if self.args.hvci:
-                    self.params += [f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"]
-                    self.params += [
-                        "-cpu Skylake-Client-v3,hv_stimer,hv_synic,hv_relaxed,hv_reenlightenment,hv_spinlocks=0xfff,hv_vpindex,hv_vapic,hv_time,hv_frequencies,hv_runtime,+kvm_pv_unhalt,+vmx --enable-kvm"
-                    ]
-                else:
-                    self.params += [f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"]
-                    if self.args.vender:
-                        self.params += [f"-smbios type=1,manufacturer={self.args.vender},product='{self.args.vender} Notebook PC'"]
-                    self.params += ["-cpu host --enable-kvm"]
-                self.params += ["-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"]
-                self.opts += [f"-vga {self.args.vga}"]
-        _numcore = int(os.cpu_count() / 2)
-        if self.args.memsize:
-            self.memsize = self.args.memsize
-        self.params += [
-            f"-m {self.memsize} -smp {_numcore},sockets=1,cores={_numcore},threads=1 -nodefaults",
-            "-rtc base=localtime",
-        ]
+        arch_params = {
+            "riscv64": ["-machine virt -bios none"],
+            "arm": ["-machine virt -cpu cortex-a53 -device ramfb"],
+            "aarch64": ["-machine virt,virtualization=true -cpu cortex-a72 -device ramfb"],
+            "x86_64": self._set_x86_64_params(),
+        }
+        self._add_param(self.params, *arch_params.get(self.args.arch, []))
+        self._add_param(self.params, f"-m {self.memsize} -smp {int(os.cpu_count() / 2)},sockets=1,cores={int(os.cpu_count() / 2)},threads=1 -nodefaults", "-rtc base=localtime")
+
+    def _set_x86_64_params(self):
+        """Set parameters specific to x86_64 architecture."""
+        params = [f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu"]
+        if self.args.hvci:
+            params += [
+                "-cpu Skylake-Client-v3,hv_stimer,hv_synic,hv_relaxed,hv_reenlightenment,hv_spinlocks=0xfff,hv_vpindex,hv_vapic,hv_time,hv_frequencies,hv_runtime,+kvm_pv_unhalt,+vmx --enable-kvm"
+            ]
+        else:
+            params += ["-cpu host --enable-kvm"]
+            if self.args.vender:
+                params += [f"-smbios type=1,manufacturer={self.args.vender},product='{self.args.vender} Notebook PC'"]
+        params += ["-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0"]
+        self.opts += [f"-vga {self.args.vga}"]
+        return params
+
+    def _add_param(self, param_list, *params):
+        """Helper to add parameters to the param list."""
+        param_list.extend(params)
 
     def set_uefi(self):
         _OVMF_PATH = f"{self.home_folder}/qemu/share/qemu"
@@ -282,29 +281,39 @@ class QEMU:
         return 1
 
     def set_nvme(self):
+        """Set NVMe devices."""
         if not self.use_nvme:
             return
+
+        def add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=None, fdp_nsid=""):
+            """Helper to add NVMe drive and namespace."""
+            NVME = []
+            if self.check_file(ns_backend, _ns_size):
+                NVME.append(f"-drive file={ns_backend},id={_NVME}{_nsid or ''},if=none,cache=none")
+                if _nsid:
+                    NVME.append(f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}{fdp_nsid}")
+                else:
+                    NVME.append(f"-device nvme,drive={_NVME},serial=beef{_NVME},ocp=on")
+            return NVME
+
         _ns_size = self.args.nssize
         if not self.vmnvme:
             self.vmnvme.append(f"nvme{self.vmuid}")
 
-        _ctrl_id = 1
         NVME = [
             "-device ioh3420,bus=pcie.0,id=root1.0,slot=1",
             "-device x3130-upstream,bus=root1.0,id=upstream1.0",
         ]
 
+        _ctrl_id = 1
         for item in self.vmnvme:
             parts = item.split(":")
             _NVME = parts[0]
-            _num_ns = int(parts[1]) if len(parts) > 1 else self.args.numns if self.args.numns else 1
+            _num_ns = int(parts[1]) if len(parts) > 1 else self.args.numns or 1
+
             if self.args.qemu:
                 ns_backend = f"{_NVME}n1.qcow2"
-                if self.check_file(ns_backend, _ns_size):
-                    NVME += [
-                        f"-drive file={ns_backend},id={_NVME},if=none,cache=none",
-                        f"-device nvme,drive={_NVME},serial=beef{_NVME},ocp=on",
-                    ]
+                NVME += add_nvme_drive(_NVME, ns_backend, _ctrl_id)
             elif self.args.sriov:
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
@@ -312,11 +321,7 @@ class QEMU:
                     f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=512,msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510",
                 ]
                 ns_backend = f"{_NVME}n1.qcow2"
-                if self.check_file(ns_backend, _ns_size):
-                    NVME += [
-                        f"-drive file={ns_backend},id={_NVME}ns,if=none,cache=none",
-                        f"-device nvme-ns,drive={_NVME}ns,bus={_NVME},nsid=1,shared=false,detached=true",
-                    ]
+                NVME += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=1, fdp_nsid=",shared=false,detached=true")
                 _ctrl_id += 1
             else:
                 _did = f",did={self.args.did}" if self.args.did else ""
@@ -325,21 +330,18 @@ class QEMU:
                 _fdp_nsid = ",fdp.ruhs=1-15" if self.args.fdp else ""
                 NVME += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
-                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp }",
+                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp}",
                     f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs={self.args.num_queues}{_did}{_mn}",
                 ]
-                _ctrl_id += 1
                 for _nsid in range(1, _num_ns + 1):
                     ns_backend = f"{_NVME}n{_nsid}.qcow2"
-                    if self.check_file(ns_backend, _ns_size):
-                        NVME += [
-                            f"-drive file={ns_backend},id={_NVME}{_nsid},if=none,cache=none",
-                            f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}{_fdp_nsid if _nsid == 1 else ''}",
-                        ]
+                    NVME += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=_nsid, fdp_nsid=_fdp_nsid if _nsid == 1 else "")
+                _ctrl_id += 1
+
         if Path("./events").exists():
-            NVME += ["--trace events=./events"]
-        if NVME:
-            self.params += NVME
+            NVME.append("--trace events=./events")
+
+        self.params.extend(NVME)
 
     def set_virtiofs(self):
         virtiofsd = (
@@ -409,70 +411,86 @@ class QEMU:
         self.params += TPM
 
     def RemoveSSH(self):
-        Path(f"/tmp/{self.vmprocid}_SSH").unlink(missing_ok=True)
-        if self.args.net == "user":
-            self.runshell(f'ssh-keygen -R "[{self.hostip}]:{self.SSHPORT}"')
-        else:
-            self.runshell(f'ssh-keygen -R "{self.localip}"')
+        """Remove existing SSH keys for the VM."""
+        ssh_file = Path(f"/tmp/{self.vmprocid}_SSH")
+        ssh_file.unlink(missing_ok=True)
+        ssh_key_cmd = f'ssh-keygen -R "[{self.hostip}]:{self.SSHPORT}"' if self.args.net == "user" else f'ssh-keygen -R "{self.localip}"'
+        self.runshell(ssh_key_cmd)
 
     def set_net(self, _set=False):
+        """Configure network settings for the VM."""
         try:
             self.SSHPORT = int(Path(f"/tmp/{self.vmprocid}_SSH").read_text())
-        except:
+        except FileNotFoundError:
             self.SSHPORT = 5900
         self.SPICEPORT = self.SSHPORT + 1
         self.macaddr = f"52:54:00:{self.vmguid[0:2]}:{self.vmguid[2:4]}:{self.vmguid[4:6]}"
+
+        # Get host IP
         _result = self.runshell("ip r g 1.0.0.0")
         self.hostip = _result.stdout.split()[6] if _result.returncode == 0 else "localhost"
         mylogger.info(f"hostip: {self.hostip}")
+
+        # Get local IP from DHCP leases
         _result = self.runshell(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
         dhcp_chk = sorted(_result.stdout.rstrip().split("\n"))[-1] if _result.returncode == 0 and _result.stdout else []
-        if self.args.ip:
-            self.localip = self.args.ip
-        else:
-            self.localip = dhcp_chk.split()[4].split("/")[0] if len(dhcp_chk) else None
+        self.localip = self.args.ip or (dhcp_chk.split()[4].split("/")[0] if dhcp_chk else None)
         mylogger.info(f"localip: {self.localip}")
 
         if _set:
+            # Ensure ports are available
             while not self.runshell(f"lsof -w -i :{self.SPICEPORT}").returncode or not self.runshell(f"lsof -w -i :{self.SSHPORT}").returncode:
                 self.SSHPORT += 2
                 self.SPICEPORT = self.SSHPORT + 1
-            match self.args.net:
-                case "user" | "u":
-                    NET = [f"-nic user,model=virtio-net-pci,mac={self.macaddr},smb={self.home_folder},hostfwd=tcp::{self.SSHPORT}-:22"]
-                case "tap" | "t":
-                    NET = [f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={self.home_folder}/projects/scripts/qemu-ifup"]
-                    # ,downscript=$VMHOME/share/qemu-ifdown
-                case "bridge" | "b":
-                    NET = [f"-nic bridge,br=virbr0,model=virtio-net-pci,mac={self.macaddr}"]
-                case "none" | "n":
-                    NET = [""]
-            self.params += NET
+
+            # Configure network based on the selected mode
+            net_modes = {
+                "user": f"-nic user,model=virtio-net-pci,mac={self.macaddr},smb={self.home_folder},hostfwd=tcp::{self.SSHPORT}-:22",
+                "tap": f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={self.home_folder}/projects/scripts/qemu-ifup",
+                "bridge": f"-nic bridge,br=virbr0,model=virtio-net-pci,mac={self.macaddr}",
+                "none": "",
+            }
+            self.params += [net_modes.get(self.args.net, "")]
+
+            # Save SSH port to a file
             try:
                 Path(f"/tmp/{self.vmprocid}_SSH").write_text(str(self.SSHPORT))
-            except:
-                pass
+            except Exception as e:
+                mylogger.error(f"Failed to write SSH port: {e}")
 
     def set_connect(self):
-        match self.args.connect:
-            case "ssh":
-                if f"-vga {self.args.vga}" in self.opts:
-                    self.opts.remove(f"-vga {self.args.vga}")
-                self.opts += ["-nographic -serial mon:stdio"]
-                self.SSH_CONNECT = f"{self.hostip} -p {self.SSHPORT}" if self.args.net == "user" else self.localip if self.localip is not None else None
-                self.CHKPORT = self.SSHPORT
-                self.CONNECT = ([] if self.args.consol else self.G_TERM + ["--"]) + [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
-            case "spice":
-                self.opts += ["-monitor stdio"]
-                self.CHKPORT = self.SPICEPORT
-                self.CONNECT = [f"remote-viewer -t {self.vmprocid} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1"]
-            case "qemu":
-                self.opts += ["-monitor stdio"]
-                self.CHKPORT = self.SPICEPORT
-                self.CONNECT = None
-        mylogger.info(self.CONNECT)
+        """Configure connection settings for the VM."""
+        connect_modes = {
+            "ssh": self._set_ssh_connect,
+            "spice": self._set_spice_connect,
+            "qemu": self._set_qemu_connect,
+        }
+        connect_func = connect_modes.get(self.args.connect, lambda: None)
+        connect_func()
+
+    def _set_ssh_connect(self):
+        """Set SSH connection settings."""
+        if f"-vga {self.args.vga}" in self.opts:
+            self.opts.remove(f"-vga {self.args.vga}")
+        self.opts += ["-nographic -serial mon:stdio"]
+        self.SSH_CONNECT = f"{self.hostip} -p {self.SSHPORT}" if self.args.net == "user" else self.localip
+        self.CHKPORT = self.SSHPORT
+        self.CONNECT = ([] if self.args.consol else self.G_TERM + ["--"]) + [f"ssh {self.args.uname}@{self.SSH_CONNECT}"]
+
+    def _set_spice_connect(self):
+        """Set SPICE connection settings."""
+        self.opts += ["-monitor stdio"]
+        self.CHKPORT = self.SPICEPORT
+        self.CONNECT = [f"remote-viewer -t {self.vmprocid} spice://{self.hostip}:{self.SPICEPORT} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1"]
+
+    def _set_qemu_connect(self):
+        """Set QEMU connection settings."""
+        self.opts += ["-monitor stdio"]
+        self.CHKPORT = self.SPICEPORT
+        self.CONNECT = None
 
     def findProc(self, _PROCID, _timeout=10):
+        """Wait for a process to start."""
         while self.runshell(f"ps -C {_PROCID}").returncode:
             mylogger.debug(f"findProc timeout {_timeout}")
             _timeout -= 1
@@ -483,7 +501,8 @@ class QEMU:
         return 1
 
     def checkConn(self, timeout=10):
-        if self.SSH_CONNECT is None:
+        """Check if the SSH connection is available."""
+        if not self.SSH_CONNECT:
             return 0
         while self.runshell(f"ping -c 1 {self.SSH_CONNECT}").returncode:
             timeout -= 1
@@ -561,6 +580,7 @@ class QEMU:
             self.RemoveSSH()
 
     def run(self):
+        """Run the QEMU VM."""
         print(f"Boot: {self.vmboot:<15} mac: {self.macaddr}, ip: {self.localip}")
         completed = subprocess.CompletedProcess(0, 0)
         if not self.findProc(self.vmprocid, 0):

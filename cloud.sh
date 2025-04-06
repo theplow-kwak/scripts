@@ -116,7 +116,7 @@ EOM
 set_args()
 {
     options=$(getopt -n ${0##*/} -o u:H:f:c:hb:i:q:n:k:s: \
-                    --long uname:,host:,fname:,cert:,backing:,image:,qemu:,net:,kernel:,size:,bios,help -- "$@")
+                    --long uname:,host:,fname:,cert:,backing:,image:,qemu:,net:,kernel:,size:,bios,help,debug -- "$@")
     [ $? -eq 0 ] || { 
         usage
         exit 1
@@ -136,6 +136,7 @@ set_args()
             -c | --cert )       _CERT_FILE+=(${2//,/ }) ;     shift ;;
             -s | --size )       IMAGE_SIZE=$2 ;     shift ;;
                  --bios )       BIOS="--bios" ;;
+                 --debug )      DEBUG=1 ;;
             -h | --help )       usage ;             exit ;;
             --)                 shift ;             break ;;
         esac
@@ -158,6 +159,19 @@ set_args()
 
 set_args $@
 
+if [[ $DEBUG ]]; then
+    echo "BACKIMG: $BACKIMG"
+    echo "IMGNAME: $IMGNAME"
+    echo "QEMU: $QEMU"
+    echo "NET: $NET"
+    echo "KERNEL: $KERNEL"
+    echo "USER_NAME: $USER_NAME"
+    echo "HOST_NAME: $HOST_NAME"
+    echo "CINIT_FILE: $CINIT_FILE"
+    echo "IMAGE_SIZE: $IMAGE_SIZE"
+    set -x
+fi
+
 [[ "$IMGNAME" == nvme* ]] && _IMGNAME="${IMGNAME%%:*}n1.qcow2" || _IMGNAME="$IMGNAME"
 echo $IMGNAME, $_IMGNAME
 if [[ ! -e $_IMGNAME ]]; then
@@ -174,4 +188,8 @@ if [[ -e $IMGNAME || -e $_IMGNAME ]]; then
     _CMD=($QEMU $BIOS --connect ssh --net $NET --uname $USER_NAME $KERNEL $IMGNAME $CLOUD_INIT $OPTIONS)
     echo "${_CMD[@]}"
     ${_CMD[@]}
+fi
+
+if [[ $DEBUG ]]; then
+    set +x
 fi
