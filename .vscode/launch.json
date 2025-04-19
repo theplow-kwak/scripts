@@ -9,10 +9,11 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "externalTerminal",
+            "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "인터넷", 
+                "ora.qcow2"
+                // "인터넷", 
             ],
         }
     ]
