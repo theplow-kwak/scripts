@@ -1,15 +1,13 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
-from genericpath import exists
-import os
-import logging
 import argparse
+import functools
+import getpass
+import hashlib
+import logging
+import os
 import shlex
 import subprocess
-import platform
-import hashlib
-import getpass
-import functools
 from pathlib import Path
 from time import sleep
 
