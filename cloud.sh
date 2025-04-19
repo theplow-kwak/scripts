@@ -52,10 +52,10 @@ disable_root: false
 runcmd:
   - [ timedatectl, set-local-rtc, 1, --adjust-system-clock ]
   - [ sh, -c, 'touch /etc/cloud/cloud-init.disabled' ]
-  - mkdir /mnt/host
+  - mkdir /host
 
 mounts:
-  - [ hostfs, /mnt/host, virtiofs ]
+  - [ hostfs, /host, virtiofs ]
 
 mount_default_fields: [ None, None, "auto", "defaults,nofail", "0", "2" ]
 

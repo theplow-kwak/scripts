@@ -64,7 +64,7 @@ tools()
     sudo apt -y update
     sudo apt -y upgrade
 
-    sudo apt -y install build-essential git python3-pip
+    sudo apt -y install build-essential git python3-pip python3-venv
     sudo apt -y install net-tools krusader qemu-kvm virt-viewer cifs-utils 
     sudo apt -y install libvirt-daemon-system barrier cloud-image-utils
     sudo apt -y install dbus-x11 openssh-server libxcb-cursor0 qemu-user-static curl gnupg
@@ -109,9 +109,21 @@ chrome()
 
 bcompare()
 {
-    echo install byound compare
-    wget https://www.scootersoftware.com/bcompare-4.4.4.27058_amd64.deb && \
-    sudo apt install ./bcompare-4.4.4.27058_amd64.deb
+    echo install beyond compare
+    url=$(curl -s https://www.scootersoftware.com/download.php | grep -oP 'https://www\.scootersoftware\.com/bcompare-[\d.]+_amd64\.deb' | head -n 1)
+    wget "$url" && sudo apt install ./"${url##*/}"
+}
+
+vscode()
+{
+    echo install vscode
+    wget -qO - https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+    printf "%s\n" \
+        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/trusted.gpg.d/microsoft.gpg] https://packages.microsoft.com/repos/vscode \
+        $(lsb_release -cs) main" \
+        | sudo dd of=/etc/apt/sources.list.d/vscode.list
+    sudo apt update
+    sudo apt -y install code
 }
 
 gitkraken()
@@ -142,14 +154,16 @@ docker()
     sudo sh -c "echo 'Acquire { https::Verify-Peer false }' > /etc/apt/apt.conf.d/99verify-peer.conf"
     sudo apt update
     sudo apt -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    sudo groupadd docker
-    sudo usermod -aG docker $USER
-    printf "%s\n" \
-        "{" \
-        "  \"bridge\": \"virbr0\"," \
-        "  \"iptables\": false" \
-        "}" \
-        | sudo dd of=/etc/docker/daemon.json
+    if ! getent group docker > /dev/null; then
+        sudo groupadd docker
+        sudo usermod -aG docker $USER
+        printf "%s\n" \
+            "{" \
+            "  \"bridge\": \"virbr0\"," \
+            "  \"iptables\": false" \
+            "}" \
+            | sudo dd of=/etc/docker/daemon.json
+    fi
 }
 
 local_cmd()

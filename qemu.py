@@ -72,6 +72,7 @@ class QEMU:
         parser.add_argument("--ip", help="Set local ip")
         parser.add_argument("images", metavar="IMAGES", nargs="*", help="Set the VM images")
         parser.add_argument("--nvme", help="Set the NVMe images")
+        parser.add_argument("--disk", help="Set the disk image")
         parser.add_argument("--vender", help="Set the PC vender")
         parser.add_argument("--kernel", dest="vmkernel", help="Set the Linux Kernel image")
         parser.add_argument("--rootdev", help="Set the rootfs dev")
@@ -93,14 +94,14 @@ class QEMU:
             mylogger.setLevel("INFO")
         else:
             mylogger.setLevel(self.args.debug.upper())
-        if self.args.nvme:
+        if self.args.disk:
             _result = self.runshell(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n")
             if _result.returncode == 0:
-                _nvme_param = self.args.nvme.lower().split(":")
-                _nvme = _nvme_param.pop(0)
-                _images = [line.split()[0] for line in _result.stdout.splitlines() if _nvme in line.lower()]
+                _disk_param = self.args.disk.lower().split(":")
+                _disk = _disk_param.pop(0)
+                _images = [line.split()[0] for line in _result.stdout.splitlines() if _disk in line.lower()]
                 for _image in _images:
-                    _part = _nvme_param.pop(0) if _nvme_param else ""
+                    _part = _disk_param.pop(0) if _disk_param else ""
                     self.args.images.append(f"/dev/{_image}{_part}")
         if self.args.numns:
             self.use_nvme = 1
@@ -206,61 +207,61 @@ class QEMU:
                 _OVMF_VAR = f"-drive if=pflash,format=raw,file={self.home_folder}/vm/edk2-arm-vars.fd"
             case _:
                 return
-        _UEFI = [f"{_OVMF_CODE}", f"{_OVMF_VAR}"]
-        self.params += _UEFI
+        UEFI_PARAMS = [f"{_OVMF_CODE}", f"{_OVMF_VAR}"]
+        self.params += UEFI_PARAMS
 
     def set_usb3(self):
-        _USB = ["-device qemu-xhci,id=xhci1"]
+        USB_PARAMS = ["-device qemu-xhci,id=xhci1"]
         _USB_REDIR = [
             "-chardev spicevmc,name=usbredir,id=usbredirchardev1 -device usb-redir,bus=xhci1.0,chardev=usbredirchardev1,id=usbredirdev1",
             "-chardev spicevmc,name=usbredir,id=usbredirchardev2 -device usb-redir,bus=xhci1.0,chardev=usbredirchardev2,id=usbredirdev2",
             "-chardev spicevmc,name=usbredir,id=usbredirchardev3 -device usb-redir,bus=xhci1.0,chardev=usbredirchardev3,id=usbredirdev3",
         ]
         _USB_PT = ["-device qemu-xhci,id=xhci2", "-device usb-host,bus=xhci2.0,vendorid=0x04e8,productid=0x6860"]
-        self.params += _USB + _USB_REDIR + _USB_PT
+        self.params += USB_PARAMS + _USB_REDIR + _USB_PT
 
     def set_usb_storage(self):
         if self.args.stick and Path(self.args.stick).exists():
-            _STICK = [
+            STICK_PARAMS = [
                 f"-drive file={self.args.stick},if=none,format=raw,id=stick{self.index}",
                 f"-device usb-storage,drive=stick{self.index}",
             ]
             self.index += 1
-            self.params += _STICK
+            self.params += STICK_PARAMS
 
     def set_usb_arm(self):
-        _USB = ["-device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet"]
-        self.params += _USB
+        USB_PARAMS = ["-device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet"]
+        self.params += USB_PARAMS
 
     def set_disks(self):
         if self.args.arch == "riscv64":
-            _SCSI = []
+            SCSI_PARAMS = []
         else:
-            _SCSI = ["-object iothread,id=iothread0 -device virtio-scsi-pci,id=scsi0,iothread=iothread0"]
-        _DISKS = []
+            SCSI_PARAMS = ["-object iothread,id=iothread0 -device virtio-scsi-pci,id=scsi0,iothread=iothread0"]
+        DISKS_PARAMS = []
         for _image in self.vmimages:
             match _image.split("."):
                 case ["wiftest", *ext]:
-                    _DISKS += [
+                    DISKS_PARAMS += [
                         f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{_image},format=qcow2,id=drive-{self.index}",
                         f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
                     ]
                 case [*name, "qcow2" | "QCOW2"]:
-                    _DISKS += [f"-drive file={_image},cache=writeback,id=drive-{self.index}"]
+                    DISKS_PARAMS += [f"-drive file={_image},cache=writeback,id=drive-{self.index}"]
                 case [*name, "vhdx" | "VHDX"]:
-                    _DISKS += [
+                    DISKS_PARAMS += [
                         f"-drive file={_image},if=none,id=drive-{self.index}",
                         f"-device nvme,drive=drive-{self.index},serial=nvme-{self.index}",
                     ]
                 case _:
                     # _disk_type = 'scsi-hd' if Path(_image).is_block_device and 'nvme' not in _image else 'scsi-hd'
-                    _DISKS += [
+                    DISKS_PARAMS += [
                         f"-drive file={_image},if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-{self.index}",
                         f"-device scsi-hd,scsi-id={self.index},drive=drive-{self.index},id=scsi0-{self.index}",
                     ]
             self.index += 1
-        if _DISKS:
-            self.params += _SCSI + _DISKS
+        if DISKS_PARAMS:
+            self.params += SCSI_PARAMS + DISKS_PARAMS
 
     def set_cdrom(self):
         _IF = "ide" if self.args.arch == "x86_64" else "none"
@@ -300,7 +301,7 @@ class QEMU:
         if not self.vmnvme:
             self.vmnvme.append(f"nvme{self.vmuid}")
 
-        NVME = [
+        NVME_PARAMS = [
             "-device ioh3420,bus=pcie.0,id=root1.0,slot=1",
             "-device x3130-upstream,bus=root1.0,id=upstream1.0",
         ]
@@ -310,38 +311,37 @@ class QEMU:
             parts = item.split(":")
             _NVME = parts[0]
             _num_ns = int(parts[1]) if len(parts) > 1 else self.args.numns or 1
+            ns_backend = f"{_NVME}n1.qcow2"
 
             if self.args.qemu:
-                ns_backend = f"{_NVME}n1.qcow2"
-                NVME += add_nvme_drive(_NVME, ns_backend, _ctrl_id)
+                NVME_PARAMS += add_nvme_drive(_NVME, ns_backend, _ctrl_id)
             elif self.args.sriov:
-                NVME += [
+                NVME_PARAMS += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
                     f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=512,msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510",
                 ]
-                ns_backend = f"{_NVME}n1.qcow2"
-                NVME += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=1, fdp_nsid=",shared=false,detached=true")
+                NVME_PARAMS += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=1, fdp_nsid=",shared=false,detached=true")
                 _ctrl_id += 1
             else:
                 _did = f",did={self.args.did}" if self.args.did else ""
                 _mn = f",mn={self.args.mn}" if self.args.mn else ""
                 _fdp = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
                 _fdp_nsid = ",fdp.ruhs=1-15" if self.args.fdp else ""
-                NVME += [
+                NVME_PARAMS += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp}",
                     f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs={self.args.num_queues}{_did}{_mn}",
                 ]
                 for _nsid in range(1, _num_ns + 1):
-                    ns_backend = f"{_NVME}n{_nsid}.qcow2"
-                    NVME += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=_nsid, fdp_nsid=_fdp_nsid if _nsid == 1 else "")
+                    ns_backend = ns_backend.replace("n1", f"n{_nsid}")
+                    NVME_PARAMS += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=_nsid, fdp_nsid=_fdp_nsid if _nsid == 1 else "")
                 _ctrl_id += 1
 
         if Path("./events").exists():
-            NVME.append("--trace events=./events")
+            NVME_PARAMS.append("--trace events=./events")
 
-        self.params.extend(NVME)
+        self.params.extend(NVME_PARAMS)
 
     def set_virtiofs(self):
         virtiofsd = (
@@ -383,7 +383,7 @@ class QEMU:
         self.params += _IPMI
 
     def set_spice(self):
-        SPICE = [
+        SPICE_PARAMS = [
             f"-spice port={self.SPICEPORT},disable-ticketing=on",
             "-audiodev spice,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0,mixer=off",
         ]
@@ -398,7 +398,7 @@ class QEMU:
             "-device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0",
         ]
         SHARE0 = [f"-virtfs local,id=fsdev0,path={self.home_folder},security_model=passthrough,writeout=writeout,mount_tag=host"]
-        self.params += SPICE + SPICE_AGENT
+        self.params += SPICE_PARAMS + SPICE_AGENT
 
     def set_tpm(self):
         fn_cancle = f"/tmp/foo-cancel-{self.vmuid}"
