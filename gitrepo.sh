@@ -11,15 +11,15 @@ git_init_local()
         git init
     fi
     if [[ -z $(git remote) ]] ; then
-        git remote add $REMOTE git@localhost:/home/git/${Repository}.git
-        git fetch $REMOTE
+        git remote add $REPO_NAME git@localhost:/home/git/${Repository}.git
+        git fetch $REPO_NAME
     fi
     branch=($(git branch --remote --list))
     branchs=(${branch//// })
     echo ${branchs[@]}
     if [[ -n ${branchs[1]} ]] ; then
-        git reset --mixed $REMOTE/master --no-refresh
-        git branch --set-upstream-to=$REMOTE/master master
+        git reset --mixed $REPO_NAME/master --no-refresh
+        git branch --set-upstream-to=$REPO_NAME/master master
     fi
     popd
 }
@@ -37,6 +37,26 @@ git_init_server()
     fi
 }
 
+git_add_remote()
+{
+    Repository=$1
+    if [[ ! -e .git ]]; then
+        echo "fatal: not a git repository (or any of the parent directories): .git"
+        exit 1
+    fi
+    if [[ -z $(git remote) ]] ; then
+        git remote add $REPO_NAME ${Repository}
+        git fetch $REPO_NAME
+    fi
+    branch=($(git branch --remote --list))
+    branchs=(${branch//// })
+    echo ${branchs[@]}
+    if [[ -n ${branchs[1]} ]] ; then
+        git reset --mixed $REPO_NAME/master --no-refresh
+        git branch --set-upstream-to=$REPO_NAME/master master
+    fi
+}
+
 usage()
 {
 cat << EOM
@@ -46,16 +66,17 @@ Usage:
 Options:
  -s, --sever    Initialize remote repository
  -l, --local    Initialize local repository
- -r, --remote   Set remote name
+ -r, --remote   Set remote repository
+ -n, --name     Set remote name
  -h, --help     Display usage
 
 EOM
 }
 
-REMOTE=origin
+REPO_NAME=origin
 
-options=$(getopt -n ${0##*/} -o hslr: \
-                --long help,server,local,remote: -- "$@")
+options=$(getopt -n ${0##*/} -o hslrn: \
+                --long help,server,local,remote:,name: -- "$@")
 [ $? -eq 0 ] || { usage; exit 1; }
 eval set -- "$options"
 
@@ -63,6 +84,7 @@ while true; do
     case $1 in
         -s | --server )     _init_sever="yes" ;;
         -l | --local )      _init_local="yes" ;;
+        -n | --name )       REPO_NAME=$2;  shift ;;
         -r | --remote )     REMOTE=$2;  shift ;;
         -h | --help )       usage ;     exit  ;;
         --)                 shift ;     break ;;
