@@ -42,13 +42,14 @@ class QEMU:
         self.index = self.use_nvme = 0
         self.home_folder = f"/home/{os.getlogin()}"
         self.memsize = self._calculate_memory_size()
+        self.sudo = ["sudo"] if os.getuid() else []
 
     def _calculate_memory_size(self):
         """Calculate memory size based on physical memory."""
         phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 * 1024 * 1000))
         return "8G" if phy_mem > 8 else "4G"
 
-    def runshell(self, cmd, _async=False, _consol=False):
+    def run_command(self, cmd, _async=False, _consol=False):
         """Run shell commands with optional async and console output."""
         if isinstance(cmd, list):
             cmd = " ".join(cmd)
@@ -62,6 +63,11 @@ class QEMU:
             if completed.stdout:
                 mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}")
         return completed
+
+    def sudo_run(self, cmd, _async=False, _consol=False):
+        """Run shell commands with sudo."""
+        cmd = self.sudo + cmd
+        return self.run_command(cmd, _async, _consol)
 
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -108,7 +114,7 @@ class QEMU:
         else:
             mylogger.setLevel(self.args.debug.upper())
         if self.args.disk:
-            _result = self.runshell(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
+            _result = self.run_command(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
             if _result.returncode == 0:
                 _disk_param = self.args.disk.lower().split(":")
                 _disk = _disk_param.pop(0)
@@ -158,7 +164,6 @@ class QEMU:
 
     def set_qemu(self):
         """Set QEMU executable and base parameters."""
-        self.sudo = ["sudo"] if os.getuid() else []
         self.qemu_exe = [f"qemu-system-{self.args.arch}"] if self.args.qemu else [f"{self.home_folder}/qemu/bin/qemu-system-{self.args.arch}"]
         self.params = [f"-name {self.vmname},process={self.vmprocid}"]
 
@@ -266,8 +271,8 @@ class QEMU:
 
     def check_file(self, filename, size):
         if not Path(filename).exists():
-            self.runshell(f"qemu-img create -f qcow2 {filename} {size}G")
-        if self.runshell(f"lsof -w {filename}").returncode == 0:
+            self.run_command(f"qemu-img create -f qcow2 {filename} {size}G")
+        if self.run_command(f"lsof -w {filename}").returncode == 0:
             return 0
         return 1
 
@@ -338,15 +343,20 @@ class QEMU:
             return
         virtiofsd_path = f"{self.home_folder}/qemu/libexec/virtiofsd" if Path(f"{self.home_folder}/qemu/libexec/virtiofsd").exists() else "/usr/libexec/virtiofsd"
         virtiofsd_cmd = (
-            self.sudo
-            + self.G_TERM
+            self.G_TERM
             + ["--geometry=80x24+5+5 --"]
-            + [f"{virtiofsd_path} --socket-path=/tmp/virtiofs_{self.vmuid}.sock " f"-o source={self.home_folder}" if "libexec" in virtiofsd_path else f"--shared-dir={self.home_folder}"]
+            + [
+                (
+                    f"{virtiofsd_path} --socket-path=/tmp/virtiofs_{self.vmuid}.sock " f"-o source={self.home_folder}"
+                    if "libexec" in virtiofsd_path
+                    else f"--shared-dir={self.home_folder}"
+                )
+            ]
         )
         if self.args.debug == "cmd":
             print(" ".join(virtiofsd_cmd))
         else:
-            self.runshell(virtiofsd_cmd)
+            self.sudo_run(virtiofsd_cmd)
             while not Path(f"/tmp/virtiofs_{self.vmuid}.sock").exists():
                 mylogger.debug(f"Waiting for /tmp/virtiofs_{self.vmuid}.sock")
                 sleep(1)
@@ -397,7 +407,7 @@ class QEMU:
         ssh_file = Path(f"/tmp/{self.vmprocid}_SSH")
         ssh_file.unlink(missing_ok=True)
         ssh_key_cmd = f'ssh-keygen -R "[{self.hostip}]:{self.SSHPORT}"' if self.args.net == "user" else f'ssh-keygen -R "{self.localip}"'
-        self.runshell(ssh_key_cmd)
+        self.run_command(ssh_key_cmd)
 
     def configure_net(self, _set=False):
         """Configure network settings for the VM."""
@@ -409,19 +419,19 @@ class QEMU:
         self.macaddr = f"52:54:00:{self.vmguid[0:2]}:{self.vmguid[2:4]}:{self.vmguid[4:6]}"
 
         # Get host IP
-        _result = self.runshell("ip r g 1.0.0.0")
+        _result = self.run_command("ip r g 1.0.0.0")
         self.hostip = _result.stdout.split()[6] if _result.returncode == 0 else "localhost"
         mylogger.info(f"hostip: {self.hostip}")
 
         # Get local IP from DHCP leases
-        _result = self.runshell(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
+        _result = self.run_command(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
         dhcp_chk = sorted(_result.stdout.rstrip().split("\n"))[-1] if _result.returncode == 0 and _result.stdout else []
         self.localip = self.args.ip or (dhcp_chk.split()[4].split("/")[0] if dhcp_chk else None)
         mylogger.info(f"localip: {self.localip}")
 
         if _set:
             # Ensure ports are available
-            while not self.runshell(f"lsof -w -i :{self.SPICEPORT}").returncode or not self.runshell(f"lsof -w -i :{self.SSHPORT}").returncode:
+            while not self.run_command(f"lsof -w -i :{self.SPICEPORT}").returncode or not self.run_command(f"lsof -w -i :{self.SSHPORT}").returncode:
                 self.SSHPORT += 2
                 self.SPICEPORT = self.SSHPORT + 1
 
@@ -471,7 +481,7 @@ class QEMU:
 
     def findProc(self, _PROCID, _timeout=10):
         """Wait for a process to start."""
-        while self.runshell(f"ps -C {_PROCID}").returncode:
+        while self.run_command(f"ps -C {_PROCID}").returncode:
             mylogger.debug(f"findProc timeout {_timeout}")
             _timeout -= 1
             if _timeout < 0:
@@ -484,7 +494,7 @@ class QEMU:
         """Check if the SSH connection is available."""
         if not self.SSH_CONNECT:
             return 0
-        while self.runshell(f"ping -c 1 {self.SSH_CONNECT}").returncode:
+        while self.run_command(f"ping -c 1 {self.SSH_CONNECT}").returncode:
             timeout -= 1
             if timeout < 0:
                 return True
@@ -547,11 +557,11 @@ class QEMU:
         print(f"Boot: {self.vmboot:<15} mac: {self.macaddr}, ip: {self.localip}")
         completed = subprocess.CompletedProcess(0, 0)
         if not self.findProc(self.vmprocid, 0):
-            qemu_command = self.sudo + ([] if self.args.debug == "debug" else [] if self.args.consol else self.G_TERM + ["--"]) + self.qemu_exe + self.params + self.opts + self.KERNEL
+            qemu_command = ([] if self.args.debug == "debug" else [] if self.args.consol else self.G_TERM + ["--"]) + self.qemu_exe + self.params + self.opts + self.KERNEL
             if self.args.debug == "cmd":
                 print(" ".join(qemu_command))
             else:
-                completed = self.runshell(qemu_command, _consol=self.args.consol)
+                completed = self.sudo_run(qemu_command, _consol=self.args.consol)
         if self.CONNECT:
             qemu_connect = self.CONNECT
             if self.args.debug == "cmd":
@@ -560,7 +570,7 @@ class QEMU:
                 if completed.returncode == 0 and self.findProc(self.vmprocid):
                     if self.args.connect == "ssh":
                         self.checkConn(60)
-                    self.runshell(qemu_connect, True, _consol=self.args.consol)
+                    self.run_command(qemu_connect, True, _consol=self.args.consol)
 
 
 def main():
