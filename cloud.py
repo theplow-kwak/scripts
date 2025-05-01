@@ -169,8 +169,9 @@ timezone: Asia/Seoul
             + [self.img_name, cloud_init_iso]
             + self.args.remainder
         )
-        print(" ".join(cmd))
-        subprocess.run(cmd, check=True)
+        cmd = " ".join(cmd)
+        print(cmd)
+        subprocess.run(cmd, shell=True, check=True)
 
 
 if __name__ == "__main__":
