@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
-import os
-import subprocess
 import argparse
 import hashlib
+import logging
+import os
+import subprocess
+import sys
+import traceback
 
 
 class CloudInitConfig:
@@ -126,6 +129,7 @@ timezone: Asia/Seoul
         parser.add_argument("-s", "--size", help="Size of the qemu image")
         parser.add_argument("--bios", help="Use BIOS instead of UEFI", action="store_true")
         parser.add_argument("--debug", help="Enable debug mode", action="store_true")
+        parser.add_argument("remainder", nargs=argparse.REMAINDER, help="all other args after --")
         args = parser.parse_args()
 
         self.backing_img = args.backing or self.backing_img
@@ -141,6 +145,9 @@ timezone: Asia/Seoul
         self.image_size = args.size or self.image_size
         self.bios = args.bios
         self.debug = args.debug
+        if args.remainder and args.remainder[0] == "--":
+            args.remainder = args.remainder[1:]
+        self.args = args
 
     def run(self):
         self.parse_args()
@@ -156,10 +163,24 @@ timezone: Asia/Seoul
             cloud_init_iso = "cloud_init.iso"
 
         kernel_option = ["--kernel", self.kernel] if self.kernel else []
-        cmd = [self.qemu, "--bios" if self.bios else "", "--connect", "ssh", "--net", self.net, "--uname", self.user_name] + kernel_option + [self.img_name, cloud_init_iso]
+        cmd = (
+            [self.qemu, "--bios" if self.bios else "", "--connect", "ssh", "--net", self.net, "--uname", self.user_name]
+            + kernel_option
+            + [self.img_name, cloud_init_iso]
+            + self.args.remainder
+        )
         print(" ".join(cmd))
         subprocess.run(cmd, check=True)
 
 
 if __name__ == "__main__":
-    CloudInitConfig().run()
+    try:
+        CloudInitConfig().run()
+    except KeyboardInterrupt:
+        logging.error("Keyboard Interrupted")
+    except Exception as e:
+        logging.error(f"QEMU terminated abnormally. {e}")
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        trace_back = traceback.extract_tb(ex_traceback)
+        for trace in trace_back[1:]:
+            logging.error(f"  File {trace[0]}, line {trace[1]}, in {trace[2]}")
