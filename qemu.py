@@ -55,11 +55,13 @@ class QEMU:
             cmd = " ".join(cmd)
         _cmd = shlex.split(cmd)
         mylogger.debug(f"runshell {'Async' if _async else ''}: {cmd}")
-        if _async:
-            completed = subprocess.Popen(_cmd) if not _consol else subprocess.run(_cmd, text=True)
+        if _consol:
+            completed = subprocess.run(_cmd, text=True)
+        elif _async:
+            completed = subprocess.Popen(_cmd)
             sleep(1)
         else:
-            completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) if not _consol else subprocess.run(_cmd, text=True)
+            completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             if completed.stdout:
                 mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}")
         return completed
