@@ -1310,9 +1310,9 @@ uname      1926  0.5  0.0  98868  9360 ?        Sl   08:58   0:04 /usr/bin/barri
 
 ```bash
 client:
-/snap/barrier/384/usr/bin/barrierc -f --no-tray --debug INFO --name test-X570-AORUS-ELITE --enable-crypto [10.0.0.150]:24800
+/usr/bin/barrierc --disable-crypto --debug WARNING --name test-X570-AORUS-ELITE [10.0.0.150]:24800
 server:
-/snap/barrier/384/usr/bin/barriers -f --no-tray --debug INFO --name uname-AORUS --enable-crypto -c /home/uname/barrier.conf --address :24800
+/usr/bin/barriers --debug WARNING --name test-Z370-AORUS-ULTRA --disable-crypto -c /home/test/barrier.conf --address :24800
 ```
 
 ERROR: ssl certificate doesn't exist: /home/test/.local/share/barrier/SSL/Barrier.pem
@@ -1669,21 +1669,33 @@ proot-distro login --user test ubuntu -- bash "/home/test/vscode.sh"
 
 ## Ubuntu in termux
 
-proot-distro login ubuntu
+~ $ proot-distro login ubuntu
 
 ```bash
 apt update && apt upgrade -y
-adduser test
+apt install sudo -y
+NEWUSER=test
+adduser --disabled-password --uid $NEWUID --gecos "${NEWUSER}" ${NEWUSER} && \
+    echo "$NEWUSER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$NEWUSER && chmod 0440 /etc/sudoers.d/$NEWUSER
 ```
 
-proot-distro login --user test ubuntu
+~ $ proot-distro login --user test ubuntu
 
 ```bash
-sudo apt install python3 git wget vim sudo -y
-wget https://github.com/coder/code-server/releases/download/v4.98.2/code-server-4.98.2-linux-arm64.tar.gz
-tar -zxvf code-server-4.98.2-linux-arm64.tar.gz
-rm code-server-4.98.2-linux-arm64.tar.gz
+sudo apt install python3 git wget vim -y
+vscode_ver=4.99.1
+wget https://github.com/coder/code-server/releases/download/v${vscode_ver}/code-server-${vscode_ver}-linux-arm64.tar.gz
+tar -zxvf code-server-${vscode_ver}-linux-arm64.tar.gz
+rm code-server-${vscode_ver}-linux-arm64.tar.gz
+cat << _EOF_ | tee vscode.sh 
+cd code-server-${vscode_ver}-linux-arm64/bin/
+export PASSWORD="1"
+./code-server
+_EOF_
+chmod +x vscode.sh
 ```
+
+~ $ proot-distro login --user test ubuntu -- bash "/home/test/vscode.sh"
 
 
 
