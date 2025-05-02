@@ -145,8 +145,8 @@ timezone: Asia/Seoul
         self.image_size = args.size or self.image_size
         self.bios = args.bios
         self.debug = args.debug
-        if args.remainder and args.remainder[0] == "--":
-            args.remainder = args.remainder[1:]
+        if args.remainder and "--" in args.remainder:
+            args.remainder.remove("--")
         self.args = args
 
     def run(self):
