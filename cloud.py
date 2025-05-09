@@ -145,7 +145,7 @@ timezone: Asia/Seoul
         self.image_size = args.size or self.image_size
         self.bios = args.bios
         self.debug = args.debug
-        if args.remainder and "--" in args.remainder:
+        if args.remainder:
             args.remainder.remove("--")
         self.args = args
 

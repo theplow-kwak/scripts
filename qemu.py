@@ -324,7 +324,7 @@ class QEMU:
                 _did = f",did={self.args.did}" if self.args.did else ""
                 _mn = f",mn={self.args.mn}" if self.args.mn else ""
                 _fdp = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
-                _fdp_nsid = ",fdp.ruhs=1-15" if self.args.fdp else ""
+                _fdp_nsid = ",fdp.ruhs=1-15,mcl=2048,mssrl=256,msrc=7" if self.args.fdp else ""
                 NVME_PARAMS += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp}",
