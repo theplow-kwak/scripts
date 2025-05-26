@@ -1,7 +1,7 @@
 #!/bin/bash
 # https://bytexd.com/how-to-setup-a-private-git-server-on-ubuntu/
 
-git_init_local()
+function git_init_local()
 {
     Repository=$1
     [[ -e ${Repository} ]] || { echo "Local repository ${Repository} does not exist"; exit 1; }
@@ -24,7 +24,7 @@ git_init_local()
     popd
 }
 
-git_init_server()
+function git_init_server()
 {
     Repository=$1
     [[ $(sudo -H -u git ls /home/git/${Repository}.git 2> /dev/null) ]] && { echo "Repository /home/git/${Repository}.git aleady exists!!"; return; }
@@ -37,7 +37,7 @@ git_init_server()
     fi
 }
 
-git_add_remote()
+function git_add_remote()
 {
     Repository=$1
     if [[ ! -e .git ]]; then
@@ -57,7 +57,28 @@ git_add_remote()
     fi
 }
 
-usage()
+function patch()
+{
+    commit1=${1:-HEAD~1}      # First commit (default: one commit before HEAD)
+    commit2=${2:-HEAD}        # Second commit (default: HEAD)
+    folderPath=${3:-""}       # Folder to filter (optional)
+    # Get the list of changed files between two commits
+    files=($(git diff --diff-filter=ACMRT --name-only $commit1 $commit2))
+
+    # Filter files by folder path if specified
+    if [[ "$folderPath" != "" ]]; then
+        files=($(printf "%s\n" "${files[@]}" | grep "$folderPath/"))
+    fi
+    # Archive only if there are files to include
+    if [[ ${#files[@]} -gt 0 ]]; then
+        git archive --worktree-attributes --output="../archive.zip" $commit2 -- ${files[@]}
+        echo "../archive.zip has been created."
+    else
+        echo "No files to archive."
+    fi
+}
+
+function usage()
 {
 cat << EOM
 Usage:
