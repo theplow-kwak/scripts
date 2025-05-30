@@ -8,6 +8,8 @@ import subprocess
 import sys
 import traceback
 
+from typing import List
+
 
 class CloudInitConfig:
     def __init__(self):
@@ -22,7 +24,7 @@ class CloudInitConfig:
         self.image_size = "30G"
         self.bios = False
         self.debug = False
-        self.cert_files = []
+        self.cert_files: List[str] = []
 
     def create_cfgfile(self):
         md5_hash = hashlib.md5(self.img_name.encode()).hexdigest()
@@ -162,7 +164,7 @@ timezone: Asia/Seoul
             subprocess.run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", self.backing_img, img_name_final, self.image_size], check=True)
             cloud_init_iso = "cloud_init.iso"
 
-        kernel_option = ["--kernel", self.kernel] if self.kernel else []
+        kernel_option: List[str] = ["--kernel", self.kernel] if self.kernel else []
         cmd = (
             [self.qemu, "--bios" if self.bios else "", "--connect", "ssh", "--net", self.net, "--uname", self.user_name]
             + kernel_option

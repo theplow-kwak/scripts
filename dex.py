@@ -105,55 +105,60 @@ class DexManager:
 
     def check_adb(self) -> None:
         """Check if adb is installed and a device is connected."""
-        if not self.run_command(f"{self.ADB_COMMAND} devices", capture_output=True).strip():
+        output = self.run_command(f"{self.ADB_COMMAND} devices", capture_output=True)
+        if not output or not output.strip():
             logging.error("No device connected!")
             sys.exit(1)
 
     def check_device_connected(self) -> None:
         """Check if any devices are connected via adb."""
         output = self.run_command(f"{self.ADB_COMMAND} devices", capture_output=True)
-        if not any("device" in line and "device" != "unauthorized" for line in output.splitlines()[1:]):
+        if not output or not any("device" in line and "unauthorized" not in line for line in output.splitlines()[1:]):
             logging.error("There is no device connected!")
             sys.exit(1)
 
     def get_display(self, verbose: bool = False) -> Optional[int]:
         """Get the ID of the last available display."""
         output = self.run_command(f"{self.SCRCPY_COMMAND} --list-displays", capture_output=True)
+        if not output:
+            logging.error("No output from scrcpy --list-displays")
+            return None
         display_ids = [int(match.group(1)) for match in re.finditer(r"--display-id=(\d+)", output)]
         if verbose:
             logging.info("\n".join([f"display-id={display_id}" for display_id in display_ids]))
         return max(display_ids, default=None)
 
-    def get_apps(self, verbose: bool = False) -> Dict[str, str]:
+    def get_apps(self, verbose: bool = False) -> dict[str, str]:
         """Retrieve a list of installed apps."""
         output = self.run_command(f"{self.SCRCPY_COMMAND} --list-apps", capture_output=True)
-        app_list = {}
-        for line in output.splitlines():
-            line = line.strip()
-            if line.startswith(("*", "-")):
-                parts = line.lstrip("*-").strip().split()
-                package = parts[-1]
-                name = "".join(parts[:-1]).strip()
-                if name:
-                    app_list[name] = package
+        app_list: dict[str, str] = {}
+        if output:
+            for line in output.splitlines():
+                line = line.strip()
+                if line.startswith(("*", "-")):
+                    parts = line.lstrip("*-").strip().split()
+                    package = parts[-1]
+                    name = "".join(parts[:-1]).strip()
+                    if name:
+                        app_list[name] = package
         if verbose:
-            for name, package in app_list.items():
-                logging.info(f"{name} - {package}")
+            for name, pkg in app_list.items():
+                logging.info(f"{name} - {pkg}")
         return app_list
 
-    def get_package(self, app_list: Dict[str, str], name: str) -> Optional[str]:
+    def get_package(self, app_list: Dict[str, str], name: str) -> str:
         """Find the package name for a given app name."""
-        for key, package in app_list.items():
-            if name.lower() in key.lower():
-                return package
+        if name:
+            for key, package in app_list.items():
+                if name.lower() in key.lower():
+                    return package
         logging.warning(f"No package found for {name}")
-        return None
+        return ""
 
     def run_app(self, package: str) -> None:
         """Run an app using scrcpy."""
-        self.run_command(
-            f"{self.SCRCPY_COMMAND} --new-display={self.DEFAULT_DISPLAY_MODE} --stay-awake --keyboard=uhid --start-app={package} --window-title='DexOnLinux'", demon_mode=True
-        )
+        _package = f" --start-app={package}" if package else ""
+        self.run_command(f"{self.SCRCPY_COMMAND} --new-display={self.DEFAULT_DISPLAY_MODE} --stay-awake --keyboard=uhid {_package} --window-title='DexOnLinux'", demon_mode=True)
 
     def adb_ssh(self) -> None:
         """Forward ports and start an SSH session."""
@@ -178,8 +183,4 @@ if __name__ == "__main__":
     else:
         app_list = dex_manager.get_apps()
         package = dex_manager.get_package(app_list, args.command)
-        if package:
-            logging.info(f"Running {args.command} - {package}")
-            dex_manager.run_app(package)
-        else:
-            logging.error(f"App '{args.command}' not found.")
+        dex_manager.run_app(package)
