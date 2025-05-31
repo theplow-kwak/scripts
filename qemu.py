@@ -13,23 +13,8 @@ from time import sleep
 from typing import Optional
 
 
-def set_logger(log_name: str = "", log_file: Optional[str] = None):
-    logger = logging.getLogger(log_name)
-    if logger.handlers:
-        return logger
-    if log_file:
-        os.makedirs(str(Path(log_file).parent), exist_ok=True)
-        fh = logging.FileHandler(log_file)
-        formatter = logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s")
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-    sh = logging.StreamHandler()
-    logger.addHandler(sh)
-    logger.setLevel(logging.WARNING)
-    return logger
-
-
-mylogger = set_logger("QEMU", f"/tmp/qemu.log")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 class QEMU:
@@ -58,7 +43,7 @@ class QEMU:
         if isinstance(cmd, list):
             cmd = " ".join(cmd)
         _cmd = shlex.split(cmd)
-        mylogger.debug(f"runshell {'Async' if _async else ''}: {cmd}")
+        logger.debug(f"runshell {'Async' if _async else ''}: {cmd}")
         if _consol:
             completed = subprocess.run(_cmd, text=True)
         elif _async:
@@ -67,7 +52,7 @@ class QEMU:
         else:
             completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             if completed.stdout:
-                mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}")
+                logger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}")
         return completed
 
     def sudo_run(self, cmd: str | list[str], _async: bool = False, _consol: bool = False):
@@ -118,9 +103,9 @@ class QEMU:
         parser.add_argument("--memsize", help="Set memory size")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
-            mylogger.setLevel("INFO")
+            logger.setLevel("INFO")
         else:
-            mylogger.setLevel(self.args.debug.upper())
+            logger.setLevel(self.args.debug.upper())
         if self.args.disk:
             _result = self.run_command(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
             if _result.returncode == 0 and _result.stdout:
@@ -156,11 +141,11 @@ class QEMU:
         _boot_dev = self.vmimages + self.vmnvme + self.vmcdimages
         if self.args.vmkernel:
             _boot_dev.append(self.args.vmkernel)
-        mylogger.info(f"vmimages {self.vmimages} ")
-        mylogger.info(f"vmcdimages {self.vmcdimages} ")
-        mylogger.info(f"vmnvme {self.vmnvme} ")
-        mylogger.info(f"vmkernel {self.args.vmkernel} ")
-        mylogger.info(f"boot_dev {_boot_dev} ")
+        logger.info(f"vmimages {self.vmimages} ")
+        logger.info(f"vmcdimages {self.vmcdimages} ")
+        logger.info(f"vmnvme {self.vmnvme} ")
+        logger.info(f"vmkernel {self.args.vmkernel} ")
+        logger.info(f"boot_dev {_boot_dev} ")
         if not _boot_dev:
             raise Exception("There is no Boot device!!")
         self.bootype = "1" if self.vmnvme and self.vmnvme[0] == _boot_dev[0] else ""
@@ -369,7 +354,7 @@ class QEMU:
         else:
             self.sudo_run(virtiofsd_cmd)
             while not Path(f"/tmp/virtiofs_{self.vmuid}.sock").exists():
-                mylogger.debug(f"Waiting for /tmp/virtiofs_{self.vmuid}.sock")
+                logger.debug(f"Waiting for /tmp/virtiofs_{self.vmuid}.sock")
                 sleep(1)
 
         self.params += [
@@ -435,7 +420,7 @@ class QEMU:
         _result = self.run_command("ip r g 1.0.0.0")
         stdout = _result.stdout.decode() if isinstance(_result.stdout, bytes) else str(_result.stdout or "")
         self.hostip = stdout.split()[6] if _result.returncode == 0 and len(stdout.split()) > 6 else "localhost"
-        mylogger.info(f"hostip: {self.hostip}")
+        logger.info(f"hostip: {self.hostip}")
 
         # Get local IP from DHCP leases
         _result = self.run_command(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
@@ -443,7 +428,7 @@ class QEMU:
         dhcp_lines = dhcp_stdout.rstrip().split("\n") if dhcp_stdout.strip() else []
         dhcp_chk = sorted(dhcp_lines)[-1] if dhcp_lines else ""
         self.localip = self.args.ip or (dhcp_chk.split()[4].split("/")[0] if dhcp_chk and len(dhcp_chk.split()) > 4 else None)
-        mylogger.info(f"localip: {self.localip}")
+        logger.info(f"localip: {self.localip}")
 
         if _set:
             # Ensure ports are available
@@ -466,7 +451,7 @@ class QEMU:
             try:
                 ssh_port_file.write_text(str(self.ssh_port))
             except Exception as e:
-                mylogger.error(f"Failed to write SSH port: {e}")
+                logger.error(f"Failed to write SSH port: {e}")
 
     def configure_connect(self):
         """Configure connection settings for the VM."""
@@ -501,12 +486,12 @@ class QEMU:
     def findProc(self, _PROCID: str, _timeout: int = 10) -> bool:
         """Wait for a process to start."""
         while self.run_command(f"ps -C {_PROCID}").returncode:
-            mylogger.debug(f"findProc timeout {_timeout}")
+            logger.debug(f"findProc timeout {_timeout}")
             _timeout -= 1
             if _timeout < 0:
                 return False
             sleep(1)
-        mylogger.debug("findProc return 1")
+        logger.debug("findProc return 1")
         return True
 
     def checkConn(self, timeout: int = 10):
@@ -544,11 +529,11 @@ class QEMU:
             lspci_out = subprocess.check_output(["lspci", "-k", "-s", pcihost], text=True)
             driver_line = next((line for line in lspci_out.splitlines() if "Kernel driver in use:" in line), None)
             if not driver_line:
-                mylogger.error(f"Could not find kernel driver for {pcihost}")
+                logger.error(f"Could not find kernel driver for {pcihost}")
                 return
             driver = driver_line.split(":")[-1].strip()
         except Exception as e:
-            mylogger.error(f"Failed to get kernel driver for {pcihost}: {e}")
+            logger.error(f"Failed to get kernel driver for {pcihost}: {e}")
             return
 
         # Unbind from current driver
@@ -556,7 +541,7 @@ class QEMU:
             with open(f"/sys/bus/pci/drivers/{driver}/unbind", "w") as f:
                 f.write(pcihost)
         except Exception as e:
-            mylogger.error(f"Failed to unbind {pcihost} from {driver}: {e}")
+            logger.error(f"Failed to unbind {pcihost} from {driver}: {e}")
             return
 
         # Bind to vfio-pci
@@ -567,7 +552,7 @@ class QEMU:
             with open("/sys/bus/pci/drivers/vfio-pci/new_id", "w") as f:
                 f.write(devid)
         except Exception as e:
-            mylogger.error(f"Failed to bind {pcihost} to vfio-pci: {e}")
+            logger.error(f"Failed to bind {pcihost} to vfio-pci: {e}")
             return
 
         # Add QEMU param
@@ -633,10 +618,10 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        mylogger.error("Keyboard Interrupted")
+        logger.error("Keyboard Interrupted")
     except Exception as e:
-        mylogger.error(f"QEMU terminated abnormally. {e}")
+        logger.error(f"QEMU terminated abnormally. {e}")
         ex_type, ex_value, ex_traceback = sys.exc_info()
         trace_back = traceback.extract_tb(ex_traceback)
         for trace in trace_back[1:]:
-            mylogger.error(f"  File {trace[0]}, line {trace[1]}, in {trace[2]}")
+            logger.error(f"  File {trace[0]}, line {trace[1]}, in {trace[2]}")

@@ -9,26 +9,11 @@ import sys
 from pathlib import Path
 
 
-def set_logger(log_name: str = "", log_file: str | None = None):
-    logger = logging.getLogger(log_name)
-    if logger.handlers:
-        return logger
-    if log_file:
-        os.makedirs(str(Path(log_file).parent), exist_ok=True)
-        fh = logging.FileHandler(log_file)
-        formatter = logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s")
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-    sh = logging.StreamHandler()
-    logger.addHandler(sh)
-    logger.setLevel(logging.WARNING)
-    return logger
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
-mylogger = set_logger("DOCKER", f"/tmp/mydocker.log")
-
-
-def runshell(cmd: str | list[str], _async: bool = False, _consol: bool = False) -> str:
+def run_command(cmd: str | list[str], _async: bool = False, _consol: bool = False) -> str:
     if isinstance(cmd, list):
         cmd = " ".join(cmd)
     _cmd = shlex.split(cmd)
@@ -42,12 +27,12 @@ def runshell(cmd: str | list[str], _async: bool = False, _consol: bool = False) 
         else:
             completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             if completed.stdout:
-                mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n")
+                logger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n")
             return completed.stdout.rstrip() if completed.stdout else ""
 
 
 def _get_docker_items(cmd: str, key: str):
-    _result = runshell(cmd)
+    _result = run_command(cmd)
     items = sorted(_result.split("\n")) if _result else []
     return items
 
@@ -112,7 +97,7 @@ class DockerMaster(object):
         if not self.image:
             self.image = get_image_id(self.name)
         if not self.image and self.container:
-            self.image = runshell(f"docker ps -a --filter 'name=^/{{self.container}}$'" + " --format '{{.Image}}'")[0]
+            self.image = run_command(f"docker ps -a --filter 'name=^/{{self.container}}$'" + " --format '{{.Image}}'")[0]
         print(f"Image    : {self.image}")
         print(f"Container: {self.container}")
         print(f"Name     : {self.name}\n")
@@ -120,7 +105,7 @@ class DockerMaster(object):
 
     def _build(self):
         if not self.args.docker:
-            mylogger.error("Docker build: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            logger.error("Docker build: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
             return
         docker_cmd = [f"docker build -t {self.name} --network=host"]
         if self.args.force:
@@ -131,7 +116,7 @@ class DockerMaster(object):
         if self.docker_file:
             docker_cmd += [f"-f {self.docker_dir}/{self.docker_file}"]
         print(" ".join(docker_cmd))
-        runshell(docker_cmd, _consol=True)
+        run_command(docker_cmd, _consol=True)
 
     def _run(self):
         _container = self.args.container if not self.container and self.args.container else self.name
@@ -156,27 +141,27 @@ class DockerMaster(object):
         _EXT_CMD = " ".join(self.args.extcmd) if self.args.extcmd else "/bin/bash"
         docker_cmd += [f"{_EXT_CMD}"]
         print(" ".join(docker_cmd))
-        runshell(docker_cmd, _consol=True)
+        run_command(docker_cmd, _consol=True)
 
     def history(self):
         if self.image:
-            print(runshell("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}"))
+            print(run_command("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}"))
 
     def inspect(self):
         if self.container:
-            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}"))
-            print(runshell('docker inspect --format \'Entrypoint: {{join .Config.Entrypoint " "}} {{join .Config.Cmd " "}}\'' + f" {self.container}"))
-            print(runshell("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}"))
+            print(run_command("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}"))
+            print(run_command('docker inspect --format \'Entrypoint: {{join .Config.Entrypoint " "}} {{join .Config.Cmd " "}}\'' + f" {self.container}"))
+            print(run_command("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}"))
             print("Mounts:")
-            print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}"))
+            print(run_command('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}"))
         elif self.image:
-            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.image}"))
-            print(runshell("docker inspect --format 'Cmd:        {{join .Config.Cmd \" \"}}'" + f" {self.image}"))
-            print(runshell("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}}'" + f" {self.image}"))
+            print(run_command("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.image}"))
+            print(run_command("docker inspect --format 'Cmd:        {{join .Config.Cmd \" \"}}'" + f" {self.image}"))
+            print(run_command("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}}'" + f" {self.image}"))
 
     def imports(self):
         if not self.args.docker:
-            mylogger.error("Docker import: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            logger.error("Docker import: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
             return
         _name = self.args.name[0] if self.args.name else self.docker_file.split(".")[0]
         docker_cmd = [f"docker import {self.args.docker} {_name}"]
@@ -184,45 +169,45 @@ class DockerMaster(object):
             _EXT_CMD = ",".join(f'"{cmd}"' for cmd in self.args.extcmd)
             docker_cmd += [f"--change 'ENTRYPOINT [{_EXT_CMD}]'"]
         print(" ".join(docker_cmd))
-        runshell(docker_cmd, _consol=True)
+        run_command(docker_cmd, _consol=True)
 
     def export(self):
         if not self.args.docker:
-            mylogger.error("Docker export: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            logger.error("Docker export: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
             return
-        runshell(f"docker export {self.container} --output {self.args.docker}", _consol=True)
+        run_command(f"docker export {self.container} --output {self.args.docker}", _consol=True)
 
     def rm(self):
         if self.container:
             print(f"remove container {self.container}")
-            runshell(f"docker rm {self.container}", _consol=True)
+            run_command(f"docker rm {self.container}", _consol=True)
 
     def rmi(self):
         if self.image:
             _containers = " ".join(get_containers(self.image))
             print(f"remove docker image {self.image} / {_containers}")
             if _containers:
-                runshell(f"docker rm -f {_containers}", _consol=True)
-            runshell(f"docker rmi {self.image}", _consol=True)
+                run_command(f"docker rm -f {_containers}", _consol=True)
+            run_command(f"docker rmi {self.image}", _consol=True)
 
     def _default(self):
         if len(sys.argv) < 2:
-            print(runshell("docker images") + "\n")
-            print(runshell("docker ps -a") + "\n")
+            print(run_command("docker images") + "\n")
+            print(run_command("docker ps -a") + "\n")
             return
         if not self.image:  # or not runshell(f"docker images -q --filter reference={self.name}")
             self._build()
             return
-        has_container = runshell(f"docker ps -a --filter 'name=^/{{self.args.container}}$'" + " --format '{{.Names}}'")
+        has_container = run_command(f"docker ps -a --filter 'name=^/{{self.args.container}}$'" + " --format '{{.Names}}'")
         if not self.container and not has_container:
             self._run()
             return
-        is_started = runshell(f"docker ps --filter 'name=^/{{self.container}}$'" + " --format '{{.Names}}'")
+        is_started = run_command(f"docker ps --filter 'name=^/{{self.container}}$'" + " --format '{{.Names}}'")
         if not is_started:
             print(f"docker start {self.container}")
-            runshell(f"docker start {self.container}")
+            run_command(f"docker start {self.container}")
         print(f"docker attach {self.container}")
-        runshell(f"docker attach {self.container}", _consol=True)
+        run_command(f"docker attach {self.container}", _consol=True)
 
 
 def main():

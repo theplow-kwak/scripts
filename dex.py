@@ -11,6 +11,7 @@ import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 class DexManager:
@@ -34,7 +35,7 @@ class DexManager:
                 result = subprocess.run(cmd_list, check=True, text=True, stdout=subprocess.PIPE if capture_output else None)
                 return result.stdout.strip() if capture_output else None
         except subprocess.CalledProcessError as e:
-            logging.error(f"Command failed: {e}")
+            logger.error(f"Command failed: {e}")
             sys.exit(1)
 
     def enable_desktop_mode(self) -> None:
@@ -47,14 +48,14 @@ class DexManager:
         ]
         for cmd in commands:
             self.run_command(cmd)
-        logging.info("Enabled desktop mode")
+        logger.info("Enabled desktop mode")
 
         time.sleep(2)
         self.run_command(f"{self.ADB_COMMAND} reboot")
-        logging.info("Rebooting...")
+        logger.info("Rebooting...")
 
         self.run_command(f"{self.ADB_COMMAND} wait-for-device")
-        logging.info("Waiting for the device to respond")
+        logger.info("Waiting for the device to respond")
         time.sleep(20)
 
     def change_secondary_display_behavior(self) -> None:
@@ -84,7 +85,7 @@ class DexManager:
     def list_screen(self) -> None:
         """List all available screens."""
         output = self.run_command(f"{self.ADB_COMMAND} shell dumpsys display", capture_output=True)
-        logging.info(output)
+        logger.info(output)
 
     def launch_app(self, app: str = "com.sec.android.app.sbrowser") -> None:
         """Launch an app on the device."""
@@ -107,25 +108,25 @@ class DexManager:
         """Check if adb is installed and a device is connected."""
         output = self.run_command(f"{self.ADB_COMMAND} devices", capture_output=True)
         if not output or not output.strip():
-            logging.error("No device connected!")
+            logger.error("No device connected!")
             sys.exit(1)
 
     def check_device_connected(self) -> None:
         """Check if any devices are connected via adb."""
         output = self.run_command(f"{self.ADB_COMMAND} devices", capture_output=True)
         if not output or not any("device" in line and "unauthorized" not in line for line in output.splitlines()[1:]):
-            logging.error("There is no device connected!")
+            logger.error("There is no device connected!")
             sys.exit(1)
 
     def get_display(self, verbose: bool = False) -> Optional[int]:
         """Get the ID of the last available display."""
         output = self.run_command(f"{self.SCRCPY_COMMAND} --list-displays", capture_output=True)
         if not output:
-            logging.error("No output from scrcpy --list-displays")
+            logger.error("No output from scrcpy --list-displays")
             return None
         display_ids = [int(match.group(1)) for match in re.finditer(r"--display-id=(\d+)", output)]
         if verbose:
-            logging.info("\n".join([f"display-id={display_id}" for display_id in display_ids]))
+            logger.info("\n".join([f"display-id={display_id}" for display_id in display_ids]))
         return max(display_ids, default=None)
 
     def get_apps(self, verbose: bool = False) -> dict[str, str]:
@@ -143,7 +144,7 @@ class DexManager:
                         app_list[name] = package
         if verbose:
             for name, pkg in app_list.items():
-                logging.info(f"{name} - {pkg}")
+                logger.info(f"{name} - {pkg}")
         return app_list
 
     def get_package(self, app_list: Dict[str, str], name: str) -> str:
@@ -152,7 +153,7 @@ class DexManager:
             for key, package in app_list.items():
                 if name.lower() in key.lower():
                     return package
-        logging.warning(f"No package found for {name}")
+        logger.warning(f"No package found for {name}")
         return ""
 
     def run_app(self, package: str) -> None:
