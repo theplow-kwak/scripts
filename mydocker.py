@@ -5,10 +5,11 @@ import logging
 import argparse
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 
-def set_logger(log_name="", log_file=None):
+def set_logger(log_name: str = "", log_file: str | None = None):
     logger = logging.getLogger(log_name)
     if logger.handlers:
         return logger
@@ -27,50 +28,52 @@ def set_logger(log_name="", log_file=None):
 mylogger = set_logger("DOCKER", f"/tmp/mydocker.log")
 
 
-def runshell(cmd, _async=False, _consol=False):
+def runshell(cmd: str | list[str], _async: bool = False, _consol: bool = False) -> str:
     if isinstance(cmd, list):
         cmd = " ".join(cmd)
     _cmd = shlex.split(cmd)
     if _async:
-        completed = subprocess.Popen(_cmd)
+        subprocess.Popen(_cmd)
+        return ""
     else:
         if _consol:
             completed = subprocess.run(_cmd, text=True)
+            return ""
         else:
             completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        if completed.stdout:
-            mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n")
-    return completed
+            if completed.stdout:
+                mylogger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n")
+            return completed.stdout.rstrip() if completed.stdout else ""
 
 
-def get_image(image):
-    _result = runshell("docker images --format '{{.Repository}}'")
-    images = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
+def _get_docker_items(cmd: str, key: str):
+    _result = runshell(cmd)
+    items = sorted(_result.split("\n")) if _result else []
+    return items
+
+
+def get_image(image: str):
+    images = _get_docker_items("docker images --format '{{.Repository}}'", "Repository")
     return next((item for item in images if item == image), None)
 
 
-def get_image_id(image):
-    _result = runshell("docker images --format '{{.ID}}'")
-    images = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
-    return next((item for item in images if item == image), None)
+def get_image_id(image: str):
+    ids = _get_docker_items("docker images --format '{{.ID}}'", "ID")
+    return next((item for item in ids if item == image), None)
 
 
-def get_containers(image):
-    _result = runshell(f"docker ps -a --filter 'ancestor={image}'" + " --format '{{.Names}}'")
-    containers = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
-    return containers
+def get_containers(image: str):
+    return _get_docker_items(f"docker ps -a --filter 'ancestor={image}' --format '{{.Names}}'", "Names")
 
 
-def get_container(container):
-    _result = runshell("docker ps -a --format '{{.Names}}'")
-    containers = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
+def get_container(container: str):
+    containers = _get_docker_items("docker ps -a --format '{{.Names}}'", "Names")
     return next((item for item in containers if item == container), None)
 
 
-def get_container_id(container):
-    _result = runshell("docker ps -a --format '{{.ID}}'")
-    containers = sorted(_result.stdout.rstrip().split("\n")) if _result.returncode == 0 and _result.stdout else []
-    return next((item for item in containers if item == container), None)
+def get_container_id(container: str):
+    ids = _get_docker_items("docker ps -a --format '{{.ID}}'", "ID")
+    return next((item for item in ids if item == container), None)
 
 
 class DockerMaster(object):
@@ -91,7 +94,7 @@ class DockerMaster(object):
         self.name = self.args.name[0] if self.args.name else ""
         self.method = getattr(self, _method, self._default)
 
-    def _start(self):
+    def start(self):
         if self.args.docker:
             _DOCKERPATH = Path(self.args.docker).resolve()
             if _DOCKERPATH.is_file():
@@ -109,7 +112,7 @@ class DockerMaster(object):
         if not self.image:
             self.image = get_image_id(self.name)
         if not self.image and self.container:
-            self.image = runshell(f"docker ps -a --filter 'name=^/{self.container}$'" + " --format '{{.Image}}'").stdout.rsplit()[0]
+            self.image = runshell(f"docker ps -a --filter 'name=^/{{self.container}}$'" + " --format '{{.Image}}'")[0]
         print(f"Image    : {self.image}")
         print(f"Container: {self.container}")
         print(f"Name     : {self.name}\n")
@@ -131,25 +134,25 @@ class DockerMaster(object):
         runshell(docker_cmd, _consol=True)
 
     def _run(self):
-        _CONTAINER = self.args.container if not self.container and self.args.container else self.name
-        WORKDIR = ""
-        docker_cmd = [f"docker run -it --user {self.args.uname}", "-v /etc/timezone:/etc/timezone:ro", "-e TZ=Asia/Seoul", f"--hostname {_CONTAINER}"]
+        _container = self.args.container if not self.container and self.args.container else self.name
+        workdir = ""
+        docker_cmd = [f"docker run -it --user {self.args.uname}", "-v /etc/timezone:/etc/timezone:ro", "-e TZ=Asia/Seoul", f"--hostname {_container}"]
         if self.args.cert:
             if Path("/etc/ssl/certs").exists():
                 docker_cmd += ["-v /etc/ssl/certs:/etc/ssl/certs:ro"]
             if Path("/etc/pki/ca-trust").exists():
                 docker_cmd += ["-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro"]
-        HOME_FOLDER = "/root" if self.args.uname == "root" else f"/home/{self.args.uname}"
+        home_folder = "/root" if self.args.uname == "root" else f"/home/{self.args.uname}"
         if self.args.share:
             for share in self.args.share:
                 _share = share.split(":")
                 _path = Path(_share[0])
                 if _path.exists():
-                    docker_cmd += [f"--mount type=bind,source='{_path.resolve()}',target='{HOME_FOLDER}/{_share[1] if len(_share) > 1 else _path.name}'"]
-                    if not WORKDIR:
-                        WORKDIR = _share[1] if len(_share) > 1 else _path.name
-        docker_cmd += [f"--workdir '{HOME_FOLDER}/{WORKDIR}'"]
-        docker_cmd += [f"--name {_CONTAINER} {self.image}"]
+                    docker_cmd += [f"--mount type=bind,source='{_path.resolve()}',target='{home_folder}/{_share[1] if len(_share) > 1 else _path.name}'"]
+                    if not workdir:
+                        workdir = _share[1] if len(_share) > 1 else _path.name
+        docker_cmd += [f"--workdir '{home_folder}/{workdir}'"]
+        docker_cmd += [f"--name {_container} {self.image}"]
         _EXT_CMD = " ".join(self.args.extcmd) if self.args.extcmd else "/bin/bash"
         docker_cmd += [f"{_EXT_CMD}"]
         print(" ".join(docker_cmd))
@@ -157,19 +160,19 @@ class DockerMaster(object):
 
     def history(self):
         if self.image:
-            print(runshell("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}").stdout.rstrip())
+            print(runshell("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}"))
 
     def inspect(self):
         if self.container:
-            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}").stdout.rstrip())
-            print(runshell("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}} {{join .Config.Cmd \" \"}}'" + f" {self.container}").stdout.rstrip())
-            print(runshell("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}").stdout.rstrip())
+            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}"))
+            print(runshell('docker inspect --format \'Entrypoint: {{join .Config.Entrypoint " "}} {{join .Config.Cmd " "}}\'' + f" {self.container}"))
+            print(runshell("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}"))
             print("Mounts:")
-            print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}").stdout.rstrip())
+            print(runshell('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}"))
         elif self.image:
-            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.image}").stdout.rstrip())
-            print(runshell("docker inspect --format 'Cmd:        {{join .Config.Cmd \" \"}}'" + f" {self.image}").stdout.rstrip())
-            print(runshell("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}}'" + f" {self.image}").stdout.rstrip())
+            print(runshell("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.image}"))
+            print(runshell("docker inspect --format 'Cmd:        {{join .Config.Cmd \" \"}}'" + f" {self.image}"))
+            print(runshell("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}}'" + f" {self.image}"))
 
     def imports(self):
         if not self.args.docker:
@@ -204,17 +207,17 @@ class DockerMaster(object):
 
     def _default(self):
         if len(sys.argv) < 2:
-            print(runshell("docker images").stdout)
-            print(runshell("docker ps -a").stdout)
+            print(runshell("docker images") + "\n")
+            print(runshell("docker ps -a") + "\n")
             return
-        if not self.image:  # or not runshell(f"docker images -q --filter reference={self.name}").stdout
+        if not self.image:  # or not runshell(f"docker images -q --filter reference={self.name}")
             self._build()
             return
-        has_container = runshell(f"docker ps -a --filter 'name=^/{self.args.container}$'" + " --format '{{.Names}}'").stdout
+        has_container = runshell(f"docker ps -a --filter 'name=^/{{self.args.container}}$'" + " --format '{{.Names}}'")
         if not self.container and not has_container:
             self._run()
             return
-        is_started = runshell(f"docker ps --filter 'name=^/{self.container}$'" + " --format '{{.Names}}'").stdout
+        is_started = runshell(f"docker ps --filter 'name=^/{{self.container}}$'" + " --format '{{.Names}}'")
         if not is_started:
             print(f"docker start {self.container}")
             runshell(f"docker start {self.container}")
@@ -224,11 +227,8 @@ class DockerMaster(object):
 
 def main():
     mydocker = DockerMaster()
-    mydocker._start()
+    mydocker.start()
 
-
-import sys
-import traceback
 
 if __name__ == "__main__":
     main()
