@@ -277,7 +277,7 @@ class QEMU:
         if not self.vmnvme:
             return
 
-        def add_nvme_drive(_NVME: str, ns_backend: str, _ctrl_id: int, _nsid: Optional[int] = None, fdp_nsid: str = "") -> list[str]:
+        def add_nvme_namespace(_NVME: str, ns_backend: str, _ctrl_id: int, _nsid: Optional[int] = None, fdp_nsid: str = "") -> list[str]:
             """Helper to add NVMe drive and namespace."""
             NVME: list[str] = []
             if self.check_file(ns_backend, _ns_size):
@@ -305,14 +305,14 @@ class QEMU:
             ns_backend = f"{_NVME}n1.qcow2"
 
             if self.args.qemu:
-                nvme_params += add_nvme_drive(_NVME, ns_backend, _ctrl_id)
+                nvme_params += add_nvme_namespace(_NVME, ns_backend, _ctrl_id)
             elif self.args.sriov:
                 nvme_params += [
                     f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                     f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
                     f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=512,msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510",
                 ]
-                nvme_params += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=1, fdp_nsid=",shared=false,detached=true")
+                nvme_params += add_nvme_namespace(_NVME, ns_backend, _ctrl_id, _nsid=1, fdp_nsid=",shared=false,detached=true")
                 _ctrl_id += 1
             else:
                 _did = f",did={self.args.did}" if self.args.did else ""
@@ -326,7 +326,7 @@ class QEMU:
                 ]
                 for _nsid in range(1, _num_ns + 1):
                     ns_backend = ns_backend.replace("n1", f"n{_nsid}")
-                    nvme_params += add_nvme_drive(_NVME, ns_backend, _ctrl_id, _nsid=_nsid, fdp_nsid=_fdp_nsid if _nsid == 1 else "")
+                    nvme_params += add_nvme_namespace(_NVME, ns_backend, _ctrl_id, _nsid=_nsid, fdp_nsid=_fdp_nsid if _nsid == 1 else "")
                 _ctrl_id += 1
 
         if Path("./events").exists():

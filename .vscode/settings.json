@@ -3,4 +3,5 @@
     "black-formatter.args": [
         "--line-length", "180"
     ],
+    "containers.commands.attach": "${containerCommand} start ${containerId}; ${containerCommand} attach ${containerId}",
 }
