@@ -6,6 +6,7 @@ import getpass
 import hashlib
 import logging
 import os
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -28,7 +29,7 @@ class QEMU:
         self.params: list[str] = []
         self.opts: list[str] = []
         self.kernel: list[str] = []
-        self.index = self.use_nvme = 0
+        self.index = 0
         self.home_folder = f"/home/{os.getlogin()}"
         self.memsize = self._calculate_memory_size()
         self.sudo = ["sudo"] if os.getuid() else []
@@ -62,6 +63,19 @@ class QEMU:
         cmd = self.sudo + cmd
         return self.run_command(cmd, _async, _consol)
 
+    def parse_disks(self):
+        for disk in self.args.disk:
+            _result = self.run_command(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
+            if _result.returncode == 0:
+                _disk_param = disk.lower().split(":")
+                _disk = _disk_param.pop(0)
+                stdout_str: str = _result.stdout.decode() if isinstance(_result.stdout, bytes) else str(_result.stdout)
+                lines: list[str] = stdout_str.splitlines()
+                _images: list[str] = [line.split()[0] for line in lines if _disk in line.lower()]
+                for _image in _images:
+                    _part = _disk_param.pop(0) if _disk_param else ""
+                    self.args.images.append(f"/dev/{_image}{_part}")
+
     def set_args(self):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
         parser.add_argument("--secboot", default="", action="store_const", const=".secboot", help="Using secureboot of UEFI")
@@ -83,8 +97,8 @@ class QEMU:
         parser.add_argument("--stick", help="Set USB storage image")
         parser.add_argument("--ip", help="Set local IP")
         parser.add_argument("images", metavar="IMAGES", nargs="*", help="Set VM images")
-        parser.add_argument("--nvme", help="Set NVMe images")
-        parser.add_argument("--disk", help="Set disk image")
+        parser.add_argument("--nvme", nargs="+", action="extend", help="Set NVMe images")
+        parser.add_argument("--disk", nargs="+", action="extend", help="Set disk image")
         parser.add_argument("--vender", help="Set PC vendor")
         parser.add_argument("--kernel", dest="vmkernel", help="Set Linux Kernel image")
         parser.add_argument("--rootdev", help="Set root filesystem device")
@@ -107,26 +121,17 @@ class QEMU:
         else:
             logger.setLevel(self.args.debug.upper())
         if self.args.disk:
-            _result = self.run_command(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
-            if _result.returncode == 0 and _result.stdout:
-                _disk_param = self.args.disk.lower().split(":")
-                _disk = _disk_param.pop(0)
-                stdout_str: str = _result.stdout.decode() if isinstance(_result.stdout, bytes) else str(_result.stdout)
-                lines: list[str] = stdout_str.splitlines()
-                _images: list[str] = [line.split()[0] for line in lines if _disk in line.lower()]
-                for _image in _images:
-                    _part = _disk_param.pop(0) if _disk_param else ""
-                    self.args.images.append(f"/dev/{_image}{_part}")
-        if self.args.numns:
-            self.use_nvme = 1
+            self.parse_disks()
+        if self.args.nvme:
+            self.vmnvme.extend(self.args.nvme)
 
     def set_images(self):
         image_extensions = {".img", ".qcow2", ".vhdx"}
         for image in self.args.images:
             image_path = Path(image)
-            if image.startswith("nvme"):
+            if re.match(r"^(nvme\d+):?(\d+)?$", image):
                 self.vmnvme.append(image)
-            elif image_path.exists() or image_path.is_block_device():
+            elif image_path.exists() and image_path.is_block_device():
                 self.vmimages.append(image)
             elif image_path.exists():
                 _, ext = os.path.splitext(image)
@@ -277,57 +282,50 @@ class QEMU:
         if not self.vmnvme:
             return
 
-        def add_nvme_namespace(_NVME: str, ns_backend: str, _ctrl_id: int, _nsid: Optional[int] = None, fdp_nsid: str = "") -> list[str]:
+        def add_nvme_namespace(_NVME: str, ns_backend: str, _nsid: int = 1, nsid_params: str = "") -> list[str]:
             """Helper to add NVMe drive and namespace."""
             NVME: list[str] = []
             if self.check_file(ns_backend, _ns_size):
                 NVME.append(f"-drive file={ns_backend},id={_NVME}{_nsid or ''},if=none,cache=none")
-                if _nsid:
-                    NVME.append(f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}{fdp_nsid}")
-                else:
-                    NVME.append(f"-device nvme,drive={_NVME},serial=beef{_NVME},ocp=on")
+                NVME.append(f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}{nsid_params}")
             return NVME
-
-        _ns_size = self.args.nssize
-        if not self.vmnvme:
-            self.vmnvme.append(f"nvme{self.vmuid}")
 
         nvme_params = [
             "-device ioh3420,bus=pcie.0,id=root1.0,slot=1",
             "-device x3130-upstream,bus=root1.0,id=upstream1.0",
         ]
 
+        _ns_size = self.args.nssize
         _ctrl_id = 1
-        for item in self.vmnvme:
-            parts = item.split(":")
-            _NVME = parts[0]
-            _num_ns = int(parts[1]) if len(parts) > 1 else self.args.numns or 1
-            ns_backend = f"{_NVME}n1.qcow2"
+        for nvme in self.vmnvme:
+            print(f"Processing nvme: {nvme}")
+            match = re.match(r"^(?P<nvme_id>nvme\d+)(?::(?P<num_ns>\d+))?(?:n(?P<ns_id>\d+)(?P<ext>\.[a-zA-Z0-9]+))?", nvme)
+            _nvme_id = match.group("nvme_id") or "nvme0"
+            _num_ns = match.group("num_ns") or "1"
+            _ns_id = match.group("ns_id")
+            _ext = match.group("ext") or ".qcow2"
+            print(f"{nvme}: NVME {_nvme_id}, ns_range {_num_ns}, ns_id {_ns_id}, extension {_ext}")
 
-            if self.args.qemu:
-                nvme_params += add_nvme_namespace(_NVME, ns_backend, _ctrl_id)
-            elif self.args.sriov:
-                nvme_params += [
-                    f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
-                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}",
-                    f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs=512,msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510",
-                ]
-                nvme_params += add_nvme_namespace(_NVME, ns_backend, _ctrl_id, _nsid=1, fdp_nsid=",shared=false,detached=true")
-                _ctrl_id += 1
-            else:
-                _did = f",did={self.args.did}" if self.args.did else ""
-                _mn = f",mn={self.args.mn}" if self.args.mn else ""
-                _fdp = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
-                _fdp_nsid = ",fdp.ruhs=1-15,mcl=2048,mssrl=256,msrc=7" if self.args.fdp else ""
-                nvme_params += [
-                    f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
-                    f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp}",
-                    f"-device nvme,serial=beef{_NVME},ocp=on,id={_NVME},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id},max_ioqpairs={self.args.num_queues}{_did}{_mn}",
-                ]
-                for _nsid in range(1, _num_ns + 1):
-                    ns_backend = ns_backend.replace("n1", f"n{_nsid}")
-                    nvme_params += add_nvme_namespace(_NVME, ns_backend, _ctrl_id, _nsid=_nsid, fdp_nsid=_fdp_nsid if _nsid == 1 else "")
-                _ctrl_id += 1
+            _did = f",did={self.args.did}" if self.args.did else ""
+            _mn = f",mn={self.args.mn}" if self.args.mn else ""
+            _fdp_subsys = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
+            _fdp_nsid = ",fdp.ruhs=1-15,mcl=2048,mssrl=256,msrc=7" if self.args.fdp else ""
+            _sriov_params = f",msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510" if self.args.sriov else ""
+            _sriov_nsid = f",shared=false,detached=true" if self.args.sriov else ""
+            _ioqpairs = f",max_ioqpairs={512 if self.args.sriov else self.args.num_queues}"
+
+            nvme_params += [
+                f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
+                f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp_subsys}",
+                f"-device nvme,serial=beef{_nvme_id},ocp=on,id={_nvme_id},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id}{_ioqpairs}{_sriov_params}{_did}{_mn}",
+            ]
+
+            ns_backend = ""
+            for _nsid in range(1, int(_num_ns) + 1):
+                ns_backend = f"{_nvme_id}n{_ns_id or _nsid}{_ext}"
+                print(f"Processing namespace {_nsid} for {nvme} => {ns_backend}")
+                nvme_params += add_nvme_namespace(_nvme_id, ns_backend, _nsid=_nsid, nsid_params=f"{_fdp_nsid if _nsid == 1 else ''}{_sriov_nsid}")
+            _ctrl_id += 1
 
         if Path("./events").exists():
             nvme_params.append("--trace events=./events")
