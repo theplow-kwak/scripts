@@ -299,12 +299,14 @@ class QEMU:
         _ctrl_id = 1
         for nvme in self.vmnvme:
             print(f"Processing nvme: {nvme}")
-            match = re.match(r"^(?P<nvme_id>nvme\d+)(?::(?P<num_ns>\d+))?(?:n(?P<ns_id>\d+)(?P<ext>\.[a-zA-Z0-9]+))?", nvme)
-            _nvme_id = match.group("nvme_id") or "nvme0"
-            _num_ns = match.group("num_ns") or "1"
-            _ns_id = match.group("ns_id")
-            _ext = match.group("ext") or ".qcow2"
-            print(f"{nvme}: NVME {_nvme_id}, ns_range {_num_ns}, ns_id {_ns_id}, extension {_ext}")
+            match = re.match(r"^(?P<nvme_id>nvme\d+):?(?P<num_ns>\d+)?$", nvme)
+            if match:
+                _nvme_id = match.group("nvme_id") or "nvme0"
+                _num_ns = match.group("num_ns") or "1"
+                print(f"{nvme}: NVME {_nvme_id}, ns_range {_num_ns}")
+            else:
+                _nvme_id = "nvme0"
+                _num_ns = "1"
 
             _did = f",did={self.args.did}" if self.args.did else ""
             _mn = f",mn={self.args.mn}" if self.args.mn else ""
@@ -313,16 +315,19 @@ class QEMU:
             _sriov_params = f",msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510" if self.args.sriov else ""
             _sriov_nsid = f",shared=false,detached=true" if self.args.sriov else ""
             _ioqpairs = f",max_ioqpairs={512 if self.args.sriov else self.args.num_queues}"
+            _ocp_params = "" if self.args.qemu else ",ocp=on"
 
             nvme_params += [
                 f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                 f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp_subsys}",
-                f"-device nvme,serial=beef{_nvme_id},ocp=on,id={_nvme_id},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id}{_ioqpairs}{_sriov_params}{_did}{_mn}",
+                f"-device nvme,serial=beef{_nvme_id},id={_nvme_id},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id}{_ioqpairs}{_sriov_params}{_did}{_mn}{_ocp_params}",
             ]
 
-            ns_backend = ""
             for _nsid in range(1, int(_num_ns) + 1):
-                ns_backend = f"{_nvme_id}n{_ns_id or _nsid}{_ext}"
+                if match:
+                    ns_backend = f"{_nvme_id}n{_nsid}.qcow2"
+                else:
+                    ns_backend = nvme
                 print(f"Processing namespace {_nsid} for {nvme} => {ns_backend}")
                 nvme_params += add_nvme_namespace(_nvme_id, ns_backend, _nsid=_nsid, nsid_params=f"{_fdp_nsid if _nsid == 1 else ''}{_sriov_nsid}")
             _ctrl_id += 1
