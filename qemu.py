@@ -105,7 +105,7 @@ class QEMU:
         parser.add_argument("--initrd", help="Set initrd image")
         parser.add_argument("--pcihost", help="PCI passthrough")
         parser.add_argument("--numns", type=int, help="Set number of NVMe namespaces")
-        parser.add_argument("--nssize", type=int, default=1, help="Set size of NVMe namespace")
+        parser.add_argument("--nssize", type=int, default=40, help="Set size of NVMe namespace")
         parser.add_argument("--num_queues", type=int, default=32, help="Set max number of queues")
         parser.add_argument("--vnum", default="", help="Set VM copies")
         parser.add_argument("--sriov", action="store_true", help="Enable SR-IOV")

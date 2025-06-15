@@ -13,17 +13,6 @@ from typing import List
 
 class CloudInitConfig:
     def __init__(self):
-        self.backing_img = "../cd/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2"
-        self.img_name = f"{os.path.basename(os.getcwd())}.qcow2"
-        self.qemu = "qemu"
-        self.net = "bridge"
-        self.kernel = None
-        self.user_name = os.getenv("USER", "root")
-        self.host_name = None
-        self.cinit_file = "_cloud_init.cfg"
-        self.image_size = "30G"
-        self.bios = False
-        self.debug = False
         self.cert_files: List[str] = []
 
     def create_cfgfile(self):
@@ -31,7 +20,6 @@ class CloudInitConfig:
         self.host_name = self.host_name or f"{os.path.splitext(self.img_name)[0]}-VM-{md5_hash[:2]}"
 
         ssh_key_path = os.path.expanduser("~/.ssh/id_rsa.pub")
-        ssh_key = None
         ssh_content = ""
         if not os.path.exists(ssh_key_path):
             subprocess.run(["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", ssh_key_path[:-4], "-N", ""], check=True)
@@ -112,7 +100,7 @@ timezone: Asia/Seoul
 
 """
         cloud_config += certs_content
-        cloud_config += 'final_message: "The system is finally up, after $UPTIME seconds"\n'
+        cloud_config += '\nfinal_message: "The system is finally up, after $UPTIME seconds"\n'
 
         with open(self.cinit_file, "w") as f:
             f.write(cloud_config)
@@ -121,32 +109,33 @@ timezone: Asia/Seoul
         parser = argparse.ArgumentParser(description="Cloud-init configuration generator and QEMU launcher.")
         parser.add_argument("-b", "--backing", help="qemu image backing file")
         parser.add_argument("-i", "--image", help="qemu image name")
-        parser.add_argument("-q", "--qemu", help="Path to qemu binary")
-        parser.add_argument("-n", "--net", help="qemu Network interface model")
+        parser.add_argument("-q", "--qemu", help="Path to qemu binary", default="qemu")
+        parser.add_argument("-n", "--net", help="qemu Network interface model", default="bridge")
         parser.add_argument("-k", "--kernel", help="Set the custom kernel")
-        parser.add_argument("-u", "--uname", help="The login USER name")
+        parser.add_argument("-u", "--uname", help="The login USER name", default=os.getenv("USER", "root"))
         parser.add_argument("-H", "--host", help="Set the HOST name")
-        parser.add_argument("-f", "--fname", help="The cloud_init file name (default: '_cloud_init.cfg')")
+        parser.add_argument("-f", "--fname", help="The cloud_init file name (default: '_cloud_init.cfg')", default="_cloud_init.cfg")
         parser.add_argument("-c", "--cert", help="Certificate file for cloud-init", action="append")
-        parser.add_argument("-s", "--size", help="Size of the qemu image")
+        parser.add_argument("-s", "--size", help="Size of the qemu image", default="40G")
+        parser.add_argument("--nvme", help="Use NVMe instead of SATA", action="store_const", const="--nvme", dest="disk_type")
         parser.add_argument("--bios", help="Use BIOS instead of UEFI", action="store_true")
         parser.add_argument("--debug", help="Enable debug mode", action="store_true")
         parser.add_argument("remainder", nargs=argparse.REMAINDER, help="all other args after --")
         args = parser.parse_args()
 
-        self.backing_img = args.backing or self.backing_img
-        self.img_name = args.image or self.img_name
-        self.qemu = args.qemu or self.qemu
-        self.net = args.net or self.net
+        self.backing_img = args.backing
+        self.img_name = args.image
+        self.qemu = args.qemu
+        self.net = args.net
         self.kernel = args.kernel
-        self.user_name = args.uname or self.user_name
+        self.user_name = args.uname
         self.host_name = args.host
-        self.cinit_file = args.fname or self.cinit_file
-        if args.cert:
-            self.cert_files.extend(args.cert)
-        self.image_size = args.size or self.image_size
+        self.cinit_file = args.fname
+        self.image_size = args.size
         self.bios = args.bios
         self.debug = args.debug
+        if args.cert:
+            self.cert_files.extend(args.cert)
         if args.remainder:
             args.remainder.remove("--")
         self.args = args
@@ -156,9 +145,13 @@ timezone: Asia/Seoul
         if self.debug:
             print(f"Configuration: {vars(self)}")
 
+        if not self.img_name:
+            raise ValueError("Image name is required.")
         img_name_final = f"{self.img_name.split(':')[0]}n1.qcow2" if self.img_name.startswith("nvme") else self.img_name
         cloud_init_iso = ""
         if not os.path.exists(img_name_final):
+            if not self.backing_img:
+                raise ValueError("Backing image is required to create boot_image.")
             self.create_cfgfile()
             subprocess.run(["cloud-localds", "-v", "cloud_init.iso", self.cinit_file], check=True)
             subprocess.run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", self.backing_img, img_name_final, self.image_size], check=True)
@@ -168,7 +161,7 @@ timezone: Asia/Seoul
         cmd = (
             [self.qemu, "--bios" if self.bios else "", "--connect", "ssh", "--net", self.net, "--uname", self.user_name]
             + kernel_option
-            + [self.img_name, cloud_init_iso]
+            + [cloud_init_iso, self.args.disk_type, self.img_name]
             + self.args.remainder
         )
         cmd = " ".join(cmd)
