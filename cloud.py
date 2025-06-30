@@ -11,6 +11,10 @@ import traceback
 from typing import List
 
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
 class CloudInitConfig:
     def __init__(self):
         self.cert_files: List[str] = []
@@ -117,32 +121,30 @@ timezone: Asia/Seoul
         parser.add_argument("-f", "--fname", help="The cloud_init file name (default: '_cloud_init.cfg')", default="_cloud_init.cfg")
         parser.add_argument("-c", "--cert", help="Certificate file for cloud-init", action="append")
         parser.add_argument("-s", "--size", help="Size of the qemu image", default="40G")
-        parser.add_argument("--nvme", help="Use NVMe instead of SATA", action="store_const", const="--nvme", dest="disk_type")
-        parser.add_argument("--bios", help="Use BIOS instead of UEFI", action="store_true")
+        parser.add_argument("--nvme", help="Use NVMe instead of SATA", action="store_const", const="--nvme", default="", dest="disk_type")
+        parser.add_argument("--uefi", help="Use UEFI instead of bios", action="store_true")
         parser.add_argument("--debug", help="Enable debug mode", action="store_true")
         parser.add_argument("remainder", nargs=argparse.REMAINDER, help="all other args after --")
         args = parser.parse_args()
 
         self.backing_img = args.backing
         self.img_name = args.image
-        self.qemu = args.qemu
-        self.net = args.net
-        self.kernel = args.kernel
         self.user_name = args.uname
         self.host_name = args.host
         self.cinit_file = args.fname
         self.image_size = args.size
-        self.bios = args.bios
-        self.debug = args.debug
         if args.cert:
             self.cert_files.extend(args.cert)
         if args.remainder:
-            args.remainder.remove("--")
+            try:
+                args.remainder.remove("--")
+            except ValueError:
+                pass
         self.args = args
 
     def run(self):
         self.parse_args()
-        if self.debug:
+        if self.args.debug:
             print(f"Configuration: {vars(self)}")
 
         if not self.img_name:
@@ -157,9 +159,9 @@ timezone: Asia/Seoul
             subprocess.run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", self.backing_img, img_name_final, self.image_size], check=True)
             cloud_init_iso = "cloud_init.iso"
 
-        kernel_option: List[str] = ["--kernel", self.kernel] if self.kernel else []
+        kernel_option: List[str] = ["--kernel", self.args.kernel] if self.args.kernel else []
         cmd = (
-            [self.qemu, "--bios" if self.bios else "", "--connect", "ssh", "--net", self.net, "--uname", self.user_name]
+            [self.args.qemu, "" if self.args.uefi else "--bios", "--connect", "ssh", "--net", self.args.net, "--uname", self.user_name]
             + kernel_option
             + [cloud_init_iso, self.args.disk_type, self.img_name]
             + self.args.remainder
@@ -175,7 +177,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logging.error("Keyboard Interrupted")
     except Exception as e:
-        logging.error(f"QEMU terminated abnormally. {e}")
+        logging.error(f"Cloud terminated abnormally. {e}")
         ex_type, ex_value, ex_traceback = sys.exc_info()
         trace_back = traceback.extract_tb(ex_traceback)
         for trace in trace_back[1:]:

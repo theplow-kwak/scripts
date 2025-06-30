@@ -184,7 +184,7 @@ class QEMU:
             (
                 "-cpu Skylake-Client-v3,hv_stimer,hv_synic,hv_relaxed,hv_reenlightenment,hv_spinlocks=0xfff,hv_vpindex,hv_vapic,hv_time,hv_frequencies,hv_runtime,+kvm_pv_unhalt,+vmx --enable-kvm"
                 if self.args.hvci
-                else "-cpu host --enable-kvm"
+                else "-cpu host,arch_capabilities=off --enable-kvm"
             ),
             "-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0",
         ]

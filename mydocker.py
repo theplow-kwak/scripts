@@ -48,7 +48,7 @@ def get_image_id(image: str):
 
 
 def get_containers(image: str):
-    return _get_docker_items(f"docker ps -a --filter 'ancestor={image}' --format '{{.Names}}'", "Names")
+    return _get_docker_items(f"docker ps -a --filter 'ancestor={image}'" + " --format '{{.Names}}'", "Names")
 
 
 def get_container(container: str):
@@ -67,6 +67,7 @@ class DockerMaster(object):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
         self.parser.add_argument("name", metavar="NAME", nargs="*", help=f"Set the name of container/image\n or commands [{'|'.join(self.method_list)}]")
         self.parser.add_argument("--uname", "-u", default=os.getlogin(), help="Set login user name")
+        self.parser.add_argument("--uid", "-U", default=os.getuid(), help="Set login user id")
         self.parser.add_argument("--docker", "-d", help="Path to the docker file")
         self.parser.add_argument("--share", "-s", nargs="+", help="Path to the shared folders")
         self.parser.add_argument("--container", "-c", help="Name of the container what you want to run")
@@ -97,7 +98,7 @@ class DockerMaster(object):
         if not self.image:
             self.image = get_image_id(self.name)
         if not self.image and self.container:
-            self.image = run_command(f"docker ps -a --filter 'name=^/{{self.container}}$'" + " --format '{{.Image}}'")[0]
+            self.image = run_command(f"docker ps -a --filter 'name=^/{self.container}$'" + " --format '{{.Image}}'")
         print(f"Image    : {self.image}")
         print(f"Container: {self.container}")
         print(f"Name     : {self.name}\n")
@@ -110,8 +111,8 @@ class DockerMaster(object):
         docker_cmd = [f"docker build -t {self.name} --network=host"]
         if self.args.force:
             docker_cmd += ["--no-cache"]
-        if os.getlogin() != "root":
-            docker_cmd += [f"--build-arg NEWUSER={os.getlogin()} --build-arg NEWUID={os.getuid()}"]
+        if self.args.uname != "root":
+            docker_cmd += [f"--build-arg NEWUSER={self.args.uname} --build-arg NEWUID={self.args.uid}"]
         docker_cmd += [f"{self.docker_dir}"]
         if self.docker_file:
             docker_cmd += [f"-f {self.docker_dir}/{self.docker_file}"]
@@ -198,11 +199,11 @@ class DockerMaster(object):
         if not self.image:  # or not runshell(f"docker images -q --filter reference={self.name}")
             self._build()
             return
-        has_container = run_command(f"docker ps -a --filter 'name=^/{{self.args.container}}$'" + " --format '{{.Names}}'")
+        has_container = run_command(f"docker ps -a --filter 'name=^/{self.args.container}$'" + " --format '{{.Names}}'")
         if not self.container and not has_container:
             self._run()
             return
-        is_started = run_command(f"docker ps --filter 'name=^/{{self.container}}$'" + " --format '{{.Names}}'")
+        is_started = run_command(f"docker ps --filter 'name=^/{self.container}$'" + " --format '{{.Image}}'")
         if not is_started:
             print(f"docker start {self.container}")
             run_command(f"docker start {self.container}")
