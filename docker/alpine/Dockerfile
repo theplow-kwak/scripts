@@ -30,6 +30,7 @@ ARG NEWUID=1000
 RUN adduser --disabled-password --uid $NEWUID --gecos "${NEWUSER}" ${NEWUSER} && \
     echo "$NEWUSER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$NEWUSER && chmod 0440 /etc/sudoers.d/$NEWUSER
 
+RUN ln -s /usr/include/sys/types.h /usr/include/bits/pthreadtypes.h
 RUN echo "alias ll='ls -lA --color=auto'" >> ~/.bashrc
 USER ${NEWUSER}
 RUN echo "alias ll='ls -lA --color=auto'" >> ~/.bashrc

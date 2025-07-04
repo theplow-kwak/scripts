@@ -1270,26 +1270,37 @@ Go back to Linux
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install xorg
-sudo apt install --no-install-recommends ubuntu-desktop -y
-sudo apt install network-manager -y
+sudo apt install -y xorg
+sudo apt install -y --no-install-recommends ubuntu-desktop
+sudo apt install -y network-manager
 ```
 
 ```bash
-sudo apt install xorg -y
-sudo apt install --no-install-recommends openbox -y
-sudo apt install network-manager -y
+sudo apt install -y xorg
+sudo apt install -y --no-install-recommends openbox obmenu
+sudo apt install -y network-manager
 ```
 
 ### booting 시간이 오래 걸리는데
 
-3. NetworkManager와 충돌 가능성 점검
-NetworkManager.service도 목록에 있으며, 이는 systemd-networkd와 충돌할 수 있습니다. 두 서비스를 동시에 사용하지 않는 것이 좋습니다. 예를 들어, NetworkManager를 사용한다면 systemd-networkd는 불필요할 수 있습니다.
+- NetworkManager와 충돌 가능성 점검
+  NetworkManager.service도 목록에 있으며, 이는 systemd-networkd와 충돌할 수 있습니다. 두 서비스를 동시에 사용하지 않는 것이 좋습니다. 예를 들어, NetworkManager를 사용한다면 systemd-networkd는 불필요할 수 있습니다.
 
 ```Bash
 sudo systemctl disable systemd-networkd
 sudo systemctl disable systemd-networkd-wait-online
 ```
+
+### autologin 설정
+
+- /etc/gdm3/custom.conf 에 autologin 관련 설정 추가
+
+- ```text
+  [daemon]
+  # Enabling automatic login
+  AutomaticLoginEnable=True
+  AutomaticLogin=test
+  ```
 
 ### ssh terminal에서 desktop 화면 띄우기
 

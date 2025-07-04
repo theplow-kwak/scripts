@@ -191,6 +191,14 @@ class DockerMaster(object):
                 run_command(f"docker rm -f {_containers}", _consol=True)
             run_command(f"docker rmi {self.image}", _consol=True)
 
+    def status(self):
+        run_command("systemctl status docker.service", _consol=True)
+        
+    def restart(self):
+        run_command("systemctl stop docker", _consol=True)
+        run_command("sudo rm -rf /var/lib/docker/network", _consol=True)
+        run_command("systemctl start docker", _consol=True)
+
     def _default(self):
         if len(sys.argv) < 2:
             print(run_command("docker images") + "\n")

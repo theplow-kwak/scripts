@@ -114,15 +114,16 @@ timezone: Asia/Seoul
         parser.add_argument("-b", "--backing", help="qemu image backing file")
         parser.add_argument("-i", "--image", help="qemu image name")
         parser.add_argument("-q", "--qemu", help="Path to qemu binary", default="qemu")
-        parser.add_argument("-n", "--net", help="qemu Network interface model", default="bridge")
+        parser.add_argument("-n", "--net", help="qemu Network interface model")
         parser.add_argument("-k", "--kernel", help="Set the custom kernel")
-        parser.add_argument("-u", "--uname", help="The login USER name", default=os.getenv("USER", "root"))
+        parser.add_argument("-u", "--uname", help="The login USER name")
         parser.add_argument("-H", "--host", help="Set the HOST name")
         parser.add_argument("-f", "--fname", help="The cloud_init file name (default: '_cloud_init.cfg')", default="_cloud_init.cfg")
         parser.add_argument("-c", "--cert", help="Certificate file for cloud-init", action="append")
         parser.add_argument("-s", "--size", help="Size of the qemu image", default="40G")
         parser.add_argument("--nvme", help="Use NVMe instead of SATA", action="store_const", const="--nvme", default="", dest="disk_type")
         parser.add_argument("--uefi", help="Use UEFI instead of bios", action="store_true")
+        parser.add_argument("--gui", help="Enable GUI", action="store_true")
         parser.add_argument("--debug", help="Enable debug mode", action="store_true")
         parser.add_argument("remainder", nargs=argparse.REMAINDER, help="all other args after --")
         args = parser.parse_args()
@@ -154,6 +155,8 @@ timezone: Asia/Seoul
         if not os.path.exists(img_name_final):
             if not self.backing_img:
                 raise ValueError("Backing image is required to create boot_image.")
+            if not self.user_name or self.user_name == "root":
+                self.user_name = os.getenv("USER", "test")
             self.create_cfgfile()
             subprocess.run(["cloud-localds", "-v", "cloud_init.iso", self.cinit_file], check=True)
             subprocess.run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", self.backing_img, img_name_final, self.image_size], check=True)
@@ -161,7 +164,13 @@ timezone: Asia/Seoul
 
         kernel_option: List[str] = ["--kernel", self.args.kernel] if self.args.kernel else []
         cmd = (
-            [self.args.qemu, "" if self.args.uefi else "--bios", "--connect", "ssh", "--net", self.args.net, "--uname", self.user_name]
+            [
+                self.args.qemu,
+                "" if self.args.uefi else "--bios",
+                "" if self.args.gui else "--connect ssh",
+                f"--net {self.args.net}" if self.args.net else "",
+                f"--uname {self.user_name}" if self.user_name else "",
+            ]
             + kernel_option
             + [cloud_init_iso, self.args.disk_type, self.img_name]
             + self.args.remainder
