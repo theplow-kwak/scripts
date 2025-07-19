@@ -166,7 +166,7 @@ timezone: Asia/Seoul
         cmd = (
             [
                 self.args.qemu,
-                "" if self.args.uefi else "--bios",
+                "" if self.args.uefi or self.args.gui else "--bios",
                 "" if self.args.gui else "--connect ssh",
                 f"--net {self.args.net}" if self.args.net else "",
                 f"--uname {self.user_name}" if self.user_name else "",

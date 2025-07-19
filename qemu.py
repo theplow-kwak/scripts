@@ -282,31 +282,26 @@ class QEMU:
         if not self.vmnvme:
             return
 
-        def add_nvme_namespace(_NVME: str, ns_backend: str, _nsid: int = 1, nsid_params: str = "") -> list[str]:
-            """Helper to add NVMe drive and namespace."""
-            NVME: list[str] = []
-            if self.check_file(ns_backend, _ns_size):
-                NVME.append(f"-drive file={ns_backend},id={_NVME}{_nsid or ''},if=none,cache=none")
-                NVME.append(f"-device nvme-ns,drive={_NVME}{_nsid},bus={_NVME},nsid={_nsid}{nsid_params}")
-            return NVME
-
         nvme_params = [
             "-device ioh3420,bus=pcie.0,id=root1.0,slot=1",
             "-device x3130-upstream,bus=root1.0,id=upstream1.0",
         ]
 
         _ns_size = self.args.nssize
-        _ctrl_id = 1
+        _ctrl_id = 0
         for nvme in self.vmnvme:
-            print(f"Processing nvme: {nvme}")
-            match = re.match(r"^(?P<nvme_id>nvme\d+):?(?P<num_ns>\d+)?$", nvme)
-            if match:
-                _nvme_id = match.group("nvme_id") or "nvme0"
-                _num_ns = match.group("num_ns") or "1"
-                print(f"{nvme}: NVME {_nvme_id}, ns_range {_num_ns}")
-            else:
-                _nvme_id = "nvme0"
-                _num_ns = "1"
+            nvme_match = None
+            f_type = None
+            if nvme_match := re.match(r"^(?P<nvme_id>nvme\d+):?(?P<num_ns>\d+)?$", nvme):
+                _nvme_fname = nvme_match.group("nvme_id")
+                _nvme_ext = "qcow2"
+                f_type = 1
+            elif nvme_match := re.match(r"^(?P<nvme_id>[^:]+):?(?P<num_ns>\d+)?$", nvme):
+                _nvme_id = nvme_match.group("nvme_id")
+                _nvme_fname, _nvme_ext = _nvme_id.split(".", 1) if "." in _nvme_id else (_nvme_id, "")
+                f_type = 2
+            _num_ns = nvme_match.group("num_ns") or "1"
+            print(f"Processing nvme {nvme}: NVME {_nvme_fname}, {_nvme_ext}, ns_range {_num_ns}")
 
             _did = f",did={self.args.did}" if self.args.did else ""
             _mn = f",mn={self.args.mn}" if self.args.mn else ""
@@ -320,16 +315,16 @@ class QEMU:
             nvme_params += [
                 f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
                 f"-device nvme-subsys,id=nvme-subsys-{_ctrl_id},nqn=subsys{_ctrl_id}{_fdp_subsys}",
-                f"-device nvme,serial=beef{_nvme_id},id={_nvme_id},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id}{_ioqpairs}{_sriov_params}{_did}{_mn}{_ocp_params}",
+                f"-device nvme,serial=beefnvme{_ctrl_id},id=nvme{_ctrl_id},subsys=nvme-subsys-{_ctrl_id},bus=downstream1.{_ctrl_id}{_ioqpairs}{_sriov_params}{_did}{_mn}{_ocp_params}",
             ]
 
             for _nsid in range(1, int(_num_ns) + 1):
-                if match:
-                    ns_backend = f"{_nvme_id}n{_nsid}.qcow2"
-                else:
-                    ns_backend = nvme
+                str_nsid = "" if f_type == 2 and _nsid == 1 else f"n{_nsid}"
+                ns_backend = f"{_nvme_fname}{str_nsid}{"." if _nvme_ext else ""}{_nvme_ext}"
                 print(f"Processing namespace {_nsid} for {nvme} => {ns_backend}")
-                nvme_params += add_nvme_namespace(_nvme_id, ns_backend, _nsid=_nsid, nsid_params=f"{_fdp_nsid if _nsid == 1 else ''}{_sriov_nsid}")
+                if self.check_file(ns_backend, _ns_size):
+                    nvme_params.append(f"-drive file={ns_backend},id=nvme{_ctrl_id}n{_nsid or ''},if=none,cache=none")
+                    nvme_params.append(f"-device nvme-ns,drive=nvme{_ctrl_id}n{_nsid},bus=nvme{_ctrl_id},nsid={_nsid}{_fdp_nsid if _nsid == 1 else ''}{_sriov_nsid}")
             _ctrl_id += 1
 
         if Path("./events").exists():
