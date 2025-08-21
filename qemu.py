@@ -64,9 +64,9 @@ class QEMU:
         return self.run_command(cmd, _async, _consol)
 
     def parse_disks(self):
-        for disk in self.args.disk:
-            _result = self.run_command(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
-            if _result.returncode == 0:
+        _result = self.run_command(f"lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
+        if _result.returncode == 0:
+            for disk in self.args.disk:
                 _disk_param = disk.lower().split(":")
                 _disk = _disk_param.pop(0)
                 stdout_str: str = _result.stdout.decode() if isinstance(_result.stdout, bytes) else str(_result.stdout)

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import logging
 import os
+import re
 import subprocess
 import sys
 import traceback
@@ -150,7 +151,7 @@ timezone: Asia/Seoul
 
         if not self.img_name:
             raise ValueError("Image name is required.")
-        img_name_final = f"{self.img_name.split(':')[0]}n1.qcow2" if self.img_name.startswith("nvme") else self.img_name
+        img_name_final = f"{self.img_name.split(':')[0]}n1.qcow2" if re.match(r"^(nvme\d+):?(\d+)?$", self.img_name) else self.img_name
         cloud_init_iso = ""
         if not os.path.exists(img_name_final):
             if not self.backing_img:
