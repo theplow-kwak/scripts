@@ -300,6 +300,8 @@ class QEMU:
                 _nvme_id = nvme_match.group("nvme_id")
                 _nvme_fname, _nvme_ext = _nvme_id.split(".", 1) if "." in _nvme_id else (_nvme_id, "")
                 f_type = 2
+            else:
+                continue
             _num_ns = nvme_match.group("num_ns") or "1"
             print(f"Processing nvme {nvme}: NVME {_nvme_fname}, {_nvme_ext}, ns_range {_num_ns}")
 
