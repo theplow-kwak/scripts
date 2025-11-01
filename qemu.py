@@ -115,6 +115,7 @@ class QEMU:
         parser.add_argument("--mn", help="Set model name")
         parser.add_argument("--ext", help="Set extra parameters")
         parser.add_argument("--memsize", help="Set memory size")
+        parser.add_argument("--blkdbg", action="store_true", help="Enable block debugging")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
             logger.setLevel("INFO")
@@ -313,6 +314,7 @@ class QEMU:
             _sriov_nsid = f",shared=false,detached=true" if self.args.sriov else ""
             _ioqpairs = f",max_ioqpairs={512 if self.args.sriov else self.args.num_queues}"
             _ocp_params = "" if self.args.qemu else ",ocp=on"
+            _blkdebug = "blkdebug:blkdebug.conf:" if self.args.blkdbg and Path("blkdebug.conf").exists() else ""
 
             nvme_params += [
                 f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{_ctrl_id},chassis={_ctrl_id},multifunction=on",
@@ -325,7 +327,7 @@ class QEMU:
                 ns_backend = f"{_nvme_fname}{str_nsid}{"." if _nvme_ext else ""}{_nvme_ext}"
                 print(f"Processing namespace {_nsid} for {nvme} => {ns_backend}")
                 if self.check_file(ns_backend, _ns_size):
-                    nvme_params.append(f"-drive file={ns_backend},id=nvme{_ctrl_id}n{_nsid or ''},if=none,cache=none")
+                    nvme_params.append(f"-drive file={_blkdebug}{ns_backend},id=nvme{_ctrl_id}n{_nsid or ''},if=none,cache=none")
                     nvme_params.append(f"-device nvme-ns,drive=nvme{_ctrl_id}n{_nsid},bus=nvme{_ctrl_id},nsid={_nsid}{_fdp_nsid if _nsid == 1 else ''}{_sriov_nsid}")
             _ctrl_id += 1
 
@@ -558,6 +560,9 @@ class QEMU:
         # Add QEMU param
         self.params.append(f"-device vfio-pci,host={pcihost},multifunction=on")
 
+    def set_qmp(self):
+        self.params.append("-qmp unix:/tmp/qmp-sock,server=on,wait=off")
+
     def setting(self):
         self.set_args()
         self.set_images()
@@ -578,6 +583,7 @@ class QEMU:
             self.configure_usbs()
             self.configure_usb_storage()
             self.configure_ipmi()
+            self.set_qmp()
             # self.set_pcipass()
             self.configure_connect()
 
