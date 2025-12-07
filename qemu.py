@@ -200,10 +200,17 @@ class QEMU:
         if self.args.bios:
             return
         ovmf_path = f"{self.home_folder}/qemu/share/qemu"
+        var_file = Path(f"./OVMF_VARS_4M.ms{self.bootype}.fd")
+        if not var_file.exists():
+            try:
+                self.run_command(["cp", "/usr/share/OVMF/OVMF_VARS_4M.ms.fd", str(var_file)])
+            except Exception as e:
+                logger.error(f"Failed to copy OVMF_VARS_4M.ms.fd: {e}")
+                raise
         uefi_params = {
             "x86_64": [
                 f"-drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M{self.args.secboot}.fd",
-                f"-drive if=pflash,format=raw,file={self.home_folder}/vm/OVMF_VARS_4M.ms{self.bootype}.fd",
+                f"-drive if=pflash,format=raw,file={var_file.absolute()}",
             ],
             "aarch64": [
                 f"-drive if=pflash,format=raw,readonly=on,file={ovmf_path}/edk2-aarch64-code.fd",
@@ -307,16 +314,19 @@ class QEMU:
             print(f"Processing nvme {nvme}: NVME {_nvme_fname}, {_nvme_ext}, ns_range {_num_ns}")
 
             if self.args.sriov:
-                sriov_max_vfs = 16
-                sriov_vq_flexible = 510
-                sriov_vi_flexible = 510
-                max_ioqpairs = 512
-
+                print(f"SRIOV enabled for {nvme}")
+                sriov_max_vfs = 64
+                sriov_vq_flexible = sriov_max_vfs * 2
+                sriov_vi_flexible = sriov_max_vfs
+                max_ioqpairs = sriov_vq_flexible + 2
+                msix_qsize = sriov_vi_flexible + 1
             _did = f",did={self.args.did}" if self.args.did else ""
             _mn = f",mn={self.args.mn}" if self.args.mn else ""
             _fdp_subsys = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
             _fdp_nsid = ",fdp.ruhs=1-15,mcl=2048,mssrl=256,msrc=7" if self.args.fdp else ""
-            _sriov_params = f",msix_qsize=512,sriov_max_vfs={sriov_max_vfs},sriov_vq_flexible={sriov_vq_flexible},sriov_vi_flexible={sriov_vi_flexible}" if self.args.sriov else ""
+            _sriov_params = (
+                f",msix_qsize={msix_qsize},sriov_max_vfs={sriov_max_vfs},sriov_vq_flexible={sriov_vq_flexible},sriov_vi_flexible={sriov_vi_flexible}" if self.args.sriov else ""
+            )
             _sriov_nsid = f",shared=false,detached=true" if self.args.sriov else ""
             _ioqpairs = f",max_ioqpairs={max_ioqpairs if self.args.sriov else self.args.num_queues}"
             _ocp_params = "" if self.args.qemu else ",ocp=on"
