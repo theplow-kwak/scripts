@@ -489,20 +489,20 @@ sudo apt-get install libvirt-daemon-system
 The proper way fo changing address is using virsh. You can stop network (e.g. ifdown): (option)
 
 ```bash
-sudo virsh net-destroy default
+virsh net-destroy default
 ```
 
 As you edited default.xml file this should be enough. But for editing you can use:
 
 ```bash
-sudo virsh net-edit default
+virsh net-edit default
 ```
 
 And you can start it with: (option)
 
 ```bash
-sudo virsh net-start default
-sudo virsh net-autostart default
+virsh net-start default
+virsh net-autostart default
 ```
 
 Find the IP addresses of VMs in KVM with virsh
