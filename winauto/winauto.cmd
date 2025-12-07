@@ -1,10 +1,10 @@
 echo off
 
-set srcfolder=.\Win11_24H2
+set srcfolder=.\Win11_25H2
 if not [%1]==[] set srcfolder=%1
 
 For /F %%A in ("%srcfolder%") do (set target=%%~nxA)
-set targetfile=.\%target%_auto.iso
+set targetfile=z:\vm\cd\%target%_auto.iso
 if not [%2]==[] set targetfile=%2
 
 echo %srcfolder% %targetfile%

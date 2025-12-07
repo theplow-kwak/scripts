@@ -193,11 +193,18 @@ class DockerMaster(object):
 
     def status(self):
         run_command("systemctl status docker.service", _consol=True)
-        
+
     def restart(self):
         run_command("systemctl stop docker", _consol=True)
         run_command("sudo rm -rf /var/lib/docker/network", _consol=True)
         run_command("systemctl start docker", _consol=True)
+
+    def restart_network(self):
+        run_command("virsh net-destroy default", _consol=True)
+        run_command("virsh net-edit default", _consol=True)
+        run_command("virsh net-start default", _consol=True)
+        run_command("virsh net-autostart default", _consol=True)
+        run_command("systemctl restart docker", _consol=True)
 
     def _default(self):
         if len(sys.argv) < 2:

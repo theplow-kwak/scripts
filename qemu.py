@@ -306,13 +306,19 @@ class QEMU:
             _num_ns = nvme_match.group("num_ns") or "1"
             print(f"Processing nvme {nvme}: NVME {_nvme_fname}, {_nvme_ext}, ns_range {_num_ns}")
 
+            if self.args.sriov:
+                sriov_max_vfs = 16
+                sriov_vq_flexible = 510
+                sriov_vi_flexible = 510
+                max_ioqpairs = 512
+
             _did = f",did={self.args.did}" if self.args.did else ""
             _mn = f",mn={self.args.mn}" if self.args.mn else ""
             _fdp_subsys = ",fdp=on,fdp.runs=96M,fdp.nrg=1,fdp.nruh=16" if self.args.fdp else ""
             _fdp_nsid = ",fdp.ruhs=1-15,mcl=2048,mssrl=256,msrc=7" if self.args.fdp else ""
-            _sriov_params = f",msix_qsize=512,sriov_max_vfs={_num_ns},sriov_vq_flexible=508,sriov_vi_flexible=510" if self.args.sriov else ""
+            _sriov_params = f",msix_qsize=512,sriov_max_vfs={sriov_max_vfs},sriov_vq_flexible={sriov_vq_flexible},sriov_vi_flexible={sriov_vi_flexible}" if self.args.sriov else ""
             _sriov_nsid = f",shared=false,detached=true" if self.args.sriov else ""
-            _ioqpairs = f",max_ioqpairs={512 if self.args.sriov else self.args.num_queues}"
+            _ioqpairs = f",max_ioqpairs={max_ioqpairs if self.args.sriov else self.args.num_queues}"
             _ocp_params = "" if self.args.qemu else ",ocp=on"
             _blkdebug = "blkdebug:blkdebug.conf:" if self.args.blkdbg and Path("blkdebug.conf").exists() else ""
 
