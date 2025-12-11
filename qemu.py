@@ -37,7 +37,7 @@ class QEMU:
     def _calculate_memory_size(self):
         """Calculate memory size based on physical memory."""
         phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 * 1024 * 1000))
-        return "8G" if phy_mem > 8 else "4G"
+        return f"{phy_mem/2}G" if phy_mem > 8 else "4G"
 
     def run_command(self, cmd: str | list[str], _async: bool = False, _consol: bool = False):
         """Run shell commands with optional async and console output."""
