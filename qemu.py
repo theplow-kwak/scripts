@@ -115,6 +115,7 @@ class QEMU:
         parser.add_argument("--mn", help="Set model name")
         parser.add_argument("--ext", help="Set extra parameters")
         parser.add_argument("--memsize", help="Set memory size")
+        parser.add_argument("--cpus", type=int, default=0, help="Set CPU count")
         parser.add_argument("--blkdbg", action="store_true", help="Enable block debugging")
         self.args = parser.parse_args()
         if self.args.debug == "cmd":
@@ -171,12 +172,12 @@ class QEMU:
         arch_params = {
             "riscv64": ["-machine virt -bios none"],
             "arm": ["-machine virt -cpu cortex-a53 -device ramfb"],
-            "aarch64": ["-machine virt,virtualization=true -cpu cortex-a72 -device ramfb"],
+            "aarch64": ["-machine virt,highmem=on,virtualization=true -cpu cortex-a72 -device ramfb"],
             "x86_64": self._set_x86_64_params(),
         }
         self.params.extend(arch_params.get(self.args.arch, []))
-        cpu_count = os.cpu_count() or 2
-        self.params.extend([f"-m {self.memsize}", f"-smp {cpu_count // 2},sockets=1,cores={cpu_count // 2},threads=1", "-nodefaults", "-rtc base=localtime"])
+        cpu_count = self.args.cpus or int((os.cpu_count() or 2) / 2)
+        self.params.extend([f"-m {self.memsize}", f"-smp {cpu_count},sockets=1,cores={cpu_count},threads=1", "-nodefaults", "-rtc base=localtime"])
 
     def _set_x86_64_params(self):
         """Set parameters specific to x86_64 architecture."""
@@ -191,7 +192,7 @@ class QEMU:
         ]
         if not self.args.hvci and self.args.vender:
             params.append(f"-smbios type=1,manufacturer={self.args.vender},product='{self.args.vender} Notebook PC'")
-        if self.args.connect != "ssh":
+        if self.args.connect != "ssh" and self.args.arch != "aarch64":
             self.opts.append(f"-vga {self.args.vga}")
         return params
 
@@ -275,7 +276,8 @@ class QEMU:
         for _image in self.vmcdimages:
             self.params.append(f"-drive file={_image},media=cdrom,readonly=on,if={_IF},index={self.index},id=cdrom{self.index}")
             if self.args.arch != "x86_64":
-                self.params.append(f"-device usb-storage,drive=cdrom{self.index}")
+                self.params.append(f"-device qemu-xhci,id=xhci")
+                self.params.append(f"-device usb-storage,drive=cdrom{self.index},bus=xhci.0")
             self.index += 1
 
     def check_file(self, filename: str, size: int) -> int:
