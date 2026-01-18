@@ -36,8 +36,8 @@ class QEMU:
 
     def _calculate_memory_size(self):
         """Calculate memory size based on physical memory."""
-        phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 * 1024 * 1000))
-        return f"{phy_mem/2}G" if phy_mem > 8 else "4G"
+        phy_mem = int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 * 1024 * 1000)) / 2
+        return f"{phy_mem}G" if phy_mem < 16 else "16G"
 
     def run_command(self, cmd: str | list[str], _async: bool = False, _consol: bool = False):
         """Run shell commands with optional async and console output."""
@@ -315,6 +315,11 @@ class QEMU:
             _num_ns = nvme_match.group("num_ns") or "1"
             print(f"Processing nvme {nvme}: NVME {_nvme_fname}, {_nvme_ext}, ns_range {_num_ns}")
 
+            sriov_max_vfs = 0
+            sriov_vq_flexible = 0
+            sriov_vi_flexible = 0
+            max_ioqpairs = self.args.num_queues
+            msix_qsize = 0
             if self.args.sriov:
                 print(f"SRIOV enabled for {nvme}")
                 sriov_max_vfs = 64
