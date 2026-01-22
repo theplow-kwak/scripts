@@ -126,6 +126,8 @@ class QEMU:
             self.parse_disks()
         if self.args.nvme:
             self.vmnvme.extend(self.args.nvme)
+        if self.args.memsize:
+            self.memsize = self.args.memsize
 
     def set_images(self):
         image_extensions = {".img", ".qcow2", ".vhdx"}
