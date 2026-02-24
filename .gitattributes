@@ -1,4 +1,4 @@
-*.py text -executable
+*.py text eol=lf -executable
 *.sh text eol=lf -executable
 *.md text
 *.txt text
