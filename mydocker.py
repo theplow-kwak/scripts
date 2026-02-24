@@ -56,11 +56,11 @@ def _docker_list(format_str: str, filter_expr: str = "") -> list[str]:
 
 
 def get_image(name: str) -> str | None:
-    return next((i for i in _docker_list("{{.Repository}}") if i == name), None)
+    return next((i for i in _docker_list("{{.Repository}}", "images") if i == name), None)
 
 
 def get_image_id(image_id: str) -> str | None:
-    return next((i for i in _docker_list("{{.ID}}") if i == image_id), None)
+    return next((i for i in _docker_list("{{.ID}}", "images") if i == image_id), None)
 
 
 def get_containers(image: str) -> list[str]:
@@ -68,11 +68,11 @@ def get_containers(image: str) -> list[str]:
 
 
 def get_container(name: str) -> str | None:
-    return next((c for c in _docker_list("{{.Names}}") if c == name), None)
+    return next((c for c in _docker_list("{{.Names}}", "ps -a") if c == name), None)
 
 
 def get_container_id(cid: str) -> str | None:
-    return next((i for i in _docker_list("{{.ID}}") if i == cid), None)
+    return next((i for i in _docker_list("{{.ID}}", "ps -a") if i == cid), None)
 
 
 class DockerMaster:
@@ -145,7 +145,7 @@ class DockerMaster:
         print(f"Container: {self.container}")
         print(f"Name     : {self.name}\n")
 
-        getattr(self, f"_{self.command}", self._default)()
+        getattr(self, f"{self.command}", self._default)()
 
     def _build(self) -> None:
         if not self.args.docker:
