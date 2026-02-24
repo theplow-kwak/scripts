@@ -214,7 +214,7 @@ class DockerMaster:
             for f in fmt:
                 print(run_command(f"docker inspect --format '{f}' {self.container}"))
             print("Mounts:")
-            print(run_command(f"docker inspect --format '{{{{range .Mounts}}\\n {{.Source}} -> {{.Destination}}{{end}}}}' {self.container}"))
+            print(run_command(f'docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}"))
         else:
             for f in (
                 "User:       {{.Config.User}}",
