@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ def run_command(cmd, *, capture: bool = True, console: bool = False, async_: boo
         subprocess.Popen(args)
         return ""
 
-    kwargs = {"text": True}
+    kwargs: dict[str, Any] = {"text": True}
     if capture and not console:
         kwargs.update(stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -117,7 +118,7 @@ class DockerMaster:
 
     def _get_uid(self) -> int:
         try:
-            return os.getuid()
+            return os.getuid()  # pyright: ignore[reportAttributeError]
         except AttributeError:
             return 1000
 
