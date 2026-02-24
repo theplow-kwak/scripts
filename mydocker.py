@@ -1,236 +1,292 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""Simple Docker helper with build/run and inspection shortcuts."""
 
-import os
-import logging
 import argparse
+import logging
+import os
 import platform
 import shlex
 import subprocess
 import sys
 from pathlib import Path
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def run_command(cmd: str | list[str], _async: bool = False, _consol: bool = False) -> str:
-    if isinstance(cmd, list):
-        cmd = " ".join(cmd)
-    _cmd = shlex.split(cmd)
-    if _async:
-        subprocess.Popen(_cmd)
-        return ""
+def run_command(cmd, *, capture: bool = True, console: bool = False, async_: bool = False) -> str:
+    """Run a shell command.
+
+    * ``cmd`` may be a string or sequence.  Returns stripped stdout when
+    ``capture`` is True; otherwise returns an empty string.  ``console``
+    forwards output to the terminal.  ``async_`` starts the process and
+    immediately returns.
+    """
+
+    if isinstance(cmd, (list, tuple)):
+        args = list(cmd)
     else:
-        if _consol:
-            completed = subprocess.run(_cmd, text=True)
-            return ""
-        else:
-            completed = subprocess.run(_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            if completed.stdout:
-                logger.debug(f"Return code: {completed.returncode}, stdout: {completed.stdout.rstrip()}\n<<<<\n")
-            return completed.stdout.rstrip() if completed.stdout else ""
+        args = shlex.split(cmd)
+
+    if async_:
+        subprocess.Popen(args)
+        return ""
+
+    kwargs = {"text": True}
+    if capture and not console:
+        kwargs.update(stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    proc = subprocess.run(args, **kwargs)
+    if capture and proc.stdout:
+        output = proc.stdout.strip()
+        logger.debug("Return code: %s, stdout: %r", proc.returncode, output)
+        return output
+    return ""
 
 
-def _get_docker_items(cmd: str, key: str):
-    _result = run_command(cmd)
-    items = sorted(_result.split("\n")) if _result else []
-    return items
+# -- helpers ---------------------------------------------------------------
 
 
-def get_image(image: str):
-    images = _get_docker_items("docker images --format '{{.Repository}}'", "Repository")
-    return next((item for item in images if item == image), None)
+def _docker_list(format_str: str, filter_expr: str = "") -> list[str]:
+    """Query docker and return sorted lines from ``--format`` output."""
+
+    cmd = f"docker {filter_expr} --format '{format_str}'"
+    out = run_command(cmd)
+    return sorted(out.splitlines()) if out else []
 
 
-def get_image_id(image: str):
-    ids = _get_docker_items("docker images --format '{{.ID}}'", "ID")
-    return next((item for item in ids if item == image), None)
+def get_image(name: str) -> str | None:
+    return next((i for i in _docker_list("{{.Repository}}") if i == name), None)
 
 
-def get_containers(image: str):
-    return _get_docker_items(f"docker ps -a --filter 'ancestor={image}'" + " --format '{{.Names}}'", "Names")
+def get_image_id(image_id: str) -> str | None:
+    return next((i for i in _docker_list("{{.ID}}") if i == image_id), None)
 
 
-def get_container(container: str):
-    containers = _get_docker_items("docker ps -a --format '{{.Names}}'", "Names")
-    return next((item for item in containers if item == container), None)
+def get_containers(image: str) -> list[str]:
+    return _docker_list("{{.Names}}", f"ps -a --filter 'ancestor={image}'")
 
 
-def get_container_id(container: str):
-    ids = _get_docker_items("docker ps -a --format '{{.ID}}'", "ID")
-    return next((item for item in ids if item == container), None)
+def get_container(name: str) -> str | None:
+    return next((c for c in _docker_list("{{.Names}}") if c == name), None)
 
 
-class DockerMaster(object):
-    def __init__(self):
-        self.method_list = [func for func in dir(self) if callable(getattr(self, func)) and not func.startswith("__") and not func.startswith("_")]
-        self.parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-        self.parser.add_argument("name", metavar="NAME", nargs="*", help=f"Set the name of container/image\n or commands [{'|'.join(self.method_list)}]")
-        self.parser.add_argument("--uname", "-n", default=os.getlogin(), help="Set login user name")
-        self.parser.add_argument("--uid", "-U", type=int, default=self.get_default_uid(), help="Set login user id")
-        self.parser.add_argument("--docker", "-d", help="Path to the docker file")
-        self.parser.add_argument("--share", "-s", nargs="+", help="Path to the shared folders")
-        self.parser.add_argument("--container", "-c", help="Name of the container what you want to run")
-        self.parser.add_argument("--extcmd", nargs="+", help="Set extended command")
-        self.parser.add_argument("--cert", action="store_true", help="Share the host cert")
-        self.parser.add_argument("--force", "-f", action="store_true", help="Do not use cache when building the image")
-        self.args = self.parser.parse_args()
+def get_container_id(cid: str) -> str | None:
+    return next((i for i in _docker_list("{{.ID}}") if i == cid), None)
 
-        _method = self.args.name.pop(0) if self.args.name and self.args.name[0] in self.method_list else ""
-        self.name = self.args.name[0] if self.args.name else ""
-        self.method = getattr(self, _method, self._default)
 
-    def get_default_uid(self):
+class DockerMaster:
+    """Command-line driver for various docker operations."""
+
+    COMMANDS = (
+        "build",
+        "run",
+        "history",
+        "inspect",
+        "imports",
+        "export",
+        "rm",
+        "rmi",
+        "status",
+        "restart",
+        "restart_network",
+    )
+
+    def __init__(self) -> None:
+        parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+        parser.add_argument("command", nargs="?", choices=self.COMMANDS, help="Operation to perform")
+        parser.add_argument("name", nargs="?", help="container/image name or dockerfile path")
+        parser.add_argument("--uname", "-n", default=os.getlogin(), help="login user name")
+        parser.add_argument("--uid", "-U", type=int, default=self._get_uid(), help="login user id")
+        parser.add_argument("--docker", "-d", help="Path to dockerfile or image tarball")
+        parser.add_argument("--share", "-s", nargs="+", help="bind mount(s) in the form src[:dest]")
+        parser.add_argument("--container", "-c", help="container name to operate on")
+        parser.add_argument("--extcmd", nargs="+", help="extra command/entrypoint")
+        parser.add_argument("--cert", action="store_true", help="mount host certificates")
+        parser.add_argument("--force", "-f", action="store_true", help="disable build cache")
+        self.args = parser.parse_args()
+        self.name = self.args.name or ""
+        self.command = self.args.command or "default"
+
+    def _get_uid(self) -> int:
         try:
             return os.getuid()
         except AttributeError:
             return 1000
-    
-    def start(self):
+
+    def start(self) -> None:
+        # resolve dockerfile / image name
         if self.args.docker:
-            _DOCKERPATH = Path(self.args.docker).resolve()
-            if _DOCKERPATH.is_file():
-                self.docker_dir = _DOCKERPATH.parent
-                self.docker_file = _DOCKERPATH.name
+            path = Path(self.args.docker).resolve()
+            if path.is_file():
+                self.docker_dir = path.parent
+                self.docker_file = path.name
             else:
-                self.docker_dir = _DOCKERPATH
+                self.docker_dir = path
                 self.docker_file = ""
-            if not self.name:
-                self.name = self.docker_dir.name
-        self.container = get_container(self.args.container) if self.args.container else get_container(self.name)
-        if not self.container:
-            self.container = get_container_id(self.name)
-        self.image = get_image(self.name)
-        if not self.image:
-            self.image = get_image_id(self.name)
-        if not self.image and self.container:
-            self.image = run_command(f"docker ps -a --filter 'name=^/{self.container}$'" + " --format '{{.Image}}'")
+            self.name = self.name or self.docker_dir.name
+
+        # look up container/image metadata
+        self.container = get_container(self.args.container or self.name) or get_container_id(self.name)
+        self.image = (
+            get_image(self.name)
+            or get_image_id(self.name)
+            or (run_command(f"docker ps -a --filter 'name=^/{self.container}$' --format '{{{{.Image}}}}'") if self.container else "")
+        )
+
         print(f"Image    : {self.image}")
         print(f"Container: {self.container}")
         print(f"Name     : {self.name}\n")
-        self.method()
 
-    def _build(self):
+        getattr(self, f"_{self.command}", self._default)()
+
+    def _build(self) -> None:
         if not self.args.docker:
-            logger.error("Docker build: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            logger.error("Specify a Dockerfile with --docker/-d.")
             return
-        docker_cmd = [f"docker build -t {self.name} --network=host"]
+        cmd = ["docker", "build", "-t", self.name, "--network=host"]
         if self.args.force:
-            docker_cmd += ["--no-cache"]
+            cmd.append("--no-cache")
         if self.args.uname != "root":
-            docker_cmd += [f"--build-arg NEWUSER={self.args.uname} --build-arg NEWUID={self.args.uid}"]
-        docker_cmd += [f"{self.docker_dir}"]
-        if self.docker_file:
-            docker_cmd += [f"-f {self.docker_dir}/{self.docker_file}"]
-        print(" ".join(docker_cmd))
-        run_command(docker_cmd, _consol=True)
+            cmd += ["--build-arg", f"NEWUSER={self.args.uname}", "--build-arg", f"NEWUID={self.args.uid}"]
+        cmd.append(str(self.docker_dir))
+        if getattr(self, "docker_file", ""):
+            cmd += ["-f", str(self.docker_dir / self.docker_file)]
+        print(" ".join(cmd))
+        run_command(cmd, console=True)
 
-    def _run(self):
-        _container = self.args.container if not self.container and self.args.container else self.name
-        workdir = ""
-        docker_cmd = [f"docker run -it --user {self.args.uname}", "-v /etc/timezone:/etc/timezone:ro", "-e TZ=Asia/Seoul", f"--hostname {_container}"]
+    def _run(self) -> None:
+        container = self.args.container or self.name
+        home = "/root" if self.args.uname == "root" else f"/home/{self.args.uname}"
+        cmd = ["docker", "run", "-it", "-e", "TZ=Asia/Seoul", "--hostname", container]
+
         if self.args.cert:
-            if Path("/etc/ssl/certs").exists():
-                docker_cmd += ["-v /etc/ssl/certs:/etc/ssl/certs:ro"]
-            if Path("/etc/pki/ca-trust").exists():
-                docker_cmd += ["-v /etc/pki/ca-trust:/etc/pki/ca-trust:ro"]
-        home_folder = "/root" if self.args.uname == "root" else f"/home/{self.args.uname}"
+            for path in ("/etc/ssl/certs", "/etc/pki/ca-trust"):
+                if Path(path).exists():
+                    cmd += ["-v", f"{path}:{path}:ro"]
+
+        workdir = ""
         if self.args.share:
-            for share in self.args.share:
-                _share = share.split(":")
-                _path = Path(_share[0])
-                if _path.exists():
-                    docker_cmd += [f"--mount type=bind,source='{_path.resolve()}',target='{home_folder}/{_share[1] if len(_share) > 1 else _path.name}'"]
-                    if not workdir:
-                        workdir = _share[1] if len(_share) > 1 else _path.name
-        docker_cmd += [f"--workdir '{home_folder}/{workdir}'"]
-        docker_cmd += [f"--name {_container} {self.image}"]
-        _EXT_CMD = " ".join(self.args.extcmd) if self.args.extcmd else "/bin/bash"
-        docker_cmd += [f"{_EXT_CMD}"]
-        print(" ".join(docker_cmd))
-        run_command(docker_cmd, _consol=True)
+            for s in self.args.share:
+                src, *dst = s.split(":")
+                srcp = Path(src)
+                if not srcp.exists():
+                    continue
+                target = dst[0] if dst else srcp.name
+                cmd += ["--mount", f"type=bind,source={srcp.resolve()},target={home}/{target}"]
+                if not workdir:
+                    workdir = target
 
-    def history(self):
+        if platform.system() == "Linux":
+            cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
+            if workdir:
+                cmd += ["--workdir", f"{home}/{workdir}"]
+
+        cmd += ["--name", container, self.image or ""]
+        ext = " ".join(self.args.extcmd) if self.args.extcmd else ("/bin/bash" if platform.system() == "Linux" else "")
+        if ext:
+            cmd.append(ext)
+
+        print(" ".join(cmd))
+        run_command(cmd, console=True)
+
+    def history(self) -> None:
         if self.image:
-            print(run_command("docker history --human --format '{{.CreatedBy}}: {{.Size}}'" + f" {self.image}"))
+            print(run_command(f"docker history --human --format '{{{{.CreatedBy}}}}: {{.Size}}' {self.image}"))
 
-    def inspect(self):
+    def inspect(self) -> None:
+        target = self.container or self.image
+        if not target:
+            return
         if self.container:
-            print(run_command("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.container}"))
-            print(run_command('docker inspect --format \'Entrypoint: {{join .Config.Entrypoint " "}} {{join .Config.Cmd " "}}\'' + f" {self.container}"))
-            print(run_command("docker inspect --format 'WorkingDir: {{.Config.WorkingDir}}'" + f" {self.container}"))
+            fmt = [
+                "User:       {{.Config.User}}",
+                'Entrypoint: {{join .Config.Entrypoint " "}} {{join .Config.Cmd " "}}',
+                "WorkingDir: {{.Config.WorkingDir}}",
+            ]
+            for f in fmt:
+                print(run_command(f"docker inspect --format '{f}' {self.container}"))
             print("Mounts:")
-            print(run_command('docker inspect --format \'{{range .Mounts}}{{println " " .Source "\t-> " .Destination}}{{end}}\'' + f" {self.container}"))
-        elif self.image:
-            print(run_command("docker inspect --format 'User:       {{.Config.User}}'" + f" {self.image}"))
-            print(run_command("docker inspect --format 'Cmd:        {{join .Config.Cmd \" \"}}'" + f" {self.image}"))
-            print(run_command("docker inspect --format 'Entrypoint: {{join .Config.Entrypoint \" \"}}'" + f" {self.image}"))
+            print(run_command(f"docker inspect --format '{{{{range .Mounts}}\\n {{.Source}} -> {{.Destination}}{{end}}}}' {self.container}"))
+        else:
+            for f in (
+                "User:       {{.Config.User}}",
+                'Cmd:        {{join .Config.Cmd " "}}',
+                'Entrypoint: {{join .Config.Entrypoint " "}}',
+            ):
+                print(run_command(f"docker inspect --format '{f}' {self.image}"))
 
-    def imports(self):
+    def imports(self) -> None:
         if not self.args.docker:
-            logger.error("Docker import: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            logger.error("--docker/-d required for import")
             return
-        _name = self.args.name[0] if self.args.name else self.docker_file.split(".")[0]
-        docker_cmd = [f"docker import {self.args.docker} {_name}"]
+        name = self.args.name or self.docker_file.split(".")[0]
+        cmd = ["docker", "import", self.args.docker, name]
         if self.args.extcmd:
-            _EXT_CMD = ",".join(f'"{cmd}"' for cmd in self.args.extcmd)
-            docker_cmd += [f"--change 'ENTRYPOINT [{_EXT_CMD}]'"]
-        print(" ".join(docker_cmd))
-        run_command(docker_cmd, _consol=True)
+            ext = ",".join(f'"{c}"' for c in self.args.extcmd)
+            cmd += ["--change", f"ENTRYPOINT [{ext}]"]
+        print(" ".join(cmd))
+        run_command(cmd, console=True)
 
-    def export(self):
+    def export(self) -> None:
         if not self.args.docker:
-            logger.error("Docker export: A dockerfile must be specified. Specify it using '--docker' or '-d'.")
+            logger.error("--docker/-d required for export")
             return
-        run_command(f"docker export {self.container} --output {self.args.docker}", _consol=True)
+        run_command(f"docker export {self.container} --output {self.args.docker}", console=True)
 
-    def rm(self):
+    def rm(self) -> None:
         if self.container:
             print(f"remove container {self.container}")
-            run_command(f"docker rm {self.container}", _consol=True)
+            run_command(f"docker rm {self.container}", console=True)
 
-    def rmi(self):
+    def rmi(self) -> None:
         if self.image:
-            _containers = " ".join(get_containers(self.image))
-            print(f"remove docker image {self.image} / {_containers}")
-            if _containers:
-                run_command(f"docker rm -f {_containers}", _consol=True)
-            run_command(f"docker rmi {self.image}", _consol=True)
+            conts = " ".join(get_containers(self.image))
+            print(f"remove docker image {self.image} / {conts}")
+            if conts:
+                run_command(f"docker rm -f {conts}", console=True)
+            run_command(f"docker rmi {self.image}", console=True)
 
-    def status(self):
-        run_command("systemctl status docker.service", _consol=True)
+    def status(self) -> None:
+        run_command("systemctl status docker.service", console=True)
 
-    def restart(self):
-        run_command("systemctl stop docker", _consol=True)
-        run_command("sudo rm -rf /var/lib/docker/network", _consol=True)
-        run_command("systemctl start docker", _consol=True)
+    def restart(self) -> None:
+        run_command("systemctl stop docker", console=True)
+        run_command("sudo rm -rf /var/lib/docker/network", console=True)
+        run_command("systemctl start docker", console=True)
 
-    def restart_network(self):
-        run_command("virsh net-destroy default", _consol=True)
-        run_command("virsh net-edit default", _consol=True)
-        run_command("virsh net-start default", _consol=True)
-        run_command("virsh net-autostart default", _consol=True)
-        run_command("systemctl restart docker", _consol=True)
+    def restart_network(self) -> None:
+        for cmd in (
+            "virsh net-destroy default",
+            "virsh net-edit default",
+            "virsh net-start default",
+            "virsh net-autostart default",
+            "systemctl restart docker",
+        ):
+            run_command(cmd, console=True)
 
-    def _default(self):
-        if len(sys.argv) < 2:
+    def _default(self) -> None:
+        # no arguments: show list
+        if self.command == "default" and not self.name:
             print(run_command("docker images") + "\n")
             print(run_command("docker ps -a") + "\n")
             return
-        if not self.image:  # or not runshell(f"docker images -q --filter reference={self.name}")
+
+        if not self.image:
             self._build()
             return
-        has_container = run_command(f"docker ps -a --filter 'name=^/{self.args.container}$'" + " --format '{{.Names}}'")
-        if not self.container and not has_container:
+
+        has_ct = run_command(f"docker ps -a --filter 'name=^/{self.args.container}$' --format '{{{{.Names}}}}'")
+        if not self.container and not has_ct:
             self._run()
             return
-        is_started = run_command(f"docker ps --filter 'name=^/{self.container}$'" + " --format '{{.Image}}'")
-        if not is_started:
+
+        started = run_command(f"docker ps --filter 'name=^/{self.container}$' --format '{{{{.Image}}}}'")
+        if not started:
             print(f"docker start {self.container}")
             run_command(f"docker start {self.container}")
         print(f"docker attach {self.container}")
-        run_command(f"docker attach {self.container}", _consol=True)
+        run_command(f"docker attach {self.container}", console=True)
 
 
 def main():
