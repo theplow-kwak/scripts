@@ -118,7 +118,7 @@ class DockerMaster:
 
     def _get_uid(self) -> int:
         try:
-            return os.getuid()  # pyright: ignore[reportAttributeError]
+            return os.getuid()  # pyright: ignore[reportAttributeAccessIssue]
         except AttributeError:
             return 1000
 
