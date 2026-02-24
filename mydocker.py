@@ -3,6 +3,7 @@
 import os
 import logging
 import argparse
+import platform
 import shlex
 import subprocess
 import sys
@@ -66,8 +67,8 @@ class DockerMaster(object):
         self.method_list = [func for func in dir(self) if callable(getattr(self, func)) and not func.startswith("__") and not func.startswith("_")]
         self.parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
         self.parser.add_argument("name", metavar="NAME", nargs="*", help=f"Set the name of container/image\n or commands [{'|'.join(self.method_list)}]")
-        self.parser.add_argument("--uname", "-u", default=os.getlogin(), help="Set login user name")
-        self.parser.add_argument("--uid", "-U", default=os.getuid(), help="Set login user id")
+        self.parser.add_argument("--uname", "-n", default=os.getlogin(), help="Set login user name")
+        self.parser.add_argument("--uid", "-U", type=int, default=self.get_default_uid(), help="Set login user id")
         self.parser.add_argument("--docker", "-d", help="Path to the docker file")
         self.parser.add_argument("--share", "-s", nargs="+", help="Path to the shared folders")
         self.parser.add_argument("--container", "-c", help="Name of the container what you want to run")
@@ -80,6 +81,12 @@ class DockerMaster(object):
         self.name = self.args.name[0] if self.args.name else ""
         self.method = getattr(self, _method, self._default)
 
+    def get_default_uid(self):
+        try:
+            return os.getuid()
+        except AttributeError:
+            return 1000
+    
     def start(self):
         if self.args.docker:
             _DOCKERPATH = Path(self.args.docker).resolve()
