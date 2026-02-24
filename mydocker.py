@@ -94,7 +94,7 @@ class DockerMaster:
 
     def __init__(self) -> None:
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-        parser.add_argument("command", nargs="?", choices=self.COMMANDS, help="Operation to perform")
+        parser.add_argument("command", nargs="?", help="Operation to perform")
         parser.add_argument("name", nargs="?", help="container/image name or dockerfile path")
         parser.add_argument("--uname", "-n", default=os.getlogin(), help="login user name")
         parser.add_argument("--uid", "-U", type=int, default=self._get_uid(), help="login user id")
@@ -105,8 +105,15 @@ class DockerMaster:
         parser.add_argument("--cert", action="store_true", help="mount host certificates")
         parser.add_argument("--force", "-f", action="store_true", help="disable build cache")
         self.args = parser.parse_args()
-        self.name = self.args.name or ""
-        self.command = self.args.command or "default"
+
+        # if the first positional argument is not a known command then treat it
+        # as the "name" instead and default the command to "default".
+        if self.args.command and self.args.command not in self.COMMANDS:
+            self.name = self.args.command
+            self.command = "default"
+        else:
+            self.name = self.args.name or ""
+            self.command = self.args.command or "default"
 
     def _get_uid(self) -> int:
         try:
