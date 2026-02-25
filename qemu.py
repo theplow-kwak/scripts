@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 
 def sh(cmd: Union[str, List[str]]) -> List[str]:
     """Split a command string into a list for subprocess."""
-    return shlex.split(cmd) if isinstance(cmd, str) else list(cmd)
+    if isinstance(cmd, List):
+        cmd = " ".join(cmd)
+    return shlex.split(cmd)
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +84,13 @@ class QEMU:
         async_: bool = False,
         consol: bool = False,
     ) -> Union[subprocess.CompletedProcess[str], subprocess.Popen[str]]:
-        """Run a shell command with optional sudo/async/console output."""
+        """Run a shell command with optional sudo/async/console output.
+
+        The former `sudo_run` method is now implemented as a shim that calls
+        this routine with ``sudo=True``.  The helper exists primarily for
+        backwards compatibility with any external code or scripts that might
+        be invoking ``qemu.sudo_run`` directly.
+        """
         cmd_list = (self.sudo + sh(cmd)) if sudo and os.getuid() else sh(cmd)
         logger.debug("exec: %s", " ".join(cmd_list))
         if consol:
@@ -91,7 +99,15 @@ class QEMU:
             proc = subprocess.Popen(cmd_list, text=True)
             sleep(1)
             return proc
-        return subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        completed = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if completed.stdout:
+            logger.debug(f"Return code: {completed.returncode}, Output: {completed.stdout.rstrip()}")
+        return completed
+
+    # keep a thin compatibility wrapper
+    def sudo_run(self, cmd: Union[str, List[str]], *, async_: bool = False, consol: bool = False):
+        """Legacy helper: run a command with sudo privileges."""
+        return self.run_command(cmd, sudo=True, async_=async_, consol=consol)
 
     # argument and image parsing -------------------------------------------
 
@@ -152,7 +168,7 @@ class QEMU:
         out = self.run_command("lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
         if out.returncode != 0 or not out.stdout:
             return
-        lines = out.stdout.splitlines()
+        lines = out.stdout.splitlines()  # pyright: ignore[reportAttributeAccessIssue]
         for token in self.args.disk:
             parts = token.lower().split(":")
             name = parts.pop(0)
@@ -436,11 +452,11 @@ class QEMU:
 
         out = self.run_command("ip r g 1.0.0.0")
         text = out.stdout or ""
-        self.hostip = text.split()[6] if out.returncode == 0 and len(text.split()) > 6 else "localhost"
+        self.hostip = text.split()[6] if out.returncode == 0 and len(text.split()) > 6 else "localhost"  # pyright: ignore[reportAttributeAccessIssue]
 
         # dhcp: virsh can return multiple lines; we pick the last
         leases = self.run_command(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}").stdout or ""
-        lines = leases.strip().splitlines()
+        lines = leases.strip().splitlines()  # pyright: ignore[reportAttributeAccessIssue]
         last = sorted(lines)[-1] if lines else ""
         self.localip = self.args.ip or (last.split()[4].split("/")[0] if last and len(last.split()) > 4 else None)
 
