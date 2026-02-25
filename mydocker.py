@@ -256,7 +256,8 @@ class DockerMaster:
         name = self.args.name or self.docker_file.split(".")[0]
         cmd = ["docker", "import", self.args.docker, name]
         if self.args.extcmd:
-            cmd += ["--change", f"ENTRYPOINT [{','.join(f'\"{c}\"' for c in self.args.extcmd)}]"]
+            extcmd = ",".join(f'"{c}"' for c in self.args.extcmd)
+            cmd += ["--change", f"ENTRYPOINT [{extcmd}]"]
         print(" ".join(cmd))
         run_command(cmd, console=True)
 
