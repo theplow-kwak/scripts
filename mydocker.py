@@ -100,7 +100,7 @@ class DockerMaster:
         parser.add_argument("--uname", "-n", default=os.getlogin(), help="login user name")
         parser.add_argument("--uid", "-U", type=int, default=self._get_uid(), help="login user id")
         parser.add_argument("--docker", "-d", help="Path to dockerfile or image tarball")
-        parser.add_argument("--share", "-s", nargs="+", help="bind mount(s) in the form src[:dest]")
+        parser.add_argument("--share", "-s", nargs="+", help="bind mount(s) in the form src[:dest]; use quoting on Windows to avoid splitting drive letters")
         parser.add_argument("--container", "-c", help="container name to operate on")
         parser.add_argument("--extcmd", nargs="+", help="extra command/entrypoint")
         parser.add_argument("--cert", action="store_true", help="mount host certificates")
@@ -165,10 +165,10 @@ class DockerMaster:
 
     def _run(self) -> None:
         container = self.args.container or self.name
-        home = "/root" if self.args.uname == "root" else f"/home/{self.args.uname}"
+        is_win, home, join_container = self._container_paths()
         cmd = ["docker", "run", "-it", "-e", "TZ=Asia/Seoul", "--hostname", container]
 
-        if self.args.cert:
+        if not is_win and self.args.cert:
             for path in ("/etc/ssl/certs", "/etc/pki/ca-trust"):
                 if Path(path).exists():
                     cmd += ["-v", f"{path}:{path}:ro"]
@@ -176,27 +176,72 @@ class DockerMaster:
         workdir = ""
         if self.args.share:
             for s in self.args.share:
-                src, *dst = s.split(":")
+                parts = s.rsplit(":", 1)
+                src = parts[0]
+                dst = parts[1] if len(parts) > 1 else ""
                 srcp = Path(src)
                 if not srcp.exists():
                     continue
-                target = dst[0] if dst else srcp.name
-                cmd += ["--mount", f"type=bind,source={srcp.resolve()},target={home}/{target}"]
+                target = dst if dst else srcp.name
+
+                # build source path string appropriate for the host
+                if platform.system() == "Windows":
+                    src_str = str(srcp.resolve())
+                else:
+                    # convert to posix style for linux/docker compatibility
+                    src_str = srcp.resolve().as_posix()
+
+                # build target path inside container based on container_os
+                target_path = join_container(home, target)
+
+                cmd += ["--mount", f"type=bind,source={src_str},target={target_path}"]
                 if not workdir:
                     workdir = target
 
-        if platform.system() == "Linux":
+        if not is_win:
             cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
-            if workdir:
-                cmd += ["--workdir", f"{home}/{workdir}"]
+        if workdir:
+            cmd += ["--workdir", join_container(home, workdir)]
 
         cmd += ["--name", container, self.image or ""]
-        ext = " ".join(self.args.extcmd) if self.args.extcmd else ("/bin/bash" if platform.system() == "Linux" else "")
+
+        if self.args.extcmd:
+            ext = " ".join(self.args.extcmd)
+        else:
+            ext = "powershell.exe" if is_win else "/bin/bash"
+
         if ext:
             cmd.append(ext)
 
         print(" ".join(cmd))
         run_command(cmd, console=True)
+
+    def _is_windows_container(self) -> bool:
+        """Return True if the current image/container appears to be Windows.
+
+        Falls back to False when the image is unknown or inspection fails.
+        """
+
+        if not self.image:
+            return False
+        os_val = run_command(f"docker inspect --format '{{{{.Os}}}}' {self.image}")
+        return os_val.strip().lower() == "windows" if os_val else False
+
+    def _container_paths(self) -> tuple[bool, str, Any]:
+        """Helper returning (is_windows, home, join_func) for the container.
+
+        The join_func takes (base, sub) and constructs a platform-appropriate
+        path inside the container.
+        """
+
+        is_win = self._is_windows_container()
+        if is_win:
+            home = f"C:\\Users\\{self.args.uname}"
+            join = lambda base, sub: f"{base}\\{sub}"
+        else:
+            home = "/root" if self.args.uname == "root" else f"/home/{self.args.uname}"
+            join = lambda base, sub: f"{base}/{sub}"
+        return is_win, home, join
 
     def history(self) -> None:
         if self.image:
