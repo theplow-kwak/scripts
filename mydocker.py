@@ -86,6 +86,7 @@ class DockerMaster:
         "export",
         "rm",
         "rmi",
+        "pull",
         "status",
         "restart",
         "restart_network",
@@ -99,13 +100,14 @@ class DockerMaster:
             (("--uname", "-n"), dict(default=os.getlogin(), help="login user name")),
             (("--uid", "-U"), dict(type=int, default=self._get_uid(), help="login user id")),
             (("--docker", "-d"), dict(help="Path to dockerfile or image tarball")),
+            (("--alias", "-a"), dict(help="local name/tag to give pulled image")),
             (("--share", "-s"), dict(nargs="+", help="bind mount(s) in the form src[:dest]; use quoting on Windows to avoid splitting drive letters")),
             (("--container", "-c"), dict(help="container name to operate on")),
             (("--extcmd",), dict(nargs="+", help="extra command/entrypoint")),
             (("--cert",), dict(action="store_true", help="mount host certificates")),
             (("--force", "-f"), dict(action="store_true", help="disable build cache")),
         ):
-            parser.add_argument(*args, **kwargs)
+            parser.add_argument(*args, **kwargs)  # pyright: ignore[reportArgumentType]
         self.args = parser.parse_args()
 
         # if first arg isn't a known command, use it as name
@@ -227,7 +229,7 @@ class DockerMaster:
         return is_win, home, join
 
     def history(self) -> None:
-        self.image and print(run_command(f"docker history --human --format '{{{{.CreatedBy}}}}: {{.Size}}' {self.image}"))
+        self.image and print(run_command(f"docker history --human --format '{{{{.CreatedBy}}}}: {{.Size}}' {self.image}"))  # pyright: ignore[reportUnusedExpression]
 
     def inspect(self) -> None:
         target = self.container or self.image
@@ -275,7 +277,7 @@ class DockerMaster:
         if self.image:
             conts = " ".join(get_containers(self.image))
             print(f"remove docker image {self.image} / {conts}")
-            conts and run_command(f"docker rm -f {conts}", console=True)
+            conts and run_command(f"docker rm -f {conts}", console=True)  # pyright: ignore[reportUnusedExpression]
             run_command(f"docker rmi {self.image}", console=True)
 
     def status(self) -> None:
@@ -294,6 +296,22 @@ class DockerMaster:
             "systemctl restart docker",
         ):
             run_command(cmd, console=True)
+
+    def pull(self) -> None:
+        """Pull an image from a registry, optionally tagging it locally.
+
+        If ``--alias`` was supplied, the image will be re-tagged after pulling.
+        """
+        image = self.name
+        if not image:
+            logger.error("Specify an image name to pull")
+            return
+        alias = self.args.alias
+        print(f"docker pull {image}")
+        run_command(f"docker pull {image}", console=True)
+        if alias:
+            print(f"docker tag {image} {alias}")
+            run_command(f"docker tag {image} {alias}", console=True)
 
     def _default(self) -> None:
         # no arguments: show list
