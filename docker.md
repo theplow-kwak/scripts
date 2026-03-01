@@ -60,6 +60,17 @@ $ sudo systemctl enable containerd.service
 
 
 
+## Install Docker engine on Windows11
+
+https://dev.gmarket.com/117
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1" -o install-docker-ce.ps1
+.\install-docker-ce.ps1
+```
+
+
+
 ## WSL2에서 docker demon 자동 실행하기
 
 /etc/sudoers.d/test를 생성 후 아래 내용 추가 
