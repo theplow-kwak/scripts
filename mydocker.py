@@ -96,7 +96,7 @@ class DockerMaster:
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
         for args, kwargs in (
             (("command",), dict(nargs="?", help="Operation to perform")),
-            (("name",), dict(nargs="?", help="container/image name or dockerfile path")),
+            (("name",), dict(nargs="*", help="container/image name or dockerfile path")),
             (("--uname", "-n"), dict(default=os.getlogin(), help="login user name")),
             (("--uid", "-U"), dict(type=int, default=self._get_uid(), help="login user id")),
             (("--docker", "-d"), dict(help="Path to dockerfile or image tarball")),
@@ -269,9 +269,17 @@ class DockerMaster:
         run_command(f"docker export {self.container} --output {self.args.docker}", console=True)
 
     def rm(self) -> None:
-        if self.container:
-            print(f"remove container {self.container}")
-            run_command(f"docker rm {self.container}", console=True)
+        if not self.name:
+            logger.error("Specify a container/image name to remove")
+            return
+        names = self.name
+        if isinstance(names, str):
+            names = [names]
+        for name in names:
+            cont = get_container(name)
+            if cont:
+                print(f"remove container {cont}")
+                run_command(f"docker rm -f {cont}", console=True)
 
     def rmi(self) -> None:
         if self.image:
