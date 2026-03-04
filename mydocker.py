@@ -112,9 +112,9 @@ class DockerMaster:
 
         # if first arg isn't a known command, use it as name
         if (cmd := self.args.command) and cmd not in self.COMMANDS:
-            self.name, self.command = cmd, "default"
+            self.name, self.command = [cmd], "default"
         else:
-            self.name, self.command = self.args.name or "", cmd or "default"
+            self.name, self.command = self.args.name or [], cmd or "default"
 
     def _get_uid(self) -> int:
         # fall back to 1000 on platforms without os.getuid
@@ -133,12 +133,9 @@ class DockerMaster:
             self.name = self.name or self.docker_dir.name
 
         # look up container/image metadata
-        self.container = get_container(cname := self.args.container or self.name) or get_container_id(self.name)
-        self.image = (
-            get_image(name := self.name)
-            or get_image_id(name)
-            or (run_command(f"docker ps -a --filter 'name=^/{self.container}$' --format '{{{{.Image}}}}'") if self.container else "")
-        )
+        name = next(iter(self.name), "")
+        self.container = get_container(cname := self.args.container or name) or get_container_id(name)
+        self.image = get_image(name) or get_image_id(name) or (run_command(f"docker ps -a --filter 'name=^/{self.container}$' --format '{{{{.Image}}}}'") if self.container else "")
 
         # display basic metadata
         for k, v in ("Image", self.image), ("Container", self.container), ("Name", self.name):
