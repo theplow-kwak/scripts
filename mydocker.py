@@ -192,7 +192,7 @@ class DockerMaster:
         if not is_win:
             cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
         if workdir:
-            cmd += ["--workdir", join_container(home, workdir)]
+            cmd += ["--workdir", workdir]
         if self.args.remainder:
             cmd += self.args.remainder
 
