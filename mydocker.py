@@ -256,9 +256,10 @@ class DockerMaster:
         run_command(cmd, console=True)
 
     def export(self) -> None:
-        if not self.args.docker:
-            return logger.error("--docker/-d required for export")
-        run_command(f"docker export {self.container} --output {self.args.docker}", console=True)
+        if not self.container:
+            return logger.error("--container/-c required for export")
+        output = self.args.docker or f"{self.container}.tar"
+        run_command(f"docker export {self.container} --output {output}", console=True)
 
     def rm(self) -> None:
         if not self.params:
