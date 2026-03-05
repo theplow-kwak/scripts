@@ -106,7 +106,7 @@ class DockerMaster:
             (("--extcmd",), dict(nargs="+", help="extra command/entrypoint")),
             (("--cert",), dict(action="store_true", help="mount host certificates")),
             (("--force", "-f"), dict(action="store_true", help="disable build cache")),
-            (("remainder"), dict(nargs=argparse.REMAINDER, help="additional args for build/run commands")),
+            (("remainder",), dict(nargs=argparse.REMAINDER, help="additional args for build/run commands")),
         ):
             parser.add_argument(*args, **kwargs)  # pyright: ignore[reportArgumentType]
         self.args = parser.parse_args()
