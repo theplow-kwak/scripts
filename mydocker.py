@@ -94,21 +94,18 @@ class DockerMaster:
 
     def __init__(self) -> None:
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-        for args, kwargs in (
-            (("command",), dict(nargs="?", help="Operation to perform")),
-            (("name",), dict(nargs="*", help="container/image name or dockerfile path")),
-            (("--uname", "-n"), dict(default=os.getlogin(), help="login user name")),
-            (("--uid", "-U"), dict(type=int, default=self._get_uid(), help="login user id")),
-            (("--docker", "-d"), dict(help="Path to dockerfile or image tarball")),
-            (("--alias", "-a"), dict(help="local name/tag to give pulled image")),
-            (("--share", "-s"), dict(nargs="+", help="bind mount(s) in the form src[:dest]; use quoting on Windows to avoid splitting drive letters")),
-            (("--container", "-c"), dict(help="container name to operate on")),
-            (("--extcmd",), dict(nargs="+", help="extra command/entrypoint")),
-            (("--cert",), dict(action="store_true", help="mount host certificates")),
-            (("--force", "-f"), dict(action="store_true", help="disable build cache")),
-            (("remainder",), dict(nargs=argparse.REMAINDER, help="additional args for build/run commands")),
-        ):
-            parser.add_argument(*args, **kwargs)  # pyright: ignore[reportArgumentType]
+        parser.add_argument("command", nargs="?", help="Operation to perform")
+        parser.add_argument("name", nargs="*", help="container/image name or dockerfile path")
+        parser.add_argument("--uname", "-n", default=os.getlogin(), help="login user name")
+        parser.add_argument("--uid", "-U", type=int, default=self._get_uid(), help="login user id")
+        parser.add_argument("--docker", "-d", help="Path to dockerfile or image tarball")
+        parser.add_argument("--alias", "-a", help="local name/tag to give pulled image")
+        parser.add_argument("--share", "-s", nargs="+", help="bind mount(s) in the form src[:dest]; use quoting on Windows to avoid splitting drive letters")
+        parser.add_argument("--container", "-c", help="container name to operate on")
+        parser.add_argument("--extcmd", nargs="+", help="extra command/entrypoint")
+        parser.add_argument("--cert", action="store_true", help="mount host certificates")
+        parser.add_argument("--force", "-f", action="store_true", help="disable build cache")
+        parser.add_argument("remainder", nargs=argparse.REMAINDER, help="additional args for build/run commands")
         self.args = parser.parse_args()
         if self.args.remainder:
             try:
