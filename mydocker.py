@@ -176,7 +176,7 @@ class DockerMaster:
                     continue
                 srcp, target = parsed
                 src_str = str(srcp.resolve()) if platform.system() == "Windows" else srcp.resolve().as_posix()
-                # target_path = join_container(home, target)
+
                 cmd += ["--mount", f"type=bind,source={src_str},target={target}"]
                 if not workdir:
                     workdir = target
@@ -187,8 +187,6 @@ class DockerMaster:
             cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
         if workdir:
             cmd += ["--workdir", workdir]
-        if self.args.remainder:
-            cmd += self.args.remainder
 
         cmd += ["--name", container, self.image or ""]
 
