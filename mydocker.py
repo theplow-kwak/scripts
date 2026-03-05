@@ -113,7 +113,7 @@ class DockerMaster:
         if self.args.remainder:
             try:
                 self.args.remainder.remove("--")
-            except ValueError:                
+            except ValueError:
                 pass
 
         # if first arg isn't a known command, use it as name
@@ -195,7 +195,7 @@ class DockerMaster:
             cmd += ["--workdir", join_container(home, workdir)]
         if self.args.remainder:
             cmd += self.args.remainder
-            
+
         cmd += ["--name", container, self.image or ""]
 
         ext = " ".join(self.args.extcmd) if self.args.extcmd else ("powershell.exe" if is_win else "/bin/bash")
@@ -212,16 +212,10 @@ class DockerMaster:
         return run_command(f"docker inspect --format '{{{{.Os}}}}' {self.image}").strip().lower() == "windows"
 
     def _parse_share(self, spec: str) -> tuple[Path, str] | None:
-        """Parse ``src[:dest]`` share spec, ignoring drive-letter colon."""
-
-        # find last colon that's not the Windows drive-letter
-        sep = spec.rfind(":")
-        if sep > 1:
-            src, dst = spec[:sep], spec[sep + 1 :]
-        else:
-            src, dst = spec, ""
-
-        srcp = Path(src)
+        """Parse ``src[,dest]`` share spec."""
+        src, *rest = spec.split(",", 1)
+        dst = rest[0] if rest else ""
+        srcp = Path(src).resolve()
         if not srcp.exists():
             return None
         return srcp, dst or srcp.name
