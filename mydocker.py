@@ -184,8 +184,8 @@ class DockerMaster:
                     continue
                 srcp, target = parsed
                 src_str = str(srcp.resolve()) if platform.system() == "Windows" else srcp.resolve().as_posix()
-                target_path = join_container(home, target)
-                cmd += ["--mount", f"type=bind,source={src_str},target={target_path}"]
+                # target_path = join_container(home, target)
+                cmd += ["--mount", f"type=bind,source={src_str},target={target}"]
                 if not workdir:
                     workdir = target
 
