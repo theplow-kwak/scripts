@@ -105,13 +105,8 @@ class DockerMaster:
         parser.add_argument("--extcmd", nargs="+", help="extra command/entrypoint")
         parser.add_argument("--cert", action="store_true", help="mount host certificates")
         parser.add_argument("--force", "-f", action="store_true", help="disable build cache")
-        parser.add_argument("remainder", nargs=argparse.REMAINDER, help="additional args for build/run commands")
+        parser.add_argument("--memsize", "-m", help="memory size for the container (e.g. 512m, 2g)")
         self.args = parser.parse_args()
-        if self.args.remainder:
-            try:
-                self.args.remainder.remove("--")
-            except ValueError:
-                pass
 
         # if first arg isn't a known command, use it as name
         if (cmd := self.args.command) and cmd not in self.COMMANDS:
@@ -186,6 +181,8 @@ class DockerMaster:
                 if not workdir:
                     workdir = target
 
+        if self.args.memsize:
+            cmd += [f"--memory={self.args.memsize}"]
         if not is_win:
             cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
         if workdir:
