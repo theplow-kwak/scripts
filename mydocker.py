@@ -106,15 +106,22 @@ class DockerMaster:
             (("--extcmd",), dict(nargs="+", help="extra command/entrypoint")),
             (("--cert",), dict(action="store_true", help="mount host certificates")),
             (("--force", "-f"), dict(action="store_true", help="disable build cache")),
+            (("remainder"), dict(nargs=argparse.REMAINDER, help="additional args for build/run commands")),
         ):
             parser.add_argument(*args, **kwargs)  # pyright: ignore[reportArgumentType]
         self.args = parser.parse_args()
+        if self.args.remainder:
+            try:
+                self.args.remainder.remove("--")
+            except ValueError:                
+                pass
 
         # if first arg isn't a known command, use it as name
         if (cmd := self.args.command) and cmd not in self.COMMANDS:
-            self.name, self.command = [cmd], "default"
+            self.params, self.command = [cmd], "default"
         else:
-            self.name, self.command = self.args.name or [], cmd or "default"
+            self.params, self.command = self.args.name or [], cmd or "default"
+        self.name = self.params[0] if self.params else ""
 
     def _get_uid(self) -> int:
         # fall back to 1000 on platforms without os.getuid
@@ -133,7 +140,7 @@ class DockerMaster:
             self.name = self.name or self.docker_dir.name
 
         # look up container/image metadata
-        name = next(iter(self.name), "")
+        name = self.name or ""
         self.container = get_container(cname := self.args.container or name) or get_container_id(name)
         self.image = get_image(name) or get_image_id(name) or (run_command(f"docker ps -a --filter 'name=^/{self.container}$' --format '{{{{.Image}}}}'") if self.container else "")
 
@@ -186,7 +193,9 @@ class DockerMaster:
             cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
         if workdir:
             cmd += ["--workdir", join_container(home, workdir)]
-
+        if self.args.remainder:
+            cmd += self.args.remainder
+            
         cmd += ["--name", container, self.image or ""]
 
         ext = " ".join(self.args.extcmd) if self.args.extcmd else ("powershell.exe" if is_win else "/bin/bash")
@@ -266,10 +275,10 @@ class DockerMaster:
         run_command(f"docker export {self.container} --output {self.args.docker}", console=True)
 
     def rm(self) -> None:
-        if not self.name:
+        if not self.params:
             logger.error("Specify a container/image name to remove")
             return
-        names = self.name
+        names = self.params
         if isinstance(names, str):
             names = [names]
         for name in names:
