@@ -2,78 +2,70 @@
 
 ## Install Docker Engine on CentOS
 
-#### Set up the repository
+### Set up the repository
 
 Install the `yum-utils` package (which provides the `yum-config-manager` utility) and set up the repository.
 
 ```bash
-$ sudo yum install -y yum-utils
-$ sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo yum install -y yum-utils
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 ```
 
-#### Install Docker Engine
+### Install Docker Engine
 
 Install the *latest version* of Docker Engine, containerd, and Docker Compose or go to the next step to install a specific version:
 
 ```bash
-$ sudo yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 ```
 
 Start Docker.
 
 ```bash
-$ sudo systemctl start docker
+sudo systemctl start docker
 ```
-
-
 
 ## Manage Docker as a non-root user[🔗](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
 
 1. Create the `docker` group.
 
    ```bash
-   $ sudo groupadd docker
+   sudo groupadd docker
    ```
 
 2. Add your user to the `docker` group.
 
    ```bash
-   $ sudo usermod -aG docker $USER
+   sudo usermod -aG docker $USER
    ```
 
 3. Activate the changes to groups.
 
    ```bash
-   $ newgrp docker
+   newgrp docker
    ```
-
-
 
 ## Configure Docker to start on boot with systemd
 
 Many modern Linux distributions use [systemd](https://docs.docker.com/config/daemon/systemd/) to manage which services start when the system boots. On Debian and Ubuntu, the Docker service starts on boot by default. To automatically start Docker and containerd on boot for other Linux distributions using systemd, run the following commands:
 
 ```bash
-$ sudo systemctl enable docker.service
-$ sudo systemctl enable containerd.service
+sudo systemctl enable docker.service
+sudo systemctl enable containerd.service
 ```
-
-
 
 ## Install Docker engine on Windows11
 
-https://dev.gmarket.com/117
+<https://dev.gmarket.com/117>
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1" -o install-docker-ce.ps1
 .\install-docker-ce.ps1
 ```
 
-
-
 ## WSL2에서 docker demon 자동 실행하기
 
-/etc/sudoers.d/test를 생성 후 아래 내용 추가 
+/etc/sudoers.d/test를 생성 후 아래 내용 추가
 
 ```bash
 test ALL=(ALL) NOPASSWD: /usr/bin/dockerd
@@ -90,25 +82,21 @@ echo '    disown' >> ~/.bash_aliases
 echo 'fi' >> ~/.bash_aliases
 ```
 
-
-
 ## Accessing the host device inside the container
 
 - Docker 1.2부터 container 실행시 `--device` option을 사용하여 host의 physical device에 접근할 수 있다.
 
-​	--device=host_devname[:container_devname[:permissions]]
+​ --device=host_devname[:container_devname[:permissions]]
 
 ```bash
-$ docker run --device=<Host Device>:<Container Device Mapping>:<Permissions>   [ OPTIONS ]  IMAGE[:TAG]  [COMMAND]  [ARG...]
+docker run --device=<Host Device>:<Container Device Mapping>:<Permissions>   [ OPTIONS ]  IMAGE[:TAG]  [COMMAND]  [ARG...]
 ```
 
-​	아래는 실행 예시 이다
+​ 아래는 실행 예시 이다
 
 ```bash
-$ docker run -it --rm -p 5901:5901 --device=/dev/nvme0n1p2:/dev/nvme0n1p2 ubuntu:19.10
+docker run -it --rm -p 5901:5901 --device=/dev/nvme0n1p2:/dev/nvme0n1p2 ubuntu:19.10
 ```
-
-
 
 - privileaged mode 실행
   docker를 privileaged mode로 실행하게 되면 host의 device들을 container에서 access 가능하다.
@@ -117,15 +105,11 @@ $ docker run -it --rm -p 5901:5901 --device=/dev/nvme0n1p2:/dev/nvme0n1p2 ubuntu
 docker run -it --rm -p 5901:5901 --privileged ubuntu:19.10
 ```
 
-
-
 - xwindows 환경을 전달하여 desktop 실행하기
 
 ```bash
-$ docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix ubuntu:19.10-desktop
+docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix ubuntu:19.10-desktop
 ```
-
-
 
 ## Docker에서 'virbr0"에 연결하는 방법
 
@@ -144,9 +128,7 @@ Than you stop the containers and restart the docker daemon service:
 systemctl restart docker
 ```
 
-
-
-# docker 실행 예시
+## docker 실행 예시
 
 ```bash
 docker attach great_heyrovsky      
@@ -167,9 +149,7 @@ newgrp docker
 sudo usermod -aG docker $USER    
 ```
 
-
-
-# docker가 실행이 안될때 해결 방법
+## docker가 실행이 안될때 해결 방법
 
 ``` bash
 systemctl stop docker
@@ -179,9 +159,7 @@ systemctl start docker
 systemctl status docker.service
 ```
 
-
-
-# docker 용량 증가시 대처
+## docker 용량 증가시 대처
 
 참고: [docker 배포 시 디스크 용량 정리](https://shg-engineer.tistory.com/18)
 
@@ -216,9 +194,7 @@ docker network prune
 docker system prune
 ```
 
-
-
-# 다른 스토리지 사용하기
+## 다른 스토리지 사용하기
 
 /etc/docker/daemon.json
 
@@ -230,7 +206,7 @@ docker system prune
 
 재기동하기
 
-```
+```bash
 # 해당 폴더 생성
 sudo mkdir -p /ext/docker
 
@@ -243,3 +219,63 @@ sudo systemctl start docker
 # sudo service docker start
 ```
 
+## Docker registry 사용하기
+
+### Docker image for registry 준비
+
+```bash
+docker image pull registry
+docker image pull hyper/docker-registry-web
+```
+
+### Run registry container
+
+```bash
+docker run -d -p 5000:5000 \
+      --name registry \
+      --network host \
+      -v /home/test/vm/dockers:/var/lib/registry \
+      -v /home/test/vm/dockers/certs:/certs \ 
+      -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/certs.crt \
+      -e REGISTRY_HTT-_TLS_KEY=/certs/certs.key \
+      --restart=always \
+      registry:latest
+```
+
+### Run registry web UI
+
+#### create configuration file: dockers/config.yaml
+
+```yaml
+registry:
+   url: http://192.168.0.100:5000/v2
+   name: 192.168.0.100:5000
+   readonly: false
+   auth:
+   enabled: false
+```
+
+#### Run container
+
+```bash
+docker run -it -d \
+   -p 8080:8080 \
+   --network host \
+   --name registry-web \
+   -v /home/test/vm/dockers/config.yaml:/conf/config.yml:ro \
+   hyper/docker-registry-web
+```
+
+### docker image push
+
+```bash
+docker commit build-env build-env-saved
+docker tag build-env-saved:latest 192.168.0.100:5000/build-env:1.0
+docker push 192.168.0.100:5000/build-env:1.0
+```
+
+### docker image pull
+
+```bash
+docker pull 192.168.0.100:5000/build-env:1.0
+```
