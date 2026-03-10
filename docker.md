@@ -29,21 +29,21 @@ sudo systemctl start docker
 
 1. Create the `docker` group.
 
-   ```bash
-   sudo groupadd docker
-   ```
+    ```bash
+    sudo groupadd docker
+    ```
 
 2. Add your user to the `docker` group.
 
-   ```bash
-   sudo usermod -aG docker $USER
-   ```
+    ```bash
+    sudo usermod -aG docker $USER
+    ```
 
 3. Activate the changes to groups.
 
-   ```bash
-   newgrp docker
-   ```
+    ```bash
+    newgrp docker
+    ```
 
 ## Configure Docker to start on boot with systemd
 
@@ -117,8 +117,8 @@ First create the configuration file /etc/docker/daemon.json as suggested in the 
 
 ```json
 {
-  "bridge": "virbr0",
-  "iptables": false
+    "bridge": "virbr0",
+    "iptables": false
 }
 ```
 
@@ -232,14 +232,14 @@ docker image pull hyper/docker-registry-web
 
 ```bash
 docker run -d -p 5000:5000 \
-      --name registry \
-      --network host \
-      -v /home/test/vm/dockers:/var/lib/registry \
-      -v /home/test/vm/dockers/certs:/certs \ 
-      -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/certs.crt \
-      -e REGISTRY_HTT-_TLS_KEY=/certs/certs.key \
-      --restart=always \
-      registry:latest
+    --name registry \
+    --network host \
+    -v /home/test/vm/dockers:/var/lib/registry \
+    -v /home/test/vm/dockers/certs:/certs \
+    -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/certs.crt \
+    -e REGISTRY_HTT-_TLS_KEY=/certs/certs.key \
+    --restart=always \
+    registry:latest
 ```
 
 ### Run registry web UI
@@ -248,22 +248,22 @@ docker run -d -p 5000:5000 \
 
 ```yaml
 registry:
-   url: http://192.168.0.100:5000/v2
-   name: 192.168.0.100:5000
-   readonly: false
-   auth:
-   enabled: false
+    url: http://192.168.0.100:5000/v2
+    name: 192.168.0.100:5000
+    readonly: false
+    auth:
+    enabled: false
 ```
 
 #### Run container
 
 ```bash
 docker run -it -d \
-   -p 8080:8080 \
-   --network host \
-   --name registry-web \
-   -v /home/test/vm/dockers/config.yaml:/conf/config.yml:ro \
-   hyper/docker-registry-web
+    -p 8080:8080 \
+    --network host \
+    --name registry-web \
+    -v /home/test/vm/dockers/config.yaml:/conf/config.yml:ro \
+    hyper/docker-registry-web
 ```
 
 ### docker image push
