@@ -2,6 +2,7 @@
 """Simple Docker helper with build/run and inspection shortcuts."""
 
 import argparse
+import fnmatch
 import logging
 import os
 import platform
@@ -51,7 +52,7 @@ def _docker_list(format_str: str, filter_expr: str = "") -> list[str]:
 
 def _lookup(fmt: str, filter_expr: str, match: str) -> str | None:
     """Find *match* in ``_docker_list`` results."""
-    return next((i for i in _docker_list(fmt, filter_expr) if i == match), None)
+    return next((i for i in _docker_list(fmt, filter_expr) if fnmatch.fnmatch(i, match)), None)
 
 
 def get_image(name: str) -> str | None:
@@ -269,10 +270,9 @@ class DockerMaster:
         if isinstance(names, str):
             names = [names]
         for name in names:
-            cont = get_container(name)
-            if cont:
+            while cont := get_container(name):
                 print(f"remove container {cont}")
-                run_command(f"docker rm -f {cont}", console=True)
+                run_command(f"docker rm -f {cont}")
 
     def rmi(self) -> None:
         if self.image:
