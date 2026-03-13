@@ -161,10 +161,10 @@ class DockerMaster:
 
     def _run(self) -> None:
         container = self.args.container or self.name
-        is_win, home, join_container = self._container_paths()
+        self.is_win, home, join_container = self._container_paths()
         cmd = ["docker", "run", "-it", "-e", "TZ=Asia/Seoul", "--hostname", container]
 
-        if not is_win and self.args.cert:
+        if not self.is_win and self.args.cert:
             for path in ("/etc/ssl/certs", "/etc/pki/ca-trust"):
                 if Path(path).exists():
                     cmd += ["-v", f"{path}:{path}:ro"]
@@ -184,14 +184,14 @@ class DockerMaster:
 
         if self.args.memsize:
             cmd += [f"--memory={self.args.memsize}"]
-        if not is_win:
+        if not self.is_win:
             cmd += ["--user", self.args.uname, "-v", "/etc/timezone:/etc/timezone:ro"]
         if workdir:
             cmd += ["--workdir", workdir]
 
         cmd += ["--name", container, self.image or ""]
 
-        ext = " ".join(self.args.extcmd) if self.args.extcmd else ("powershell.exe" if is_win else "/bin/bash")
+        ext = " ".join(self.args.extcmd) if self.args.extcmd else ("powershell.exe" if self.is_win else "/bin/bash")
         if ext:
             cmd.append(ext)
 
@@ -211,7 +211,7 @@ class DockerMaster:
         srcp = Path(src).resolve()
         if not srcp.exists():
             return None
-        return srcp, dst or srcp.name
+        return srcp, dst or f"/{srcp.name}" if not self.is_win else f"C:/{srcp.name}"
 
     def _container_paths(self) -> tuple[bool, str, Any]:
         """Return is_win flag, home dir and join func for container."""
