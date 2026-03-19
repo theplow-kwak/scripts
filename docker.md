@@ -231,15 +231,27 @@ docker image pull hyper/docker-registry-web
 ### Run registry container
 
 ```bash
-docker run -d -p 5000:5000 \
+docker run -d \
+    -p 5000:5000 \
     --name registry \
     --network host \
+    -e REGISTRY_STORAGE_DELETE_ENABLED=true \
     -v /home/test/vm/dockers:/var/lib/registry \
-    -v /home/test/vm/dockers/certs:/certs \
-    -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/certs.crt \
-    -e REGISTRY_HTT-_TLS_KEY=/certs/certs.key \
     --restart=always \
     registry:latest
+```
+
+#### Docker Registry HTTPS 연결 문제 해결
+
+daemon.json file에 insecure 설정 추가 후 Docker 서비스를 재시작합니다.
+
+- linux: /etc/docker/daemon.json, sudo systemctl restart docker
+- Windows: C:\ProgramData\docker\config\daemon.json, Restart-Service docker
+
+```json
+{
+  "insecure-registries" : ["내-레지스트리-IP:포트"]
+}
 ```
 
 ### Run registry web UI
@@ -263,6 +275,7 @@ docker run -it -d \
     --network host \
     --name registry-web \
     -v /home/test/vm/dockers/config.yaml:/conf/config.yml:ro \
+    --restart=always \
     hyper/docker-registry-web
 ```
 
