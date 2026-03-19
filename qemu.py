@@ -202,7 +202,7 @@ class QEMU:
         guid = hashlib.md5("".join(boot_devs).encode()).hexdigest()
         self.vmguid, self.vmuid = guid, guid[:2]
         self.vmprocid = f"{self.vmname[:12]}_{self.vmuid}"
-        self.bootype = "1" if self.vmnvme and self.vmnvme[0] == self.vmboot else ""
+        self.bootype = "" if any(self.vmboot.endswith(ext) for ext in self.IMAGE_EXTS) else "1"
         self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"]
         logger.info("vmimages %s vmcd %s vmnvme %s vmkernel %s", self.vmimages, self.vmcdimages, self.vmnvme, self.args.vmkernel)
 
