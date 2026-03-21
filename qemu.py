@@ -293,34 +293,36 @@ class QEMU:
                 "-device virtio-scsi-pci,id=scsi0,iothread=iothread0",
             ]
         )
-        for idx, img in enumerate(self.vmimages):
+        for img in self.vmimages:
             ext = Path(img).suffix.lower()
             if img.startswith("wiftest"):
                 self.params += [
-                    f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{img},format=qcow2,id=drive-{idx}",
-                    f"-device virtio-blk-pci,drive=drive-{idx},id=virtio-blk-pci{idx}",
+                    f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{img},format=qcow2,id=drive-{self.index}",
+                    f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
                 ]
             elif ext == ".qcow2":
-                self.params.append(f"-drive file={img},cache=writeback,id=drive-{idx}")
+                self.params.append(f"-drive file={img},cache=writeback,id=drive-{self.index}")
             elif ext == ".vhdx":
                 self.params += [
-                    f"-drive file={img},if=none,id=drive-{idx}",
-                    f"-device nvme,drive=drive-{idx},serial=nvme-{idx}",
+                    f"-drive file={img},if=none,id=drive-{self.index}",
+                    f"-device nvme,drive=drive-{self.index},serial=nvme-{self.index}",
                 ]
             else:
                 self.params += [
-                    f"-drive file={img},if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-{idx}",
-                    f"-device scsi-hd,scsi-id={idx},drive=drive-{idx},id=scsi0-{idx}",
+                    f"-drive file={img},if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-{self.index}",
+                    f"-device scsi-hd,scsi-id={self.index},drive=drive-{self.index},id=scsi0-{self.index}",
                 ]
+            self.index += 1
         if scsi:
             self.params = scsi + self.params
 
     def configure_cdrom(self) -> None:
         iface = "ide" if self.args.arch == "x86_64" else "none"
-        for idx, iso in enumerate(self.vmcdimages):
-            self.params.append(f"-drive file={iso},media=cdrom,readonly=on,if={iface},index={idx},id=cdrom{idx}")
+        for iso in self.vmcdimages:
+            self.params.append(f"-drive file={iso},media=cdrom,readonly=on,if={iface},index={self.index},id=cdrom{self.index}")
             if self.args.arch != "x86_64":
-                self.params += ["-device qemu-xhci,id=xhci", f"-device usb-storage,drive=cdrom{idx},bus=xhci.0"]
+                self.params += ["-device qemu-xhci,id=xhci", f"-device usb-storage,drive=cdrom{self.index},bus=xhci.0"]
+            self.index += 1
 
     def check_file(self, filename: str, size: int) -> bool:
         if not Path(filename).exists():
