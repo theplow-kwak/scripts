@@ -69,9 +69,9 @@ class QEMU:
     @property
     def memsize(self) -> str:
         if self._memsize is None:
-            pages = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-            gb = int(pages / (1024**3) / 2)
-            self._memsize = f"{min(gb, 16)}G"
+            avail_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_AVPHYS_PAGES")
+            gb = int(avail_bytes / (1024**3) / 2)
+            self._memsize = f"{min(max(gb, 4), 16)}G"
         return self._memsize
 
     # command execution -----------------------------------------------------
