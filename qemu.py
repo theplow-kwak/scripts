@@ -226,12 +226,12 @@ class QEMU:
     def _set_x86_64_params(self) -> List[str]:
         base = [
             f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu",
-            "-device virtio-rng-pci,rng=rng0" if self.args.hvci else "-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0",
             (
                 "-cpu Skylake-Client-v3,hv_stimer,hv_synic,hv_relaxed,hv_reenlightenment,hv_spinlocks=0xfff,hv_vpindex,hv_vapic,hv_time,hv_frequencies,hv_runtime,+kvm_pv_unhalt,+vmx --enable-kvm"
                 if self.args.hvci
                 else "-cpu host,arch_capabilities=off --enable-kvm"
             ),
+            "-device virtio-rng-pci,rng=rng0" if self.args.hvci else "-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0",
         ]
         if not self.args.hvci and self.args.vender:
             base.append(f"-smbios type=1,manufacturer={self.args.vender},product='{self.args.vender} Notebook PC'")
@@ -285,36 +285,30 @@ class QEMU:
             self.index += 1
 
     def configure_disks(self) -> None:
-        scsi = (
-            []
-            if self.args.arch == "riscv64"
-            else [
-                "-object iothread,id=iothread0",
-                "-device virtio-scsi-pci,id=scsi0,iothread=iothread0",
-            ]
-        )
+        scsi_params = [] if self.args.arch == "riscv64" else ["-object iothread,id=iothread0", "-device virtio-scsi-pci,id=scsi0,iothread=iothread0"]
+        disk_params: list[str] = []
         for img in self.vmimages:
             ext = Path(img).suffix.lower()
             if img.startswith("wiftest"):
-                self.params += [
+                disk_params += [
                     f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{img},format=qcow2,id=drive-{self.index}",
                     f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
                 ]
             elif ext == ".qcow2":
-                self.params.append(f"-drive file={img},cache=writeback,id=drive-{self.index}")
+                disk_params.append(f"-drive file={img},cache=writeback,id=drive-{self.index}")
             elif ext == ".vhdx":
-                self.params += [
+                disk_params += [
                     f"-drive file={img},if=none,id=drive-{self.index}",
                     f"-device nvme,drive=drive-{self.index},serial=nvme-{self.index}",
                 ]
             else:
-                self.params += [
+                disk_params += [
                     f"-drive file={img},if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-{self.index}",
                     f"-device scsi-hd,scsi-id={self.index},drive=drive-{self.index},id=scsi0-{self.index}",
                 ]
             self.index += 1
-        if scsi:
-            self.params = scsi + self.params
+        if disk_params:
+            self.params += scsi_params + disk_params
 
     def configure_cdrom(self) -> None:
         iface = "ide" if self.args.arch == "x86_64" else "none"
