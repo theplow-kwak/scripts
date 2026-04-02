@@ -615,7 +615,7 @@ class QEMU:
             self.RemoveSSH()
 
     def run(self) -> None:
-        print(f"Boot: {self.vmboot:<15} mac: {self.macaddr}, ip: {self.localip}")
+        print(f"Boot: {self.vmboot:<15}, memsize: {self._memsize}, mac: {self.macaddr}, ip: {self.localip}")
         completed: subprocess.CompletedProcess[str] | subprocess.Popen[str] = subprocess.CompletedProcess(args=[], returncode=0)
         if not self.findProc(self.vmprocid, 0):
             qcmd = [] if self.args.debug == "debug" else []
