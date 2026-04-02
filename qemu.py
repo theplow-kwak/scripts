@@ -318,14 +318,14 @@ class QEMU:
         base_port = 60000 + int(self.vmguid[:2], 16)
         bus = "xhci1.0" if self.args.arch == "x86_64" else "usb3.0"
 
-        for idx in range(2):
-            chardev_id = f"usbserial{idx}"
-            device_id = f"usbserialdev{idx}"
-            port = base_port + idx
-            self.params += [
-                f"-chardev socket,id={chardev_id},host=127.0.0.1,port={port},server,wait=off",
-                f"-device usb-serial,chardev={chardev_id},id={device_id},bus={bus}",
-            ]
+        # Create a direct TCP link between two guest USB serial ports.
+        # The first endpoint listens, the second connects to the same port.
+        self.params += [
+            f"-chardev socket,id=usbserial0,host=127.0.0.1,port={base_port},server=on,wait=off",
+            f"-device usb-serial,chardev=usbserial0,id=usbserialdev0,bus={bus}",
+            f"-chardev socket,id=usbserial1,host=127.0.0.1,port={base_port},server=off,wait=off",
+            f"-device usb-serial,chardev=usbserial1,id=usbserialdev1,bus={bus}",
+        ]
 
     def configure_disks(self) -> None:
         scsi_params = [] if self.args.arch == "riscv64" else ["-object iothread,id=iothread0", "-device virtio-scsi-pci,id=scsi0,iothread=iothread0"]
