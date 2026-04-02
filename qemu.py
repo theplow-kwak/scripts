@@ -308,6 +308,25 @@ class QEMU:
             ]
             self.index += 1
 
+    def configure_usb_serial(self) -> None:
+        if self.args.nousb:
+            return
+
+        # Two USB serial adapters backed by TCP sockets on the host.
+        # The VM can attach both USB serial devices and host-side tools
+        # can connect to the sockets on localhost.
+        base_port = 60000 + int(self.vmguid[:2], 16)
+        bus = "xhci1.0" if self.args.arch == "x86_64" else "usb3.0"
+
+        for idx in range(2):
+            chardev_id = f"usbserial{idx}"
+            device_id = f"usbserialdev{idx}"
+            port = base_port + idx
+            self.params += [
+                f"-chardev socket,id={chardev_id},host=127.0.0.1,port={port},server,wait=off",
+                f"-device usb-serial,chardev={chardev_id},id={device_id},bus={bus}",
+            ]
+
     def configure_disks(self) -> None:
         scsi_params = [] if self.args.arch == "riscv64" else ["-object iothread,id=iothread0", "-device virtio-scsi-pci,id=scsi0,iothread=iothread0"]
         disk_params: list[str] = []
@@ -608,6 +627,7 @@ class QEMU:
         self.configure_usbs()
         self.configure_usb_storage()
         self.configure_ipmi()
+        self.configure_usb_serial()
         self.set_qmp()
         # self.set_pcipass()
         self.configure_connect()
