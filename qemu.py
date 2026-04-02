@@ -39,6 +39,31 @@ def sh(cmd: Union[str, List[str]]) -> List[str]:
     return shlex.split(cmd)
 
 
+def get_available_memory_gb() -> int:
+    """Get available memory in GB.
+
+    Returns:
+        int: Available memory in GB, or 0 if unable to read.
+    """
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    # Extract the number (in kB) and convert to bytes
+                    mem_available_kb = int(line.split()[1])
+                    return mem_available_kb // (1024 * 1024)
+    except (FileNotFoundError, ValueError, IndexError):
+        pass
+
+    # Fallback to the original method if /proc/meminfo is not available
+    try:
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        avail_phys_pages = os.sysconf("SC_PHYS_PAGES")
+        return (page_size * avail_phys_pages) // (1024 * 1024 * 1024)
+    except (ValueError, OSError):
+        return 0
+
+
 # ---------------------------------------------------------------------------
 # QEMU class
 # ---------------------------------------------------------------------------
@@ -69,9 +94,8 @@ class QEMU:
     @property
     def memsize(self) -> str:
         if self._memsize is None:
-            avail_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_AVPHYS_PAGES")
-            gb = int(avail_bytes / (1024**3) / 2)
-            self._memsize = f"{min(max(gb, 4), 16)}G"
+            gb = get_available_memory_gb()
+            self._memsize = f"{min(max(gb, 6), 16)}G"
         return self._memsize
 
     # command execution -----------------------------------------------------
