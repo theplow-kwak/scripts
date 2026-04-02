@@ -312,18 +312,12 @@ class QEMU:
         if self.args.nousb:
             return
 
-        # Two USB serial adapters backed by TCP sockets on the host.
-        # The VM can attach both USB serial devices and host-side tools
-        # can connect to the sockets on localhost.
         base_port = 60000 + int(self.vmguid[:2], 16)
         bus = "xhci1.0" if self.args.arch == "x86_64" else "usb3.0"
-
-        # Create a direct TCP link between two guest USB serial ports.
-        # The first endpoint listens, the second connects to the same port.
         self.params += [
             f"-chardev socket,id=usbserial0,host=127.0.0.1,port={base_port},server=on,wait=off",
             f"-device usb-serial,chardev=usbserial0,id=usbserialdev0,bus={bus}",
-            f"-chardev socket,id=usbserial1,host=127.0.0.1,port={base_port},server=off,wait=off",
+            f"-chardev socket,id=usbserial1,host=127.0.0.1,port={base_port},server=off",
             f"-device usb-serial,chardev=usbserial1,id=usbserialdev1,bus={bus}",
         ]
 
