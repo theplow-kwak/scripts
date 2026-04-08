@@ -175,6 +175,7 @@ class QEMU:
         parser.add_argument("--ext", help="Extra parameters")
         parser.add_argument("--memsize", help="Override memory size")
         parser.add_argument("--cpus", type=int, default=0, help="vCPU count")
+        parser.add_argument("--serial", action="store_true", help="Enable USB serial")
         parser.add_argument("--blkdbg", action="store_true", help="Enable block debug")
         self.args = parser.parse_args()
 
@@ -309,6 +310,8 @@ class QEMU:
             self.index += 1
 
     def configure_usb_serial(self) -> None:
+        if not self.args.serial:
+            return
         if self.args.nousb:
             return
 
@@ -363,6 +366,25 @@ class QEMU:
     def configure_nvme(self) -> None:
         if not self.vmnvme:
             return
+        
+        # build dynamic options
+        did = f",did={self.args.did}" if self.args.did else ""
+        mn = f",mn={self.args.mn}" if self.args.mn else ""
+        ocp = "" if self.args.qemu else ",ocp=on"
+        blkdbg = "blkdebug:blkdebug.conf:" if self.args.blkdbg and Path("blkdebug.conf").exists() else ""
+
+        if self.args.sriov:
+            sriov_max_vfs = 64
+            sriov_vq = sriov_max_vfs * 2
+            sriov_vi = sriov_max_vfs
+            max_ioqpairs = sriov_vq + 2
+            msix = sriov_vi + 1
+            sriov_params = f",msix_qsize={msix},sriov_max_vfs={sriov_max_vfs},sriov_vq_flexible={sriov_vq},sriov_vi_flexible={sriov_vi}"
+            sriov_nsid = ",shared=false,detached=true"
+        else:
+            max_ioqpairs = self.args.num_queues
+            sriov_params = sriov_nsid = ""
+
         params = [
             "-device ioh3420,bus=pcie.0,id=root1.0,slot=1",
             "-device x3130-upstream,bus=root1.0,id=upstream1.0",
@@ -376,24 +398,6 @@ class QEMU:
             num_ns = int(m.group("num_ns") or 1)
             fname, ext = nvme_id.split(".", 1) if "." in nvme_id else (nvme_id, "")
             is_phys = nvme.startswith("nvme")
-
-            # build dynamic options
-            did = f",did={self.args.did}" if self.args.did else ""
-            mn = f",mn={self.args.mn}" if self.args.mn else ""
-            ocp = "" if self.args.qemu else ",ocp=on"
-            blkdbg = "blkdebug:blkdebug.conf:" if self.args.blkdbg and Path("blkdebug.conf").exists() else ""
-
-            if self.args.sriov:
-                sriov_max_vfs = 64
-                sriov_vq = sriov_max_vfs * 2
-                sriov_vi = sriov_max_vfs
-                max_ioqpairs = sriov_vq + 2
-                msix = sriov_vi + 1
-                sriov_params = f",msix_qsize={msix},sriov_max_vfs={sriov_max_vfs},sriov_vq_flexible={sriov_vq},sriov_vi_flexible={sriov_vi}"
-                sriov_nsid = ",shared=false,detached=true"
-            else:
-                max_ioqpairs = self.args.num_queues
-                sriov_params = sriov_nsid = ""
 
             params += [
                 f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{ctrl},chassis={ctrl},multifunction=on",
