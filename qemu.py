@@ -103,7 +103,6 @@ class QEMU:
     def run_command(
         self,
         cmd: Union[str, List[str]],
-        *,
         sudo: bool = False,
         async_: bool = False,
         consol: bool = False,
@@ -303,10 +302,7 @@ class QEMU:
 
     def configure_usb_storage(self) -> None:
         if self.args.stick and Path(self.args.stick).exists():
-            self.params += [
-                f"-drive file={self.args.stick},if=none,format=raw,id=stick{self.index}",
-                f"-device usb-storage,drive=stick{self.index}",
-            ]
+            self.params += [f"-drive file={self.args.stick},if=none,format=raw,id=stick{self.index}", f"-device usb-storage,drive=stick{self.index}"]
             self.index += 1
 
     def configure_usb_serial(self) -> None:
@@ -385,10 +381,7 @@ class QEMU:
             max_ioqpairs = self.args.num_queues
             sriov_params = sriov_nsid = ""
 
-        params = [
-            "-device ioh3420,bus=pcie.0,id=root1.0,slot=1",
-            "-device x3130-upstream,bus=root1.0,id=upstream1.0",
-        ]
+        params = ["-device ioh3420,bus=pcie.0,id=root1.0,slot=1", "-device x3130-upstream,bus=root1.0,id=upstream1.0"]
         ctrl = 0
         for nvme in self.vmnvme:
             m = re.match(r"^(?P<nvme_id>[^:]+):?(?P<num_ns>\d+)?$", nvme)
@@ -443,11 +436,7 @@ class QEMU:
             return
         mapping = {
             "internal": ["-device ipmi-bmc-sim,id=bmc0"],
-            "external": [
-                "-chardev socket,id=ipmi0,host=localhost,port=9002,reconnect=10",
-                "-device ipmi-bmc-extern,chardev=ipmi0,id=bmc1",
-                "-device isa-ipmi-kcs,bmc=bmc1",
-            ],
+            "external": ["-chardev socket,id=ipmi0,host=localhost,port=9002,reconnect=10", "-device ipmi-bmc-extern,chardev=ipmi0,id=bmc1", "-device isa-ipmi-kcs,bmc=bmc1"],
         }
         self.params += mapping.get(self.args.ipmi, [])
 
@@ -466,10 +455,7 @@ class QEMU:
         if self.args.tpm:
             cancel = Path(f"/tmp/foo-cancel-{self.vmuid}")
             cancel.touch(exist_ok=True)
-            self.params += [
-                f"-tpmdev passthrough,id=tpm0,path=/dev/tpm0,cancel-path={cancel}",
-                "-device tpm-tis,tpmdev=tpm0",
-            ]
+            self.params += [f"-tpmdev passthrough,id=tpm0,path=/dev/tpm0,cancel-path={cancel}", "-device tpm-tis,tpmdev=tpm0"]
 
     def RemoveSSH(self) -> None:
         ssh_file = Path(f"/tmp/{self.vmprocid}_SSH")
@@ -519,11 +505,7 @@ class QEMU:
             logger.error("can't save ssh port: %s", e)
 
     def configure_connect(self) -> None:
-        modes = {
-            "ssh": self._set_ssh_connect,
-            "spice": self._set_spice_connect,
-            "qemu": self._set_qemu_connect,
-        }
+        modes = {"ssh": self._set_ssh_connect, "spice": self._set_spice_connect, "qemu": self._set_qemu_connect}
         modes.get(self.args.connect, lambda: None)()
 
     def _set_ssh_connect(self) -> None:
