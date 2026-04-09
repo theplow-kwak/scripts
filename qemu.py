@@ -137,7 +137,7 @@ class QEMU:
 
     def set_args(self) -> None:
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-        parser.add_argument("--secboot", default="", action="store_const", const=".secboot", help="UEFI secure boot")
+        parser.add_argument("--secboot", default="", action="store_const", const=".ms", help="UEFI secure boot")
         parser.add_argument("--bios", action="store_true", help="Use BIOS instead of UEFI")
         parser.add_argument("--consol", action="store_true", help="Use current tty for VM")
         parser.add_argument("--noshare", action="store_true", help="Disable virtiofs share")
@@ -227,7 +227,7 @@ class QEMU:
         guid = hashlib.md5("".join(boot_devs).encode()).hexdigest()
         self.vmguid, self.vmuid = guid, guid[:2]
         self.vmprocid = f"{self.vmname[:12]}_{self.vmuid}"
-        self.bootype = "" if any(self.vmboot.endswith(ext) for ext in self.IMAGE_EXTS) else "1"
+        self.bootype = "n" if self.vmnvme and self.vmnvme[0] == self.vmboot else ""
         self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"]
         logger.info("vmimages %s vmcd %s vmnvme %s vmkernel %s", self.vmimages, self.vmcdimages, self.vmnvme, self.args.vmkernel)
 
@@ -267,10 +267,10 @@ class QEMU:
     def configure_uefi(self) -> None:
         if self.args.bios:
             return
-        varfile = Path(f"./OVMF_VARS_4M.ms{self.bootype}.fd")
+        varfile = Path(f"./OVMF_VARS_4M{self.args.secboot}{self.bootype}.fd")
         if not varfile.exists():
             try:
-                self.run_command(["cp", "/usr/share/OVMF/OVMF_VARS_4M.ms.fd", str(varfile)])
+                self.run_command(["cp", f"/usr/share/OVMF/OVMF_VARS_4M{self.args.secboot}.fd", str(varfile)])
             except Exception as e:
                 logger.error("copy failed: %s", e)
                 raise
@@ -366,7 +366,7 @@ class QEMU:
     def configure_nvme(self) -> None:
         if not self.vmnvme:
             return
-        
+
         # build dynamic options
         did = f",did={self.args.did}" if self.args.did else ""
         mn = f",mn={self.args.mn}" if self.args.mn else ""
@@ -636,18 +636,19 @@ class QEMU:
         print(f"Boot: {self.vmboot:<15}, memsize: {self._memsize}, mac: {self.macaddr}, ip: {self.localip}")
         completed: subprocess.CompletedProcess[str] | subprocess.Popen[str] = subprocess.CompletedProcess(args=[], returncode=0)
         if not self.findProc(self.vmprocid, 0):
-            qcmd = [] if self.args.debug == "debug" else []
-            if not self.args.consol:
-                qcmd = self.G_TERM + ["--"]
+            qcmd = [] if self.args.debug == "debug" or self.args.consol else self.G_TERM + ["--"]
             qcmd += self.qemu_exe + self.params + self.opts + self.kernel
             if self.args.debug == "cmd":
                 print(" ".join(qcmd))
             else:
                 completed = self.run_command(qcmd, sudo=bool(self.sudo), consol=self.args.consol)
-        if self.connect and completed and completed.returncode == 0 and self.findProc(self.vmprocid):
-            if self.args.connect == "ssh":
-                self.checkConn(60)
-            self.run_command(self.connect, async_=True, consol=self.args.consol)
+        if self.connect:
+            if self.args.debug == "cmd":
+                print(" ".join(self.connect))
+            elif completed.returncode == 0 and self.findProc(self.vmprocid):
+                if self.args.connect == "ssh":
+                    self.checkConn(60)
+                self.run_command(self.connect, async_=True, consol=self.args.consol)
 
 
 # ---------------------------------------------------------------------------
