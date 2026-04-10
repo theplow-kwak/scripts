@@ -145,16 +145,22 @@ Usage:
  ${0##*/} [OPTIONS]
 
 Options:
- -d, --docker       Path to the docker file
- -s, --share        Path to the shared folder
- -c, --container    Name of the container what you want to run
- -r, --rm           Remove the container
- -R, --rmi          Remove the docker image and associated containers.
+ -x, --unmount      unmount the rootfs directory
+ -c, --chroot       chroot to the rootfs directory
+ -f, --format       format the rootfs file
+ -m, --mkroot       make rootfs file
+ -M, --module       install kernel modules into the rootfs file
+ -k, --kernel       set the kernel version
+ -i, --imgname      set the image name
+ -u, --user         set the user name
+ -d, --distro       set the distro name
+ -s, --size         set the rootfs size
+ -t, --target       set the rootfs target directory
 
 EOM
 }
 
-UNLOAD=0
+UNMOUNT=0
 CHROOT=0
 FORMAT=0
 MKROOT=0
@@ -164,7 +170,7 @@ IMGNAME=${PWD##*/}
 
 while getopts ":xcfmMk:i:u:d:s:t:n:" opt; do
     case $opt in
-        x)  UNLOAD=1 ;;	
+        x)  UNMOUNT=1 ;;	
         c)  CHROOT=1 ;;
         f)  FORMAT=1 ;;
         m)  MKROOT=1 ;;
@@ -176,9 +182,9 @@ while getopts ":xcfmMk:i:u:d:s:t:n:" opt; do
         s)  SIZE=$OPTARG ;;
         t)  MPATH=$OPTARG ;;
         \?) echo "Invalid option: -$OPTARG" >&2 
-            exit 1 ;;
+            usage ; exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2 
-            exit 1 ;;
+            usage ; exit 1 ;;
     esac
 done 
 
@@ -192,15 +198,15 @@ IMGSIZE=${SIZE:-"16g"}
 _MOUNT_PATH=${MPATH:-$PWD/rootfs}
 MOUNT_PATH=$(realpath $_MOUNT_PATH)
 
-echo source $ROOTFS_FILE
-echo target $MOUNT_PATH
+echo rootfs file: $ROOTFS_FILE
+echo rootfs path: $MOUNT_PATH
 
 [ $FORMAT -eq 1 ] && FormatDisk
 MountFolder
 [ $MKROOT -eq 1 ] && { MakeRootFS; unMountFolder; }
 [ $MODULE -eq 1 ] && { InstallModules; unMountFolder; }
 [ $CHROOT -eq 1 ] && chroot
-[ $UNLOAD -eq 1 ] && unMountFolder
+[ $UNMOUNT -eq 1 ] && unMountFolder
 
 echo " end of work"
 

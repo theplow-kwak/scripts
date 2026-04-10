@@ -158,6 +158,11 @@
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>
                 <SynchronousCommand wcm:action="add">
+                    <Order>6</Order>
+                    <CommandLine>cmd /C D:\Utility\FreeCommanderXE\FreeCommanderXE-32-public_setup.exe /SP- /SILENT</CommandLine>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
                     <Order>7</Order>
                     <CommandLine>cmd /C reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run /v hostfs /t REG_SZ /d "sc.exe start VirtioFsSvc"</CommandLine>
                     <RequiresUserInput>false</RequiresUserInput>
@@ -182,5 +187,5 @@
             <EnableLUA>true</EnableLUA>
         </component>
     </settings>
-    <cpi:offlineImage cpi:source="wim:c:/utility/winauto/imagesource/sources/install.wim#Windows 11 Pro" xmlns:cpi="urn:schemas-microsoft-com:cpi" />
+    <cpi:offlineImage cpi:source="wim:c:/utility/winauto/imagesource/sources/install.wim#Windows 11 Pro N" xmlns:cpi="urn:schemas-microsoft-com:cpi" />
 </unattend>

@@ -11,8 +11,10 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
+            "cwd": "./",
             "args": [
-                "/dev/nvme1n1", 
+                "ora.qcow2"
+                // "인터넷", 
             ],
         }
     ]

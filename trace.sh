@@ -52,7 +52,7 @@ on()
 {
     sudo sh -c "echo 0 > /sys/kernel/tracing/trace"
     sudo sh -c "echo 1 > /sys/kernel/tracing/tracing_on"
-    sudo cat /sys/kernel/debug/tracing/trace_pipe
+    # sudo cat /sys/kernel/debug/tracing/trace_pipe
 }
 
 off()
@@ -75,7 +75,7 @@ log()
     fi
 }
 
-echo $1 $@
-$1 $@
+echo $@
+$@
 
 
