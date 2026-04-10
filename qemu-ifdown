@@ -1,0 +1,21 @@
+#!/bin/sh
+set -x
+
+_br=virbr0
+
+if ! [ -n "$1" ];then
+    echo "Error: no interface specified"
+    exit 1
+fi
+
+ip link set $1 down
+ip link delete $1
+
+if ! (ip link show | grep tap > /dev/null); then 
+    ip link set $_br down
+    ip link delete $_br
+    sleep 0.5s
+    sudo systemctl restart NetworkManager.service
+fi
+
+exit 0
