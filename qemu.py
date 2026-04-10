@@ -70,6 +70,8 @@ def get_available_memory_gb() -> int:
 
 
 class QEMU:
+    NVME_INPUT_PATTERN = re.compile(r"^(?P<nvme_id>[^:]+):?(?P<num_ns>\d+)?$")
+    NVME_STEM_PATTERN = re.compile(r"^(?P<nvme>.+?)(?P<ns_id>n\d+)?$")
     IMAGE_EXTS = {".img", ".qcow2", ".vhdx"}
 
     def __init__(self) -> None:
@@ -354,9 +356,9 @@ class QEMU:
                 self.params += ["-device qemu-xhci,id=xhci", f"-device usb-storage,drive=cdrom{self.index},bus=xhci.0"]
             self.index += 1
 
-    def check_file(self, filename: str, size: int) -> bool:
+    def check_file(self, filename: str, size: int, raw: bool = False) -> bool:
         if not Path(filename).exists():
-            self.run_command(f"qemu-img create -f qcow2 {filename} {size}G")
+            self.run_command(f"qemu-img create -f {'raw' if raw else 'qcow2'} {filename} {size}G")
         return self.run_command(f"lsof -w {filename}").returncode != 0
 
     def configure_nvme(self) -> None:
@@ -384,13 +386,20 @@ class QEMU:
         params = ["-device ioh3420,bus=pcie.0,id=root1.0,slot=1", "-device x3130-upstream,bus=root1.0,id=upstream1.0"]
         ctrl = 0
         for nvme in self.vmnvme:
-            m = re.match(r"^(?P<nvme_id>[^:]+):?(?P<num_ns>\d+)?$", nvme)
+            m = self.NVME_INPUT_PATTERN.match(nvme)
             if not m:
                 continue
-            nvme_id = m.group("nvme_id")
+            fname = m.group("nvme_id")
             num_ns = int(m.group("num_ns") or 1)
-            fname, ext = nvme_id.split(".", 1) if "." in nvme_id else (nvme_id, "")
-            is_phys = nvme.startswith("nvme")
+            if is_phys := nvme.startswith("/dev/"):
+                nvme_id = fname
+                ns_id = ext = ""
+            else:
+                p = Path(fname)
+                ext = p.suffix or ".qcow2"
+                m = self.NVME_STEM_PATTERN.match(p.stem)
+                nvme_id = m.group("nvme")
+                ns_id = m.group("ns_id") or "" if p.suffix else "n1"
 
             params += [
                 f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{ctrl},chassis={ctrl},multifunction=on",
@@ -399,9 +408,10 @@ class QEMU:
             ]
 
             for ns in range(1, num_ns + 1):
-                tail = "" if not ext or (not is_phys and ns == 1) else f"n{ns}"
-                backend = f"{fname}{tail}{'.' if ext else ''}{ext}"
-                if self.check_file(backend, self.args.nssize):
+                if ns != 1 and not is_phys:
+                    ns_id = f"n{int(ns_id[1:]) + 1}" if ns_id else f"n{ns}"
+                backend = f"{nvme_id}{ns_id}{ext}"
+                if self.check_file(backend, self.args.nssize, ext == ".img"):
                     params += [
                         f"-drive file={blkdbg}{backend},id=nvme{ctrl}n{ns},if=none,cache=none",
                         f"-device nvme-ns,drive=nvme{ctrl}n{ns},bus=nvme{ctrl},nsid={ns}{sriov_nsid if ns == 1 else ''}",
