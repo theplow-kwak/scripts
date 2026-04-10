@@ -413,7 +413,7 @@ class QEMU:
                 backend = f"{nvme_id}{ns_id}{ext}"
                 if self.check_file(backend, self.args.nssize, ext == ".img"):
                     params += [
-                        f"-drive file={blkdbg}{backend},id=nvme{ctrl}n{ns},if=none,cache=none",
+                        f"-drive file={blkdbg}{backend},id=nvme{ctrl}n{ns},if=none{',format=raw' if ext != '.qcow2' else ''},cache=none",
                         f"-device nvme-ns,drive=nvme{ctrl}n{ns},bus=nvme{ctrl},nsid={ns}{sriov_nsid if ns == 1 else ''}",
                     ]
             ctrl += 1
