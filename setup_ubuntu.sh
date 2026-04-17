@@ -56,6 +56,11 @@ PREFIX=${PREFIX:-$HOME/$NAME}
 set_mirror()
 {
     sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' /etc/apt/sources.list
+    for file in /etc/apt/sources.list.d/*.sources; do
+        if [ -f "$file" ]; then
+            sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/mirror.kakao.com/g' "$file"
+        fi
+    done
 }
 
 tools()
