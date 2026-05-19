@@ -555,12 +555,12 @@ class QEMU:
     def checkConn(self, timeout: int = 10) -> bool:
         if not self.ssh_connect:
             return False
-        while self.run_command(f"ping -c 1 {self.ssh_connect}").returncode:
+        while self.run_command(f"nc -z -w 1 {self.ssh_connect} 22").returncode:
             timeout -= 1
             if timeout < 0:
-                return True
+                return False
             sleep(1)
-        return False
+        return True
 
     def configure_kernel(self) -> None:
         if not self.args.vmkernel:
