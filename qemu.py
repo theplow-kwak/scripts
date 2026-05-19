@@ -300,7 +300,7 @@ class QEMU:
             ]
             self.params += ["-device qemu-xhci,id=xhci2", "-device usb-host,bus=xhci2.0,vendorid=0x04e8,productid=0x6860"]
         else:
-            self.params += ["-device qemu-xhci,id=usb3 -device usb-kbd -device usb-tablet"]
+            self.params += ["-device qemu-xhci,id=usb3", "-device usb-kbd", "-device usb-tablet"]
 
     def configure_usb_storage(self) -> None:
         if self.args.stick and Path(self.args.stick).exists():
@@ -333,7 +333,10 @@ class QEMU:
                     f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
                 ]
             elif ext == ".qcow2":
-                disk_params.append(f"-drive file={img},cache=writeback,id=drive-{self.index}")
+                disk_params += [
+                    f"-drive file={img},if=none,cache=writeback,id=drive-{self.index}",
+                    f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
+                ]
             elif ext == ".vhdx":
                 disk_params += [
                     f"-drive file={img},if=none,id=drive-{self.index}",
@@ -349,11 +352,13 @@ class QEMU:
             self.params += scsi_params + disk_params
 
     def configure_cdrom(self) -> None:
-        iface = "ide" if self.args.arch == "x86_64" else "none"
+        iface = "none"
         for iso in self.vmcdimages:
             self.params.append(f"-drive file={iso},media=cdrom,readonly=on,if={iface},index={self.index},id=cdrom{self.index}")
-            if self.args.arch != "x86_64":
-                self.params += ["-device qemu-xhci,id=xhci", f"-device usb-storage,drive=cdrom{self.index},bus=xhci.0"]
+            bus = "xhci1.0" if self.args.arch == "x86_64" else "xhci.0"
+            if self.args.arch != "x86_64":            
+                self.params.append("-device qemu-xhci,id=xhci")
+            self.params.append(f"-device usb-storage,drive=cdrom{self.index},bus={bus}")
             self.index += 1
 
     def check_file(self, filename: str, size: int, raw: bool = False) -> bool:
@@ -608,13 +613,13 @@ class QEMU:
         self.configure_uefi()
         self.configure_kernel()
         self.configure_disks()
+        self.configure_usbs()
         self.configure_cdrom()
         self.configure_nvme()
         self.configure_net(True)
         self.configure_spice()
         self.configure_virtiofs()
         self.configure_tpm()
-        self.configure_usbs()
         self.configure_usb_storage()
         self.configure_ipmi()
         self.configure_usb_serial()
