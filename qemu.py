@@ -356,7 +356,7 @@ class QEMU:
         for iso in self.vmcdimages:
             self.params.append(f"-drive file={iso},media=cdrom,readonly=on,if={iface},index={self.index},id=cdrom{self.index}")
             bus = "xhci1.0" if self.args.arch == "x86_64" else "xhci.0"
-            if self.args.arch != "x86_64":            
+            if self.args.arch != "x86_64":
                 self.params.append("-device qemu-xhci,id=xhci")
             self.params.append(f"-device usb-storage,drive=cdrom{self.index},bus={bus}")
             self.index += 1
@@ -495,7 +495,8 @@ class QEMU:
         # dhcp: virsh can return multiple lines; we pick the last
         leases = self.run_command(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}").stdout or ""
         lines = leases.strip().splitlines()  # pyright: ignore[reportAttributeAccessIssue]
-        last = sorted(lines)[-1] if lines else ""
+        match = next((ln for ln in lines if self.vmname in ln), None)
+        last = match if match else (sorted(lines)[-1] if lines else "")
         self.localip = self.args.ip or (last.split()[4].split("/")[0] if last and len(last.split()) > 4 else None)
 
         if not set_ports:
@@ -522,6 +523,8 @@ class QEMU:
     def configure_connect(self) -> None:
         modes = {"ssh": self._set_ssh_connect, "spice": self._set_spice_connect, "qemu": self._set_qemu_connect}
         modes.get(self.args.connect, lambda: None)()
+        if self.args.rmssh:
+            self.RemoveSSH()
 
     def _set_ssh_connect(self) -> None:
         self.opts += ["-nographic -serial mon:stdio"]
@@ -626,8 +629,6 @@ class QEMU:
         self.set_qmp()
         # self.set_pcipass()
         self.configure_connect()
-        if self.args.rmssh:
-            self.RemoveSSH()
 
     def run(self) -> None:
         print(f"Boot: {self.vmboot:<15}, memsize: {self._memsize}, mac: {self.macaddr}, ip: {self.localip}")
