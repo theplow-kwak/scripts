@@ -483,7 +483,7 @@ nmcli -f bridge con show br0
 > [Installation of KVM](https://help.ubuntu.com/community/KVM/Installation)
 
 ```bash
-sudo apt-get install libvirt-daemon-system
+sudo apt install -y libvirt-daemon-system
 ```
 
 The proper way fo changing address is using virsh. You can stop network (e.g. ifdown): (option)

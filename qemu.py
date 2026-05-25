@@ -86,6 +86,7 @@ class QEMU:
         self.index = 0
         self._memsize: Optional[str] = None
         self.sudo = ["sudo"] if os.getuid() else []
+        self.G_TERM: List[str] = []
 
     # properties -------------------------------------------------------------
 
@@ -156,6 +157,8 @@ class QEMU:
         parser.add_argument("--vga", default="qxl", help="VGA card")
         parser.add_argument("--stick", help="USB stick image")
         parser.add_argument("--ip", help="Fixed guest IP")
+        parser.add_argument("--usbredir", action="store_true", help="Enable SPICE USB redirection in remote-viewer")
+        parser.add_argument("--usbredir-filter", default="", help="SPICE USB redirect filter string")
         parser.add_argument("images", metavar="IMAGES", nargs="*", help="VM disk/iso images")
         parser.add_argument("--nvme", nargs="+", action="extend", help="NVMe backend(s)")
         parser.add_argument("--disk", nargs="+", action="extend", help="Additional disks (lsblk)\nexample: sda:1")
@@ -534,9 +537,11 @@ class QEMU:
 
     def _set_spice_connect(self) -> None:
         self.opts += ["-monitor stdio"]
-        self.chkport, self.connect = self.spiceport, [
-            f"remote-viewer -t {self.vmprocid} spice://{self.hostip}:{self.spiceport} --spice-usbredir-auto-redirect-filter=0x03,-1,-1,-1,0|-1,-1,-1,-1,1"
-        ]
+        cmd = [f"remote-viewer -t {self.vmprocid} spice://{self.hostip}:{self.spiceport}"]
+        if self.args.usbredir or self.args.usbredir_filter:
+            filter_str = self.args.usbredir_filter or "0x03,-1,-1,-1,0|-1,-1,-1,-1,1"
+            cmd.append(f"--spice-usbredir-redirect-on-connect={filter_str}")
+        self.chkport, self.connect = self.spiceport, cmd
 
     def _set_qemu_connect(self) -> None:
         self.opts += ["-monitor stdio"]

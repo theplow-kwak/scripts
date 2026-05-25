@@ -56,6 +56,7 @@ setup_env()
     sudo apt install -y valgrind xfslibs-dev 
     sudo apt install -y flex bison ninja-build 
     sudo apt install -y libspice-server-dev libspice-server1 libudev-dev libusb-dev libusbredirparser-dev libusb-1.0-0-dev
+    sudo apt install -y dbus-x11 gnome-terminal rvirt-viewer virtiofsd libvirt-daemon-system
 }
 
 config()
