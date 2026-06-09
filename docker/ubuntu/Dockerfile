@@ -1,7 +1,7 @@
-FROM ubuntu:plucky
+FROM ubuntu:26.04
 
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
             sudo \
             which \
             wget \
@@ -21,12 +21,18 @@ RUN apt-get update && \
             zlib1g-dev \
             xz-utils \
             zip \
-            linux-headers-$(uname -r) 
+            curl && \
+    rm -rf /var/lib/apt/lists/* 
 
 ARG NEWUSER=test
-RUN usermod -l $NEWUSER ubuntu && \
-    echo "$NEWUSER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${NEWUSER} && \
-    chmod 0440 /etc/sudoers.d/${NEWUSER}
+RUN userdel -r ubuntu || true && \
+    groupadd -g 1000 $NEWUSER && \
+    useradd -u 1000 -g 1000 -m -s /bin/bash $NEWUSER && \
+    echo "$NEWUSER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$NEWUSER && \
+    chmod 0440 /etc/sudoers.d/$NEWUSER
 
 RUN pip config set global.trusted-host "pypi.org files.pythonhosted.org pypi.python.org" && \
     python3 -m pip install --upgrade pip
+
+USER $NEWUSER
+WORKDIR /home/$NEWUSER
