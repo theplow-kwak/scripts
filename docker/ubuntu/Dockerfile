@@ -6,8 +6,6 @@ RUN apt-get update && \
             which \
             wget \
             ca-certificates \
-            python3 \
-            python3-pip \
             git \
             g++ \
             make \
@@ -30,9 +28,6 @@ RUN userdel -r ubuntu || true && \
     useradd -r -u 1000 -g 1000 -m -s /bin/bash $NEWUSER && \
     echo "$NEWUSER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$NEWUSER && \
     chmod 0440 /etc/sudoers.d/$NEWUSER
-
-RUN pip config set global.trusted-host "pypi.org files.pythonhosted.org pypi.python.org" && \
-    python3 -m pip install --upgrade pip --break-system-packages --ignore-installed
 
 USER $NEWUSER
 WORKDIR /home/$NEWUSER

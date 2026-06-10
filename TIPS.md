@@ -1,4 +1,118 @@
-# pre-install tools
+# TIPS
+
+## Table of Contents
+
+- [pre-install tools](#pre-install-tools)
+- [Kernel tracing on ubuntu](#kernel-tracing-on-ubuntu)
+  - [get kernel source](#get-kernel-source)
+  - [Depackage the kernel source](#depackage-the-kernel-source)
+  - [kernel tracing patch](#kernel-tracing-patch)
+  - [build NVMe module driver](#build-nvme-module-driver)
+  - [build kernel](#build-kernel)
+  - [enable kernel trace](#enable-kernel-trace)
+- [nvme-cli 사용 예제](#nvme-cli)
+- [bcc 설치](#bcc)
+- [Example of fio test](#example-of-fio-test)
+- [iol_interact-8.0](#iolinteract-80)
+- [wine 설치](#wine)
+- [fix GitKraken invalid collation character error](#fix-gitkraken-invalid-collation-character-error)
+- [Deleting a git commit](#deleting-a-git-commit)
+  - [Example git log](#example-git-log)
+  - [Using Cherry Pick](#using-cherry-pick)
+    - [**Example**](#example)
+- [GIT](#git)
+  - [Setup a Private Git Server on Ubuntu](#setup-a-private-git-server-on-ubuntu)
+  - [git clone into an existing folder](#git-clone-into-an-existing-folder)
+  - [GIT Truncated history](#git-truncated-history)
+  - [tag list](#tag-list)
+- [레드햇에서 YUM 사용하는 방법](#yum)
+- [ftrace를 이용한 디버깅 방법](#ftrace)
+- [유용한 shell script](#shell-script)
+- [Samba](#samba)
+  - [Ubuntu](#ubuntu)
+  - [CentOS / RHEL 7 : Eable To Start The Samba Service](#centos-rhel-7-eable-to-start-the-samba-service)
+  - [Samba mount](#samba-mount)
+  - [Windows 10에서 samba server 인증 안되는 경우 해결 방안](#windows-10-samba-server)
+- [QEMU](#qemu)
+  - [How to create a bridge, named br0](#how-to-create-a-bridge-named-br0)
+  - [libvirt network bridge 설정](#libvirt-network-bridge)
+  - [Bridged networking using qemu-bridge-helper](#bridged-networking-using-qemu-bridge-helper)
+  - [Docker에서 'virbr0"에 연결하는 방법](#docker-virbr0)
+  - [ENHANCING VIRTUALIZATION WITH THE QEMU GUEST AGENT AND SPICE AGENT](#enhancing-virtualization-with-the-qemu-guest-agent-and-spice-agent)
+    - [QEMU Guest Agent](#qemu-guest-agent)
+    - [SPICE AGENT](#spice-agent)
+  - [virtiofs](#virtiofs)
+  - [i386 apt](#i386-apt)
+- [Jenkins](#jenkins)
+  - [Jenkins docker 설치](#jenkins-docker)
+  - [Jenkins 실행](#jenkins)
+  - [Jenkins shell 연결](#jenkins-shell)
+  - [Plug-in 설치](#plug-in)
+  - [Jenkins and python](#jenkins-and-python)
+  - [Jenkins plugin](#jenkins-plugin)
+- [SQL Server](#sql-server)
+  - [Docker를 이용한 SQL server 설치](#docker-sql-server)
+  - [DB 사용법](#db)
+    - [DB 생성](#db)
+    - [Table 생성](#table)
+  - [Azure Data Studio 설치](#azure-data-studio)
+- [Windows 관련](#windows)
+  - [Windows server 설정](#windows-server)
+  - [Windows 10 WSL 2 설치](#windows-10-wsl-2)
+  - [Enable the access to network drives from elevated apps running as administrator](#enable-the-access-to-network-drives-from-elevated-apps-running-as-administrator)
+  - [Default login](#default-login)
+  - [Dual Boot Windows with Virtual Hard Disk (VHDX)](#dual-boot-windows-with-virtual-hard-disk-vhdx)
+  - [How to bypass TPM 2.0 requirements when upgrading to Windows 11](#how-to-bypass-tpm-20-requirements-when-upgrading-to-windows-11)
+- [Python 참고](#python)
+  - [PIP Certification](#pip-certification)
+    - [Using a certificate as parameter](#using-a-certificate-as-parameter)
+    - [Using a certificate in a `pip.conf`](#using-a-certificate-in-a-pipconf)
+    - [Set the configuration in Windows](#set-the-configuration-in-windows)
+    - [Ignoring certificate and using HTTP](#ignoring-certificate-and-using-http)
+    - [Ignoring certificate and using HTTP in a pip.conf](#ignoring-certificate-and-using-http-in-a-pipconf)
+  - [PIP upgrade](#pip-upgrade)
+  - [jupyter lab 설치](#jupyter-lab)
+- [Perforce](#perforce)
+  - [p4v 설치 방법](#p4v)
+    - [1. Ubuntu](#1-ubuntu)
+    - [2. RHEL](#2-rhel)
+  - [P4 client 설정](#p4-client)
+- [ca-certification](#ca-certification)
+- [mvn 개발 환경 설정](#mvn)
+- [Ubuntu](#ubuntu)
+  - [Ubuntu repository 변경](#ubuntu-repository)
+  - [Barrier 설정](#barrier)
+  - [Fix Time Differences in Ubuntu & Windows 10 Dual Boot](#fix-time-differences-in-ubuntu-windows-10-dual-boot)
+  - [How to Change MAC Address on Ubuntu](#how-to-change-mac-address-on-ubuntu)
+  - [OS disk 이동](#os-disk)
+  - [NTFS mount](#ntfs-mount)
+  - [Ubuntu upgrade](#ubuntu-upgrade)
+  - [NVMe Multipath](#nvme-multipath)
+  - [Bluetooth Pairing on Dual Boot of Windows & Linux](#bluetooth-pairing-on-dual-boot-of-windows-linux)
+  - [install desktop on the server](#install-desktop-on-the-server)
+    - [booting 시간이 오래 걸리는데](#booting)
+    - [autologin 설정](#autologin)
+  - [Create ssh keypair](#create-ssh-keypair)
+  - [Install virt-customize on Linux](#install-virt-customize-on-linux)
+  - [Setup/inject an ssh keys](#setupinject-an-ssh-keys)
+  - [Create cloud-init configuration](#create-cloud-init-configuration)
+  - [ssh key setting](#ssh-key-setting)
+  - [Correct SSH Permission denied](#correct-ssh-permission-denied)
+  - [Centos](#centos)
+    - [cloud image](#cloud-image)
+    - [Install Centos aarch64 GPG key](#install-centos-aarch64-gpg-key)
+  - [virbr dhcp 확인](#virbr-dhcp)
+- [msys64](#msys64)
+- [pciutils for windows](#pciutils-for-windows)
+- [network](#network)
+- [Termux](#termux)
+  - [Install Ubuntu in termux](#install-ubuntu-in-termux)
+  - [Ubuntu in termux](#ubuntu-in-termux)
+    - [vscode.sh](#vscodesh)
+- [VS Code in termux](#vs-code-in-termux)
+
+
+## pre-install tools
 
 Ubuntu를 기본 설치 후 개발 작업을 진행하기 위해 필요한 package들을 미리 설치한다.
 
@@ -15,24 +129,24 @@ sudo apt install vagrant
 sudo apt install libglib2.0-dev libpixman-1-dev libxen-dev libgtk-3-dev
 ```
 
-# Kernel tracing on ubuntu
+## Kernel tracing on ubuntu
 
 > <https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel#Obtaining_the_source_for_an_Ubuntu_release>
 
-## get kernel source
+### get kernel source
 
 ```bash
 apt source linux-headers-$(uname -r)
 sudo apt build-dep linux-headers-$(uname -r)
 ```
 
-## Depackage the kernel source
+### Depackage the kernel source
 
 ```bash
 dpkg-source -x linux_4.15.0-38.41.dsc
 ```
 
-## kernel tracing patch
+### kernel tracing patch
 
 download nvme_driver.diff to ~/
 
@@ -43,7 +157,7 @@ patch -p1 < ../nvme_driver.diff
 diff -urN nvme_u1804_org/drivers/nvme linux-4.15.0/drivers/nvme > nvme_driver.diff
 ```
 
-## build NVMe module driver
+### build NVMe module driver
 >
 > <https://wiki.ubuntu.com/KernelCustomBuild>
 
@@ -58,7 +172,7 @@ sudo make -C /lib/modules/`uname -r`/build M=`pwd` modules_install install
 sudo depmod -a
 ```
 
-## build kernel
+### build kernel
 
 ```bash
 fakeroot debian/rules clean
@@ -67,7 +181,7 @@ debian/rules build
 fakeroot debian/rules binary-headers binary-generic binary-perarch
 ```
 
-## enable kernel trace  
+### enable kernel trace
 
 ```bash
 sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/events/nvme/enable'
@@ -75,7 +189,7 @@ sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
 sudo cat /sys/kernel/debug/tracing/trace_pipe | tee ./nvme.log
 ```
 
-# nvme-cli 사용 예제
+## nvme-cli 사용 예제
 
 ```bash
 sudo nvme id-ctrl /dev/nvme0
@@ -83,7 +197,7 @@ sudo nvme dir-receive /dev/nvme0 -D 1 -O 1 -H
 sudo nvme smart-log /dev/nvme0
 ```
 
-# bcc 설치
+## bcc 설치
 
 ```bash
 sudo apt install cmake clang libedit-dev llvm libclang-dev luajit libfl-dev
@@ -97,14 +211,14 @@ make -j `getconf _NPROCESSORS_ONLN`
 sudo make install
 ```
 
-# Example of fio test
+## Example of fio test
 
 ```bash
 fio --randrepeat=1 --ioengine=libaio --direct=1 --gtod_reduce=1 --name=test --filename=/mnt/nvme/test --bs=4k --iodepth=64 --size=4G --readwrite=randrw --rwmixread=75
 fio --randrepeat=1 --ioengine=libaio --direct=1 --gtod_reduce=1 --name=test --filename=/mnt/nvme/test --bs=4k --iodepth=64 --size=4G --readwrite=randread 
 ```
 
-# iol_interact-8.0
+## iol_interact-8.0
 
 ```bash
 sudo apt-get install runit
@@ -116,7 +230,7 @@ sudo apt-get install linux-headers-$(uname -r)
 
 dnvme.ko build시에 gcc version이 맞지 않으면 insmod에서 error 발생 (kernel patch와 연관) -> ppa:ubuntu-toolchain-r/test 사용하면 안됨
 
-# wine 설치
+## wine 설치
 
 ```bash
 sudo apt install wine-stable ttf-mscorefonts-installer --install-recommends
@@ -124,7 +238,7 @@ sudo apt install fonts-nanum fonts-nanum-extra fonts-nanum-coding
 sudo apt install wine64
 ```
 
-# fix GitKraken invalid collation character error
+## fix GitKraken invalid collation character error
 
 added ```LC_ALL=C``` to the ```Exec=env``` line, in the file ```/var/lib/snapd/desktop/applications/gitkraken_gitkraken.desktop```
 
@@ -132,11 +246,11 @@ added ```LC_ALL=C``` to the ```Exec=env``` line, in the file ```/var/lib/snapd/d
 Exec=env LC_ALL=C BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/gitkraken_gitkraken.desktop /snap/bin/gitkraken %U
 ```
 
-# Deleting a git commit
+## Deleting a git commit
 
 Git server에 지저분하게 커밋된것들을 다 지우고 필요한 항목만 선정하여 깨끝하게 다시 커밋하고 싶을때 사용.
 
-## Example git log
+### Example git log
 
 | Number | Hash    | Commit Message                                         | Author       |
 | ------ | ------- | ------------------------------------------------------ | ------------ |
@@ -148,7 +262,7 @@ Git server에 지저분하게 커밋된것들을 다 지우고 필요한 항목�
 | 6      | 7feddbb | Adding CMS class and files                             | Tom          |
 | 7      | a809379 | Adding project to Git                                  | Tom          |
 
-## Using Cherry Pick
+### Using Cherry Pick
 
 **Step 1:** Find the commit before the commit you want to remove `git log`
 
@@ -172,7 +286,7 @@ Git server에 지저분하게 커밋된것들을 다 지우고 필요한 항목�
 
 You can do the process without creating a new branch by replacing **Step 2 & 3** with **Step 8** then not carry out **Step 7 & 9.**
 
-### **Example**
+#### **Example**
 
 Say we want to remove commits 2 & 4 from the repo.
 
@@ -185,9 +299,9 @@ Say we want to remove commits 2 & 4 from the repo.
 7. `git merge repair` Merge our new branch onto master.
 8. `git push --hard origin master` Push master to the remote repo.
 
-# GIT
+## GIT
 
-## Setup a Private Git Server on Ubuntu
+### Setup a Private Git Server on Ubuntu
 
 1. Install Git: ``` sudo apt install git ```
 
@@ -206,7 +320,7 @@ Say we want to remove commits 2 & 4 from the repo.
    ssh-copy-id -i ~/.ssh/id_rsa.pub git@192.168.1.58
    ```
 
-## git clone into an existing folder
+### git clone into an existing folder
 
 ```bash
 rm -fr .git
@@ -217,7 +331,7 @@ git reset --mixed origin/master --no-refresh
 git branch --set-upstream-to=origin/master master
 ```
 
-## GIT Truncated history
+### GIT Truncated history
 
 [git - How to push a shallow clone to a new repo? - Stack Overflow](https://stackoverflow.com/questions/50992188/how-to-push-a-shallow-clone-to-a-new-repo/50996201#50996201)
 
@@ -253,7 +367,7 @@ git remote add origin https://gitlab.com/....git
 git push -u origin master
 ```
 
-## tag list
+### tag list
 
 ```bash
 git for-each-ref --sort=-creatordate --format '%(refname)%09 %(creatordate)' refs/tags --count=5
@@ -263,7 +377,7 @@ git for-each-ref --sort=-creatordate --format '%(refname)%09 %(creatordate)' ref
 git remote update
 ```
 
-# 레드햇에서 YUM 사용하는 방법
+## 레드햇에서 YUM 사용하는 방법
 
 1. CD 이용하여 local repo 사용
 
@@ -314,7 +428,7 @@ git remote update
 
    Replace "7.7.1908" with your own release version if you are having this problem and nothing else has worked. (7.6.1810)
 
-# ftrace를 이용한 디버깅 방법
+## ftrace를 이용한 디버깅 방법
 
 - call graph 출력
 
@@ -335,7 +449,7 @@ echo 1 > /proc/sys/kernel/stack_tracer_enabled
 stacktrace
 ```
 
-# 유용한 shell script
+## 유용한 shell script
 
 ```bash
 for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*}; done
@@ -345,9 +459,9 @@ for file in ~/projects/scripts/*.sh; do name=${file##*/}; ln -s $file ${name%%.*
 tar --exclude=".*" -czvf ssdsnoop.tar.gz ssdsnoop/
 ```
 
-# Samba
+## Samba
 
-## Ubuntu
+### Ubuntu
 
 [사용자 공유 기능 활성화](https://access.redhat.com/documentation/ko-kr/red_hat_enterprise_linux/8/html/deploying_different_types_of_servers/assembly_enabling-users-to-share-directories-on-a-samba-server_assembly_using-samba-as-a-server#doc-wrapper)
 
@@ -364,7 +478,7 @@ net usershare info
 sudo smbstatus
 ```
 
-## CentOS / RHEL 7 : Eable To Start The Samba Service
+### CentOS / RHEL 7 : Eable To Start The Samba Service
 
 **Configure SELinux to allow SAMBA services**
 In case if you do not want to disable SELinux, you can review the SELinux policy allowing the SAMBA subsystem to run. To check the current SELinux policies, use the below commands.
@@ -387,7 +501,7 @@ For example:
 setsebool -P bacula_use_samba on
 ```
 
-## Samba mount
+### Samba mount
 
 ```bash
 cat << _EOF_ | sudo tee /etc/.smb.cred
@@ -414,7 +528,7 @@ sudo mount -t cifs -o username=uname //10.0.2.4/qemu ./host
 gio mount "smb://WORKGROUP;uname@10.0.2.2/home/"
 ```
 
-## Windows 10에서 samba server 인증 안되는 경우 해결 방안
+### Windows 10에서 samba server 인증 안되는 경우 해결 방안
 
 Windows 10에서 samba server에 연결이 안되고 계속 인증 에러가 나는 경우 발생. ubuntu에서 `sudo smbstatus`로 확인 결과 user name이 ***nobody***로 바뀌어 있다.
 
@@ -449,11 +563,11 @@ then I set Local Policies > Security Options > Network Security: LAN Manager aut
 2. 파일 > 스냅인 추가/제거 클릭 > 그룹 정책 개체 편집기 > 추가
 3. 컴퓨터 구성 > 관리 템플릿 > 네트워크 > Lanman 워크스테이션 > 보안되지 않은 게스트 로그온 사용 > 사용
 
-# QEMU
+## QEMU
 
 qemu를 사용하는데 유용한 tip
 
-## How to create a bridge, named br0
+### How to create a bridge, named br0
 
 The procedure to add a bridge interface on Linux is as follows when you want to use Network Manager.
 
@@ -476,7 +590,7 @@ To view the bridge settings, issue the following command:
 nmcli -f bridge con show br0
 ```
 
-## libvirt network bridge 설정
+### libvirt network bridge 설정
 
 아래 site를 참고하여 `libvirt-daemon-system`을 설치
 
@@ -513,7 +627,7 @@ virsh net-info default
 virsh net-dhcp-leases default
 ```
 
-## Bridged networking using qemu-bridge-helper
+### Bridged networking using qemu-bridge-helper
 
 This method does not require a start-up script and readily accommodates multiple taps and multiple bridges. It uses `/usr/lib/qemu/qemu-bridge-helper` binary, which allows creating tap devices on an existing bridge.
 
@@ -531,7 +645,7 @@ qemu ... NET="-nic bridge,br=br0,model=virtio-net-pci,mac=$macaddr" ...
 
 <https://wiki.archlinux.org/index.php/QEMU#Bridged_networking_using_qemu-bridge-helper>
 
-## Docker에서 'virbr0"에 연결하는 방법
+### Docker에서 'virbr0"에 연결하는 방법
 
 First create the configuration file /etc/docker/daemon.json as suggested in the Docker documentation with the following content (the iptables line may not even be needed):
 
@@ -551,9 +665,9 @@ virsh net-start default
 systemctl restart docker
 ```
 
-## ENHANCING VIRTUALIZATION WITH THE QEMU GUEST AGENT AND SPICE AGENT
+### ENHANCING VIRTUALIZATION WITH THE QEMU GUEST AGENT AND SPICE AGENT
 
-### QEMU Guest Agent
+#### QEMU Guest Agent
 
 ```bash
 sudo yum install qemu-guest-agent
@@ -567,7 +681,7 @@ GUEST_AGENT="\
 -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"
 ```
 
-### SPICE AGENT
+#### SPICE AGENT
 
 ```bash
 sudo yum install spice-vdagent
@@ -581,7 +695,7 @@ SPICE_AGENT="\
 -device virtserialport,chardev=vdagent,name=com.redhat.spice.0"
 ```
 
-## virtiofs
+### virtiofs
 
 mount virtiofs in linux:
 
@@ -589,22 +703,22 @@ mount virtiofs in linux:
 sudo mount -t virtiofs hostfs ~/host/
 ```
 
-## i386 apt
+### i386 apt
 
 - sudo dpkg --add-architecture i386
 - sudo dpkg --remove-architecture i386
 - dpkg --get-selections | awk '/i386/{print $1}'
 - sudo dpkg --purge --force-remove-protected {???,111,222}:i386
 
-# Jenkins
+## Jenkins
 
-## Jenkins docker 설치
+### Jenkins docker 설치
 
 ```bash
 docker pull jenkins
 ```
 
-## Jenkins 실행
+### Jenkins 실행
 
 ```bash
 docker run -d -p 8080:8080 -v /jenkins:/var/jenkins_home --network host --name jenkins -u root jenkins
@@ -623,13 +737,13 @@ cd /home/qa-tools/jenkins/apache-tomcat-8/webapps/
 java -jar jenkins.war &
 ```
 
-## Jenkins shell 연결
+### Jenkins shell 연결
 
 ```bash
 docker exec -it -u 0 jenkins /bin/bash
 ```
 
-## Plug-in 설치
+### Plug-in 설치
 
 필요한 plug-in
 
@@ -640,13 +754,13 @@ docker exec -it -u 0 jenkins /bin/bash
 
 ##
 
-## Jenkins and python
+### Jenkins and python
 
 > [Jenkins에서 파이썬 출력을 실시간으로 보고싶다면?](https://taetaetae.github.io/2018/12/02/python-buffer/)
 >
 > [Python + Jenkins 연동](https://tomining.tistory.com/147)
 
-## Jenkins plugin
+### Jenkins plugin
 
 ```bash
 mvn -DdownloadSources=true -DdownloadJavadocs=true -DoutputDirectory=target/eclipse-classes -Declipse.workspace=${HOME}/eclipse-workspace eclipse:eclipse eclipse:configure-workspace
@@ -659,9 +773,9 @@ pip install python-jenkins
 pip install wcmatch
 ```
 
-# SQL Server
+## SQL Server
 
-## Docker를 이용한 SQL server 설치
+### Docker를 이용한 SQL server 설치
 
 In the first step, we will pull the SQL Server 2019 container image from the Microsoft syndicates container catalog (mcr.microsfoft.com)
 
@@ -705,19 +819,19 @@ select * from information_schema.columns where table_name = 'ovt'
 >
 > [Official images for Microsoft SQL Server on Linux for Docker Engine](https://hub.docker.com/_/microsoft-mssql-server)
 
-## DB 사용법
+### DB 사용법
 
-### DB 생성
+#### DB 생성
 
-### Table 생성
+#### Table 생성
 
-## Azure Data Studio 설치
+### Azure Data Studio 설치
 
 > [Azure Data Studio 다운로드 및 설치](https://docs.microsoft.com/ko-kr/sql/azure-data-studio/download-azure-data-studio?view=sql-server-ver15)
 
-# Windows 관련
+## Windows 관련
 
-## Windows server 설정
+### Windows server 설정
 
 - Network static IP setting:
 
@@ -797,7 +911,7 @@ select * from information_schema.columns where table_name = 'ovt'
   reagentc /info
   ```
 
-## Windows 10 WSL 2 설치
+### Windows 10 WSL 2 설치
 
 Command line으로 Windows 10 WSL 2 설치하기
 
@@ -822,7 +936,7 @@ $PackageFamilyName = (Get-AppxPackage -Name "*ubuntu*").PackageFamilyName
 dir $env:LOCALAPPDATA\Packages\$PackageFamilyName\LocalState\
 ```
 
-## Enable the access to network drives from elevated apps running as administrator
+### Enable the access to network drives from elevated apps running as administrator
 
 1. Open [Registry Editor](https://winaero.com/blog/windows-registry-editor-for-dummies/).
 2. Go to the following Registry key:
@@ -834,7 +948,7 @@ HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
 3. Create a new DWORD value called **EnableLinkedConnections**, and set it to 1
 4. Restart your PC and you are done.
 
-## Default login
+### Default login
 
 ```text
 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
@@ -842,9 +956,9 @@ HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
 
 String value DefaultUserName, DefaultPassword
 
-## Dual Boot Windows with Virtual Hard Disk (VHDX)
+### Dual Boot Windows with Virtual Hard Disk (VHDX)
 
-## How to bypass TPM 2.0 requirements when upgrading to Windows 11
+### How to bypass TPM 2.0 requirements when upgrading to Windows 11
 
 ```powershell
 reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\CompatMarkers" /f
@@ -854,17 +968,17 @@ reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Hw
 reg.exe add "HKLM\SYSTEM\Setup\MoSetup" /f /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1
 ```
 
-# Python 참고
+## Python 참고
 
-## PIP Certification
+### PIP Certification
 
-### Using a certificate as parameter
+#### Using a certificate as parameter
 
 ```py
 pip install --cert /path/to/mycertificate.crt packagename
 ```
 
-### Using a certificate in a `pip.conf`
+#### Using a certificate in a `pip.conf`
 
 Create this file:
 
@@ -883,7 +997,7 @@ cert = /path/to/mycertificate.crt
 _EOF_
 ```
 
-### Set the configuration in Windows
+#### Set the configuration in Windows
 
 ```text
 # Windows
@@ -891,13 +1005,13 @@ pip config set global.cert %USERPROFILE%\certs\ca-bundle.crt
 pip config list
 ```
 
-### Ignoring certificate and using HTTP
+#### Ignoring certificate and using HTTP
 
 ```py
 pip install --trusted-host pypi.python.org packagename
 ```
 
-### Ignoring certificate and using HTTP in a pip.conf
+#### Ignoring certificate and using HTTP in a pip.conf
 
 Create this file:
 
@@ -917,7 +1031,7 @@ trusted-host = pypi.python.org
 _EOF_
 ```
 
-## PIP upgrade
+### PIP upgrade
 
 PIP upgrade pip itself
 
@@ -944,19 +1058,19 @@ error: externally-managed-environment 발생시
 python3 -m pip config set global.break-system-packages true
 ```
 
-## jupyter lab 설치
+### jupyter lab 설치
 
 ```bash
 pip install jupyterlab
 ```
 
-# Perforce
+## Perforce
 
-## p4v 설치 방법
+### p4v 설치 방법
 
 Perforce's package repositories allow simplified installation of Perforce products and product updates on popular Linux platforms.
 
-### 1. Ubuntu
+#### 1. Ubuntu
 
 ```bash
 wget -qO - https://package.perforce.com/perforce.pubkey | sudo gpg --dearmor -o /usr/share/keyrings/perforce-archive-keyring.gpg
@@ -966,7 +1080,7 @@ echo "deb [signed-by=/usr/share/keyrings/perforce-archive-keyring.gpg] http://pa
 sudo apt update && sudo apt install helix-cli
 ```
 
-### 2. RHEL
+#### 2. RHEL
 
 1. Add Perforce's repository to your YUM configuration.
 
@@ -994,7 +1108,7 @@ sudo yum install helix-cli
 
 > [Perforce Packages](https://www.perforce.com/perforce-packages)
 
-## P4 client 설정
+### P4 client 설정
 
 1. `.p4config` 파일을 아래 내용으로 생성 :
 
@@ -1037,7 +1151,7 @@ p4 client -o ${P4CLIENT}
 
 5. '`p4 sync`'  실행.  or '`p4 sync -f`'
 
-# ca-certification
+## ca-certification
 
 - 'git clone' 시 fail 회피 방안
 
@@ -1066,7 +1180,7 @@ p4 client -o ${P4CLIENT}
     wget --no-check-certificate https://dl.google.com/linux/direct/google-chrome-stable_current_`uname -m`.rpm
     ```
 
-# mvn 개발 환경 설정
+## mvn 개발 환경 설정
 
 ```bash
 export VER="3.6.3"
@@ -1100,9 +1214,9 @@ mvn verify
 mvn clean
 ```
 
-# Ubuntu
+## Ubuntu
 
-## Ubuntu repository 변경
+### Ubuntu repository 변경
 
 apt repository를 'mirror.kakao.com'으로 변경
 
@@ -1116,7 +1230,7 @@ disco repository는 old-releases.ubuntu.com로 변경
 sudo sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com|extras.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
 ```
 
-## Barrier 설정
+### Barrier 설정
 
 barrier 설치
 
@@ -1147,7 +1261,7 @@ cd /home/test/.local/share/barrier/SSL/
 openssl req -x509 -nodes -days 365 -subj /CN=Barrier -newkey rsa:4096 -keyout Barrier.pem -out Barrier.pem
 ```
 
-## Fix Time Differences in Ubuntu & Windows 10 Dual Boot
+### Fix Time Differences in Ubuntu & Windows 10 Dual Boot
 
 **Disable UTC and use Local Time in Ubuntu**
 
@@ -1155,7 +1269,7 @@ openssl req -x509 -nodes -days 365 -subj /CN=Barrier -newkey rsa:4096 -keyout Ba
 timedatectl set-local-rtc 1 --adjust-system-clock
 ```
 
-## How to Change MAC Address on Ubuntu
+### How to Change MAC Address on Ubuntu
 
 <https://www.wikihow.com/Change-MAC-Address-on-Ubuntu>
 
@@ -1166,7 +1280,7 @@ sudo ip link set dev xxxx address xx:xx:xx:xx:xx:xx
 sudo ip link set dev xxxx up
 ```
 
-## OS disk 이동
+### OS disk 이동
 
 Ubuntu 설치 디스크를 다른 디스크로 변경하려고 한다.
 
@@ -1181,7 +1295,7 @@ cd ..
 sudo umount src dest
  ```
 
-## NTFS mount
+### NTFS mount
 
 For my case, The command `sudo dmesg | tail` shows:
 
@@ -1197,7 +1311,7 @@ ntfs_defaults=uid=$UID,gid=$GID
 ntfs_allow=uid=$UID,gid=$GID,nls,umask,dmask,fmask,nohidden,sys_immutable,discard,force,sparse,showmeta,prealloc,no_acs_rules,acl,noatime
 ```
 
-## Ubuntu upgrade
+### Ubuntu upgrade
 
 ```bash
 sudo apt remove snapd
@@ -1208,7 +1322,7 @@ sudo sed -i 's/=lts/=normal/g' /etc/update-manager/release-upgrades
 do-release-upgrade
 ```
 
-## NVMe Multipath
+### NVMe Multipath
 
 ```bash
 sudo multipath -ll
@@ -1217,7 +1331,7 @@ systemctl disable multipathd
 systemctl stop multipathd
 ```
 
-## Bluetooth Pairing on Dual Boot of Windows & Linux
+### Bluetooth Pairing on Dual Boot of Windows & Linux
 
 Use `chntpw` from your Linux distro (easier). Start in a terminal then:
 
@@ -1266,7 +1380,7 @@ Go back to Linux
    Key=B99999999FFFFFFFFF999999999FFFFF
    ```
 
-## install desktop on the server
+### install desktop on the server
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -1281,7 +1395,7 @@ sudo apt install -y --no-install-recommends openbox obmenu
 sudo apt install -y network-manager
 ```
 
-### booting 시간이 오래 걸리는데
+#### booting 시간이 오래 걸리는데
 
 - NetworkManager와 충돌 가능성 점검
   NetworkManager.service도 목록에 있으며, 이는 systemd-networkd와 충돌할 수 있습니다. 두 서비스를 동시에 사용하지 않는 것이 좋습니다. 예를 들어, NetworkManager를 사용한다면 systemd-networkd는 불필요할 수 있습니다.
@@ -1291,7 +1405,7 @@ sudo systemctl disable systemd-networkd
 sudo systemctl disable systemd-networkd-wait-online
 ```
 
-### autologin 설정
+#### autologin 설정
 
 - /etc/gdm3/custom.conf 에 autologin 관련 설정 추가
 
@@ -1339,25 +1453,25 @@ qemu --arch aarch64 --connect ssh --net bridge --uname test centos-8.3.qcow2 clo
 qemu --arch aarch64 --connect ssh --net bridge --uname test centos-8.3.qcow2 
 ```
 
-## Create ssh keypair
+### Create ssh keypair
 
 ```bash
 ssh-keygen -t rsa
 ```
 
-## Install virt-customize on Linux
+### Install virt-customize on Linux
 
 ```bash
 sudo apt -y install libguestfs-tools
 ```
 
-## Setup/inject an ssh keys
+### Setup/inject an ssh keys
 
 ```bash
 sudo virt-customize -a centos-2003.qcow2 --ssh-inject centos:file:/home/uname/.ssh/id_rsa.pub
 ```
 
-## Create cloud-init configuration
+### Create cloud-init configuration
 
 Create a file named “cloud_init.cfg” with the below content.
 
@@ -1390,13 +1504,13 @@ Now we generate a seed disk that has the cloud-config metadata.
 cloud-localds -v cloud_init.iso cloud_init.cfg 
 ```
 
-## ssh key setting
+### ssh key setting
 
 ```bash
 ssh-copy-id user@server.com
 ```
 
-## Correct SSH Permission denied
+### Correct SSH Permission denied
 
 The only real difference was some security context differences on files and directories between those that worked and those that didn't.
 
@@ -1416,9 +1530,9 @@ sudo chcon unconfined_u:object_r:user_home_t:s0 "$home"
 restorecon -r -v -F /home/centos/.ssh
 ```
 
-## Centos
+### Centos
 
-### cloud image
+#### cloud image
 
 - CentOS Stream EL9
 
@@ -1441,13 +1555,13 @@ sudo grubby --update-kernel ALL --args selinux=0
 sudo reboot
 ```
 
-### Install Centos aarch64 GPG key
+#### Install Centos aarch64 GPG key
 
 ```bash
 sudo rpm --import https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7-aarch64
 ```
 
-## virbr dhcp 확인
+### virbr dhcp 확인
 
 sudo virsh net-start default
 
@@ -1455,7 +1569,7 @@ virsh net-list
 virsh net-info default
 virsh net-dhcp-leases default
 
-# msys64
+## msys64
 
 <https://www.msys2.org/>
 
@@ -1469,7 +1583,7 @@ virsh net-dhcp-leases default
    4. pacman -S mingw-w64-x86_64-rust
    5. pacman -S git
 
-# pciutils for windows
+## pciutils for windows
 
 <https://edwinwang.com/2011/04/compile-pciutils-lspci-setpci-in-windows-x86%EF%BC%8C%E5%9C%A8-windows-x86-%E5%B9%B3%E5%8F%B0%E4%B8%8B%E7%BC%96%E8%AF%91-pciutils-%EF%BC%88lspci-setpci%EF%BC%89/>
 
@@ -1479,7 +1593,7 @@ virsh net-dhcp-leases default
 4. win32의 configh, config.mk를 lib에 copy
 5. make
 
-# network
+## network
 
 <https://ubuntu.com/server/docs/network-configuration>
 
@@ -1493,9 +1607,9 @@ ip link set dev enp0s25 down
 sudo dhclient eth0
 ```
 
-# Termux
+## Termux
 
-## Install Ubuntu in termux
+### Install Ubuntu in termux
 
 ```bash
 apt update
@@ -1509,7 +1623,7 @@ proot-distro login --user test ubuntu
 proot-distro login --user test ubuntu -- bash "/home/test/vscode.sh"
 ```
 
-## Ubuntu in termux
+### Ubuntu in termux
 
 ~ $ proot-distro login ubuntu
 
@@ -1539,7 +1653,7 @@ chmod +x vscode.sh
 
 ~ $ proot-distro login --user test ubuntu -- bash "/home/test/vscode.sh"
 
-### vscode.sh
+#### vscode.sh
 
 ```bash
 cd code-server-4.98.2-linux-arm64/bin/
@@ -1547,7 +1661,7 @@ export PASSWORD="1"
 ./code-server
 ```
 
-# VS Code in termux
+## VS Code in termux
 
 ```bash
 scrcpy --new-display=1920x1080/210 --start-app=com.termux

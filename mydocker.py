@@ -165,7 +165,7 @@ class DockerMaster:
         cmd = ["docker", "run", "-it", "-e", "TZ=Asia/Seoul", "--hostname", container]
 
         if not self.is_win and self.args.cert:
-            for path in ("/etc/ssl/certs", "/etc/pki/ca-trust"):
+            for path in ("/etc/ssl/certs", "/etc/pki/ca-trust", "/usr/local/share/ca-certificates"):
                 if Path(path).exists():
                     cmd += ["-v", f"{path}:{path}:ro"]
 
