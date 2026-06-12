@@ -192,6 +192,8 @@ class QEMU:
             self.vmnvme.extend(self.args.nvme)
         if self.args.memsize:
             self._memsize = self.args.memsize
+        if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_CLIENT"):
+            self.args.demon = True
 
     def parse_disks(self) -> None:
         """Translate --disk arguments into block device paths using lsblk."""
