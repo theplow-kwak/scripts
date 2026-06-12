@@ -122,7 +122,7 @@ class QEMU:
         if consol:
             return subprocess.run(cmd_list, text=True)
         if async_:
-            proc = subprocess.Popen(cmd_list, text=True)
+            proc = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             sleep(1)
             return proc
         completed = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -181,6 +181,7 @@ class QEMU:
         parser.add_argument("--cpus", type=int, default=0, help="vCPU count")
         parser.add_argument("--serial", action="store_true", help="Enable USB serial")
         parser.add_argument("--blkdbg", action="store_true", help="Enable block debug")
+        parser.add_argument("--demon", action="store_true", help="Run in daemon mode (no console, no auto-connect)")
         self.args = parser.parse_args()
 
         # logging and derived arguments
@@ -232,7 +233,7 @@ class QEMU:
         self.vmguid, self.vmuid = guid, guid[:2]
         self.vmprocid = f"{self.vmname[:12]}_{self.vmuid}"
         self.bootype = "n" if self.vmnvme and self.vmnvme[0] == self.vmboot else ""
-        self.G_TERM = [f"gnome-terminal --title={self.vmprocid}"]
+        self.G_TERM = [] if self.args.demon else [f"gnome-terminal --title={self.vmprocid}", "--"]
         logger.info("vmimages %s vmcd %s vmnvme %s vmkernel %s", self.vmimages, self.vmcdimages, self.vmnvme, self.args.vmkernel)
 
     # qemu initialization --------------------------------------------------
@@ -435,11 +436,11 @@ class QEMU:
         virtiofsd = Path(f"{self.home_folder}/qemu/libexec/virtiofsd")
         virtiofsd = str(virtiofsd) if virtiofsd.exists() else "/usr/libexec/virtiofsd"
         sock = f"/tmp/virtiofs_{self.vmuid}.sock"
-        cmd = self.G_TERM + ["--", f"{virtiofsd} --socket-path={sock} -o source={self.home_folder}" if "libexec" in virtiofsd else f"--shared-dir={self.home_folder}"]
+        cmd = [f"{virtiofsd} --socket-path={sock} -o source={self.home_folder}" if "libexec" in virtiofsd else f"--shared-dir={self.home_folder}"]
         if self.args.debug == "cmd":
             print(" ".join(cmd))
         else:
-            self.run_command(cmd, sudo=True)
+            self.run_command(cmd, sudo=True, async_=True)
             while not Path(sock).exists():
                 logger.debug("waiting for %s", sock)
                 sleep(1)
@@ -533,7 +534,7 @@ class QEMU:
         self.opts += ["-nographic -serial mon:stdio"]
         host = self.hostip or "localhost"
         self.ssh_connect = f"{host} -p {self.ssh_port}" if self.args.net == "user" else self.localip
-        self.chkport, self.connect = self.ssh_port, ([] if self.args.consol else self.G_TERM + ["--"]) + [f"ssh {self.args.uname}@{self.ssh_connect}"]
+        self.chkport, self.connect = self.ssh_port, ([] if self.args.consol else self.G_TERM) + [f"ssh {self.args.uname}@{self.ssh_connect}"]
 
     def _set_spice_connect(self) -> None:
         self.opts += ["-monitor stdio"]
@@ -639,12 +640,14 @@ class QEMU:
         print(f"Boot: {self.vmboot:<15}, memsize: {self._memsize}, mac: {self.macaddr}, ip: {self.localip}")
         completed: subprocess.CompletedProcess[str] | subprocess.Popen[str] = subprocess.CompletedProcess(args=[], returncode=0)
         if not self.findProc(self.vmprocid, 0):
-            qcmd = [] if self.args.debug == "debug" or self.args.consol else self.G_TERM + ["--"]
+            qcmd = [] if self.args.debug == "debug" or self.args.consol else self.G_TERM
             qcmd += self.qemu_exe + self.params + self.opts + self.kernel
             if self.args.debug == "cmd":
                 print(" ".join(qcmd))
             else:
-                completed = self.run_command(qcmd, sudo=bool(self.sudo), consol=self.args.consol)
+                if self.args.demon:
+                    print(" ".join(self.connect))
+                completed = self.run_command(qcmd, sudo=bool(self.sudo), consol=self.args.consol or self.args.demon)
         if self.connect:
             if self.args.debug == "cmd":
                 print(" ".join(self.connect))
