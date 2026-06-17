@@ -509,7 +509,7 @@ class QEMU:
             return
 
         # pick unused ports
-        while not self.run_command(f"lsof -w -i :{self.spiceport}").returncode or not self.run_command(f"lsof -w -i :{self.ssh_port}").returncode:
+        while not self.run_command(f"lsof -w -i :{self.spiceport}", sudo=True).returncode or not self.run_command(f"lsof -w -i :{self.ssh_port}", sudo=True).returncode:
             self.ssh_port += 2
             self.spiceport = self.ssh_port + 1
 
