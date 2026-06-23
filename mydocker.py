@@ -148,7 +148,9 @@ class DockerMaster:
         if not self.args.docker:
             logger.error("Specify a Dockerfile with --docker/-d.")
             return
-        cmd = ["docker", "build", "-t", self.name, "--network=host"]
+        cmd = ["docker", "build", "-t", self.name]
+        if platform.system() == "Linux":
+            cmd += ["--network=host"]
         if self.args.force:
             cmd.append("--no-cache")
         if self.args.uname != "root":
@@ -165,7 +167,7 @@ class DockerMaster:
         cmd = ["docker", "run", "-it", "-e", "TZ=Asia/Seoul", "--hostname", container]
 
         if not self.is_win and self.args.cert:
-            for path in ("/etc/ssl/certs", "/etc/pki/ca-trust", "/usr/local/share/ca-certificates"):
+            for path in ("/etc/pki/ca-trust", "/usr/local/share/ca-certificates"):
                 if Path(path).exists():
                     cmd += ["-v", f"{path}:{path}:ro"]
 
