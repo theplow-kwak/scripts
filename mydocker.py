@@ -213,7 +213,8 @@ class DockerMaster:
         srcp = Path(src).resolve()
         if not srcp.exists():
             return None
-        return srcp, dst or f"/{srcp.name}" if not self.is_win else f"C:/{srcp.name}"
+        default_dst = f"C:/{srcp.name}" if self.is_win else f"/{srcp.name}"
+        return srcp, dst or default_dst
 
     def _container_paths(self) -> tuple[bool, str, Any]:
         """Return is_win flag, home dir and join func for container."""
