@@ -1088,6 +1088,12 @@ sudo apt update && sudo apt upgrade -y
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
+```powershell
+$env:UV_SYSTEM_CERTS='true'
+git config --global http.sslVerify false
+iex (irm https://hermes-agent.nousresearch.com/install.ps1)
+```
+
 ### Jenkins
 
 #### Jenkins Docker 설치
