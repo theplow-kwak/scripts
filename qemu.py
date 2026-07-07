@@ -234,7 +234,7 @@ class QEMU:
         guid = hashlib.md5("".join(boot_devs).encode()).hexdigest()
         self.vmguid, self.vmuid = guid, guid[:2]
         self.vmprocid = f"{self.vmname[:12]}_{self.vmuid}"
-        self.bootype = "n" if self.vmnvme and self.vmnvme[0] == self.vmboot else ""
+        self.bootype = "p" if Path(self.vmboot).is_block_device() else "n" if self.vmnvme and self.vmnvme[0] == self.vmboot else ""
         self.G_TERM = [] if self.args.demon else [f"gnome-terminal --title={self.vmprocid}", "--"]
         logger.info("vmimages %s vmcd %s vmnvme %s vmkernel %s", self.vmimages, self.vmcdimages, self.vmnvme, self.args.vmkernel)
 
