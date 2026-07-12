@@ -19,7 +19,12 @@ RUN apt-get update && \
             zlib1g-dev \
             xz-utils \
             zip \
-            curl && \
+            curl \
+            iproute2 \
+            iputils-ping \
+            dnsutils \
+            netcat-openbsd \
+            traceroute && \
     rm -rf /var/lib/apt/lists/* 
 
 ARG NEWUSER=test

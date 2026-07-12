@@ -128,6 +128,45 @@ Than you stop the containers and restart the docker daemon service:
 systemctl restart docker
 ```
 
+## Docker and libvirt Network Configuration
+
+### Current Setup
+- **libvirt** uses `virbr0` bridge: `192.168.122.1/24` (NAT forwarding)
+- **Docker** uses `docker0` bridge: `172.17.0.1/16` (default)
+
+### Why Separate Bridges?
+When Docker tries to use an existing managed bridge (like `virbr0` from libvirt), conflicts occur because:
+- libvirt manages `virbr0`'s IP address (192.168.122.1/24)
+- Docker also tries to assign an IP to the bridge it uses
+- These conflicting managers cause startup failures
+
+### Using virbr0 for QEMU
+QEMU VMs can connect directly to `virbr0`:
+```bash
+qemu ... --net bridge,br=virbr0 ...
+# or use qemu.py --net bridge
+```
+
+VMs will receive DHCP leases in the 192.168.122.0/24 range from libvirt.
+
+### Using docker0 for Docker
+Docker containers use the default `docker0` bridge:
+```bash
+docker run -it ubuntu:latest
+# Containers get IPs from 172.17.0.0/16
+```
+
+### Manual Bridge Configuration (if needed)
+To create a Docker network using virbr0:
+```bash
+docker network create \
+  --driver bridge \
+  --opt com.docker.network.bridge.name=virbr0 \
+  virbr0-net
+```
+Note: This requires additional configuration beyond daemon.json.
+
+
 ## docker 실행 예시
 
 ```bash
