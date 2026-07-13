@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-"""Lightweight QEMU VM launcher with convenient CLI options.
+"""Lightweight QEMU VM launcher with convenient CLI options."""
 
-The original implementation contained many repetitive patterns and
-imperative code.  This refactor keeps the same behaviour but is
-shorter, uses more Python idioms, and breaks complex routines into
-smaller helpers.
-"""
+from __future__ import annotations
 
 import argparse
 import functools
@@ -16,9 +12,10 @@ import os
 import re
 import shlex
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from time import sleep
-from typing import List, Optional, Union
+from typing import Sequence
 
 # ---------------------------------------------------------------------------
 # logging
@@ -31,12 +28,101 @@ logger = logging.getLogger(__name__)
 # helpers
 # ---------------------------------------------------------------------------
 
+Command = str | Sequence[str]
+IMAGE_EXTS = {".img", ".qcow2", ".vhdx"}
+DEFAULT_SSH_PORT = 5900
+VIRTIOFSD_TIMEOUT = 15
 
-def sh(cmd: Union[str, List[str]]) -> List[str]:
-    """Split a command string into a list for subprocess."""
-    if isinstance(cmd, List):
-        cmd = " ".join(cmd)
-    return shlex.split(cmd)
+
+@dataclass(frozen=True)
+class NvmeBackend:
+    nvme_id: str
+    namespace_id: str
+    extension: str
+    namespace_count: int
+    is_physical: bool
+
+    def backend_for_namespace(self, namespace: int) -> str:
+        ns_id = self.namespace_id
+        if namespace != 1 and not self.is_physical:
+            ns_id = f"n{int(ns_id[1:]) + namespace - 1}" if ns_id else f"n{namespace}"
+        return f"{self.nvme_id}{ns_id}{self.extension}"
+
+
+@dataclass(frozen=True)
+class NvmeOptions:
+    max_ioqpairs: int
+    controller: str = ""
+    namespace: str = ""
+
+
+def split_command(cmd: Command) -> list[str]:
+    """Convert a command string or command fragments into subprocess argv."""
+    if isinstance(cmd, str):
+        return shlex.split(cmd)
+
+    argv: list[str] = []
+    for fragment in cmd:
+        argv.extend(shlex.split(str(fragment)))
+    return argv
+
+
+def command_text(cmd: Command) -> str:
+    return shlex.join(split_command(cmd))
+
+
+def default_home_folder() -> str:
+    user = os.environ.get("SUDO_USER") or getpass.getuser()
+    candidate = Path("/home") / user
+    return str(candidate) if candidate.exists() else str(Path.home())
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("--secboot", default="", action="store_const", const=".ms", help="UEFI secure boot")
+    parser.add_argument("--bios", action="store_true", help="Use BIOS instead of UEFI")
+    parser.add_argument("--consol", action="store_true", help="Use current tty for VM")
+    parser.add_argument("--noshare", action="store_true", help="Disable virtiofs share")
+    parser.add_argument("--nousb", action="store_true", help="Disable USB")
+    parser.add_argument("--qemu", "-q", action="store_true", help="Use system qemu binaries")
+    parser.add_argument("--rmssh", action="store_true", help="Remove VM SSH key")
+    parser.add_argument("--tpm", action="store_true", help="Enable TPM (Win11)")
+    parser.add_argument("--arch", "-a", default="x86_64", choices=["x86_64", "aarch64", "arm", "riscv64"], help="VM architecture")
+    parser.add_argument("--connect", default="spice", choices=["ssh", "spice", "qemu"], help="How to connect")
+    parser.add_argument("--debug", "-d", nargs="?", const="info", default="warning", choices=["cmd", "debug", "info", "warning"], help="Logging level")
+    parser.add_argument("--ipmi", choices=["internal", "external"], help="IPMI model")
+    parser.add_argument("--machine", default="q35", choices=["q35", "ubuntu-q35", "pc", "ubuntu", "virt", "sifive_u"], help="Machine type")
+    parser.add_argument("--net", default="bridge", choices=["user", "tap", "bridge", "none"], help="Network mode")
+    parser.add_argument("--uname", "-u", default=getpass.getuser(), help="Remote username")
+    parser.add_argument("--vga", default="qxl", help="VGA card")
+    parser.add_argument("--stick", help="USB stick image")
+    parser.add_argument("--ip", help="Fixed guest IP")
+    parser.add_argument("--usbredir", action="store_true", help="Enable SPICE USB redirection in remote-viewer")
+    parser.add_argument("--usbredir-filter", default="", help="SPICE USB redirect filter string")
+    parser.add_argument("images", metavar="IMAGES", nargs="*", help="VM disk/iso images")
+    parser.add_argument("--nvme", nargs="+", action="extend", help="NVMe backend(s)")
+    parser.add_argument("--disk", nargs="+", action="extend", help="Additional disks (lsblk)\nexample: sda:1")
+    parser.add_argument("--vender", help="SMBIOS vendor string")
+    parser.add_argument("--kernel", dest="vmkernel", help="Kernel image")
+    parser.add_argument("--rootdev", help="Root device (e.g. sda1)")
+    parser.add_argument("--initrd", help="initrd image")
+    parser.add_argument("--pcihost", help="PCI passthrough PCI address")
+    parser.add_argument("--numns", type=int, help="NVMe namespace count")
+    parser.add_argument("--nssize", type=int, default=40, help="NVMe namespace size (GB)")
+    parser.add_argument("--num_queues", type=int, default=32, help="NVMe queue count")
+    parser.add_argument("--vnum", default="", help="VM copy suffix")
+    parser.add_argument("--sriov", action="store_true", help="Enable SR-IOV")
+    parser.add_argument("--fdp", action="store_true", help="Enable FDP extensions")
+    parser.add_argument("--hvci", action="store_true", help="Enable HVCI CPU features")
+    parser.add_argument("--did", type=functools.partial(int, base=0), help="NVMe device ID (hex)")
+    parser.add_argument("--mn", help="NVMe model name")
+    parser.add_argument("--ext", help="Extra parameters")
+    parser.add_argument("--memsize", help="Override memory size")
+    parser.add_argument("--cpus", type=int, default=0, help="vCPU count")
+    parser.add_argument("--serial", action="store_true", help="Enable USB serial")
+    parser.add_argument("--blkdbg", action="store_true", help="Enable block debug")
+    parser.add_argument("--demon", action="store_true", help="Run in daemon mode (no console, no auto-connect)")
+    return parser
 
 
 def get_available_memory_gb() -> int:
@@ -72,27 +158,34 @@ def get_available_memory_gb() -> int:
 class QEMU:
     NVME_INPUT_PATTERN = re.compile(r"^(?P<nvme_id>[^:]+):?(?P<num_ns>\d+)?$")
     NVME_STEM_PATTERN = re.compile(r"^(?P<nvme>.+?)(?P<ns_id>n\d+)?$")
-    IMAGE_EXTS = {".img", ".qcow2", ".vhdx"}
 
     def __init__(self) -> None:
         self.args: argparse.Namespace
-        self.vmimages: List[str] = []
-        self.vmcdimages: List[str] = []
-        self.vmnvme: List[str] = []
-        self.params: List[str] = []
-        self.opts: List[str] = []
-        self.kernel: List[str] = []
+        self.vmimages: list[str] = []
+        self.vmcdimages: list[str] = []
+        self.vmnvme: list[str] = []
+        self.params: list[str] = []
+        self.opts: list[str] = []
+        self.kernel: list[str] = []
+        self.connect: list[str] | None = []
+        self.ssh_connect: str | None = None
+        self.ssh_host: str | None = None
+        self.localip: str | None = None
+        self.hostip = "localhost"
+        self.macaddr = ""
+        self.ssh_port = DEFAULT_SSH_PORT
+        self.spiceport = DEFAULT_SSH_PORT + 1
         self.vmprocid = ""
         self.index = 0
-        self._memsize: Optional[str] = None
+        self._memsize: str | None = None
         self.sudo = ["sudo"] if os.getuid() else []
-        self.G_TERM: List[str] = []
+        self.G_TERM: list[str] = []
 
     # properties -------------------------------------------------------------
 
     @property
     def home_folder(self) -> str:
-        return f"/home/{os.getlogin()}"
+        return default_home_folder()
 
     @property
     def memsize(self) -> str:
@@ -105,11 +198,11 @@ class QEMU:
 
     def run_command(
         self,
-        cmd: Union[str, List[str]],
+        cmd: Command,
         sudo: bool = False,
         async_: bool = False,
         consol: bool = False,
-    ) -> Union[subprocess.CompletedProcess[str], subprocess.Popen[str]]:
+    ) -> subprocess.CompletedProcess[str] | subprocess.Popen[str]:
         """Run a shell command with optional sudo/async/console output.
 
         The former `sudo_run` method is now implemented as a shim that calls
@@ -117,72 +210,36 @@ class QEMU:
         backwards compatibility with any external code or scripts that might
         be invoking ``qemu.sudo_run`` directly.
         """
-        cmd_list = (self.sudo + sh(cmd)) if sudo and os.getuid() else sh(cmd)
-        logger.debug("exec: %s", " ".join(cmd_list))
-        if consol:
-            return subprocess.run(cmd_list, text=True)
-        if async_:
-            proc = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            sleep(1)
-            return proc
-        completed = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        cmd_list = split_command(cmd)
+        if sudo and os.getuid():
+            cmd_list = self.sudo + cmd_list
+
+        logger.debug("exec: %s", shlex.join(cmd_list))
+        try:
+            if consol:
+                return subprocess.run(cmd_list, text=True)
+            if async_:
+                proc = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                sleep(1)
+                return proc
+            completed = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        except FileNotFoundError as exc:
+            logger.debug("command not found: %s", cmd_list[0])
+            return subprocess.CompletedProcess(cmd_list, 127, stdout=str(exc), stderr=None)
+
         if completed.stdout:
             logger.debug(f"Return code: {completed.returncode}, Output: {completed.stdout.rstrip()}")
         return completed
 
     # keep a thin compatibility wrapper
-    def sudo_run(self, cmd: Union[str, List[str]], *, async_: bool = False, consol: bool = False):
+    def sudo_run(self, cmd: Command, *, async_: bool = False, consol: bool = False):
         """Legacy helper: run a command with sudo privileges."""
         return self.run_command(cmd, sudo=True, async_=async_, consol=consol)
 
     # argument and image parsing -------------------------------------------
 
     def set_args(self) -> None:
-        parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-        parser.add_argument("--secboot", default="", action="store_const", const=".ms", help="UEFI secure boot")
-        parser.add_argument("--bios", action="store_true", help="Use BIOS instead of UEFI")
-        parser.add_argument("--consol", action="store_true", help="Use current tty for VM")
-        parser.add_argument("--noshare", action="store_true", help="Disable virtiofs share")
-        parser.add_argument("--nousb", action="store_true", help="Disable USB")
-        parser.add_argument("--qemu", "-q", action="store_true", help="Use system qemu binaries")
-        parser.add_argument("--rmssh", action="store_true", help="Remove VM SSH key")
-        parser.add_argument("--tpm", action="store_true", help="Enable TPM (Win11)")
-        parser.add_argument("--arch", "-a", default="x86_64", choices=["x86_64", "aarch64", "arm", "riscv64"], help="VM architecture")
-        parser.add_argument("--connect", default="spice", choices=["ssh", "spice", "qemu"], help="How to connect")
-        parser.add_argument("--debug", "-d", nargs="?", const="info", default="warning", choices=["cmd", "debug", "info", "warning"], help="Logging level")
-        parser.add_argument("--ipmi", choices=["internal", "external"], help="IPMI model")
-        parser.add_argument("--machine", default="q35", choices=["q35", "ubuntu-q35", "pc", "ubuntu", "virt", "sifive_u"], help="Machine type")
-        parser.add_argument("--net", default="bridge", choices=["user", "tap", "bridge", "none"], help="Network mode")
-        parser.add_argument("--uname", "-u", default=getpass.getuser(), help="Remote username")
-        parser.add_argument("--vga", default="qxl", help="VGA card")
-        parser.add_argument("--stick", help="USB stick image")
-        parser.add_argument("--ip", help="Fixed guest IP")
-        parser.add_argument("--usbredir", action="store_true", help="Enable SPICE USB redirection in remote-viewer")
-        parser.add_argument("--usbredir-filter", default="", help="SPICE USB redirect filter string")
-        parser.add_argument("images", metavar="IMAGES", nargs="*", help="VM disk/iso images")
-        parser.add_argument("--nvme", nargs="+", action="extend", help="NVMe backend(s)")
-        parser.add_argument("--disk", nargs="+", action="extend", help="Additional disks (lsblk)\nexample: sda:1")
-        parser.add_argument("--vender", help="SMBIOS vendor string")
-        parser.add_argument("--kernel", dest="vmkernel", help="Kernel image")
-        parser.add_argument("--rootdev", help="Root device (e.g. sda1)")
-        parser.add_argument("--initrd", help="initrd image")
-        parser.add_argument("--pcihost", help="PCI passthrough PCI address")
-        parser.add_argument("--numns", type=int, help="NVMe namespace count")
-        parser.add_argument("--nssize", type=int, default=40, help="NVMe namespace size (GB)")
-        parser.add_argument("--num_queues", type=int, default=32, help="NVMe queue count")
-        parser.add_argument("--vnum", default="", help="VM copy suffix")
-        parser.add_argument("--sriov", action="store_true", help="Enable SR-IOV")
-        parser.add_argument("--fdp", action="store_true", help="Enable FDP extensions")
-        parser.add_argument("--hvci", action="store_true", help="Enable HVCI CPU features")
-        parser.add_argument("--did", type=functools.partial(int, base=0), help="NVMe device ID (hex)")
-        parser.add_argument("--mn", help="NVMe model name")
-        parser.add_argument("--ext", help="Extra parameters")
-        parser.add_argument("--memsize", help="Override memory size")
-        parser.add_argument("--cpus", type=int, default=0, help="vCPU count")
-        parser.add_argument("--serial", action="store_true", help="Enable USB serial")
-        parser.add_argument("--blkdbg", action="store_true", help="Enable block debug")
-        parser.add_argument("--demon", action="store_true", help="Run in daemon mode (no console, no auto-connect)")
-        self.args = parser.parse_args()
+        self.args = build_parser().parse_args()
 
         # logging and derived arguments
         logger.setLevel("INFO" if self.args.debug == "cmd" else self.args.debug.upper())
@@ -200,7 +257,7 @@ class QEMU:
         out = self.run_command("lsblk -d -o NAME,MODEL,SERIAL --sort NAME -n -e7")
         if out.returncode != 0 or not out.stdout:
             return
-        lines = out.stdout.splitlines()  # pyright: ignore[reportAttributeAccessIssue]
+        lines = out.stdout.splitlines()
         for token in self.args.disk:
             parts = token.lower().split(":")
             name = parts.pop(0)
@@ -217,7 +274,7 @@ class QEMU:
                 self.vmnvme.append(image)
                 continue
             if p.exists():
-                if p.is_block_device() or p.suffix.lower() in self.IMAGE_EXTS:
+                if p.is_block_device() or p.suffix.lower() in IMAGE_EXTS:
                     self.vmimages.append(image)
                 elif p.suffix.lower() == ".iso":
                     self.vmcdimages.append(image)
@@ -244,18 +301,23 @@ class QEMU:
         exe = f"qemu-system-{self.args.arch}"
         self.qemu_exe = [exe] if self.args.qemu else [f"{self.home_folder}/qemu/bin/{exe}"]
         self.params = [f"-name {self.vmname},process={self.vmprocid}"]
+        self.params += self._arch_params()
+        self.params += self._machine_resources()
 
-        arch_switch = {
+    def _arch_params(self) -> list[str]:
+        arch_switch: dict[str, list[str]] = {
             "riscv64": ["-machine virt -bios none"],
             "arm": ["-machine virt -cpu cortex-a53 -device ramfb"],
             "aarch64": ["-machine virt,highmem=on,virtualization=true -cpu cortex-a72 -device ramfb"],
             "x86_64": self._set_x86_64_params(),
         }
-        self.params += arch_switch.get(self.args.arch, [])
-        cpu = self.args.cpus or int((os.cpu_count() or 2) / 2)
-        self.params += [f"-m {self.memsize}", f"-smp {cpu},sockets=1,cores={cpu},threads=1", "-nodefaults", "-rtc base=localtime"]
+        return arch_switch.get(self.args.arch, [])
 
-    def _set_x86_64_params(self) -> List[str]:
+    def _machine_resources(self) -> list[str]:
+        cpu = self.args.cpus or int((os.cpu_count() or 2) / 2)
+        return [f"-m {self.memsize}", f"-smp {cpu},sockets=1,cores={cpu},threads=1", "-nodefaults", "-rtc base=localtime"]
+
+    def _set_x86_64_params(self) -> list[str]:
         base = [
             f"-machine type={self.args.machine},accel=kvm,usb=on -device intel-iommu",
             (
@@ -332,30 +394,34 @@ class QEMU:
         scsi_params = [] if self.args.arch == "riscv64" else ["-object iothread,id=iothread0", "-device virtio-scsi-pci,id=scsi0,iothread=iothread0"]
         disk_params: list[str] = []
         for img in self.vmimages:
-            ext = Path(img).suffix.lower()
-            if img.startswith("wiftest"):
-                disk_params += [
-                    f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{img},format=qcow2,id=drive-{self.index}",
-                    f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
-                ]
-            elif ext == ".qcow2":
-                disk_params += [
-                    f"-drive file={img},if=none,cache=writeback,id=drive-{self.index}",
-                    f"-device virtio-blk-pci,drive=drive-{self.index},id=virtio-blk-pci{self.index}",
-                ]
-            elif ext == ".vhdx":
-                disk_params += [
-                    f"-drive file={img},if=none,id=drive-{self.index}",
-                    f"-device nvme,drive=drive-{self.index},serial=nvme-{self.index}",
-                ]
-            else:
-                disk_params += [
-                    f"-drive file={img},if=none,format=raw,discard=unmap,aio=native,cache=none,id=drive-{self.index}",
-                    f"-device scsi-hd,scsi-id={self.index},drive=drive-{self.index},id=scsi0-{self.index}",
-                ]
+            disk_params += self._disk_params(img, self.index)
             self.index += 1
         if disk_params:
             self.params += scsi_params + disk_params
+
+    def _disk_params(self, img: str, index: int) -> list[str]:
+        ext = Path(img).suffix.lower()
+        drive_id = f"drive-{index}"
+
+        if img.startswith("wiftest"):
+            return [
+                f"-drive if=none,cache=none,file=blkdebug:blkdebug.conf:{img},format=qcow2,id={drive_id}",
+                f"-device virtio-blk-pci,drive={drive_id},id=virtio-blk-pci{index}",
+            ]
+        if ext == ".qcow2":
+            return [
+                f"-drive file={img},if=none,cache=writeback,id={drive_id}",
+                f"-device virtio-blk-pci,drive={drive_id},id=virtio-blk-pci{index}",
+            ]
+        if ext == ".vhdx":
+            return [
+                f"-drive file={img},if=none,id={drive_id}",
+                f"-device nvme,drive={drive_id},serial=nvme-{index}",
+            ]
+        return [
+            f"-drive file={img},if=none,format=raw,discard=unmap,aio=native,cache=none,id={drive_id}",
+            f"-device scsi-hd,scsi-id={index},drive={drive_id},id=scsi0-{index}",
+        ]
 
     def configure_cdrom(self) -> None:
         iface = "none"
@@ -376,61 +442,73 @@ class QEMU:
         if not self.vmnvme:
             return
 
-        # build dynamic options
-        did = f",did={self.args.did}" if self.args.did else ""
-        mn = f",mn={self.args.mn}" if self.args.mn else ""
-        ocp = "" if self.args.qemu else ",ocp=on"
-        blkdbg = "blkdebug:blkdebug.conf:" if self.args.blkdbg and Path("blkdebug.conf").exists() else ""
-
-        if self.args.sriov:
-            sriov_max_vfs = 64
-            sriov_vq = sriov_max_vfs * 2
-            sriov_vi = sriov_max_vfs
-            max_ioqpairs = sriov_vq + 2
-            msix = sriov_vi + 1
-            sriov_params = f",msix_qsize={msix},sriov_max_vfs={sriov_max_vfs},sriov_vq_flexible={sriov_vq},sriov_vi_flexible={sriov_vi}"
-            sriov_nsid = ",shared=false,detached=true"
-        else:
-            max_ioqpairs = self.args.num_queues
-            sriov_params = sriov_nsid = ""
-
+        nvme_opts = self._nvme_options()
+        blkdbg = self._blkdebug_prefix()
         params = ["-device ioh3420,bus=pcie.0,id=root1.0,slot=1", "-device x3130-upstream,bus=root1.0,id=upstream1.0"]
         ctrl = 0
         for nvme in self.vmnvme:
-            m = self.NVME_INPUT_PATTERN.match(nvme)
-            if not m:
+            backend = self._parse_nvme_backend(nvme)
+            if backend is None:
                 continue
-            fname = m.group("nvme_id")
-            num_ns = int(m.group("num_ns") or 1)
-            if is_phys := nvme.startswith("/dev/"):
-                nvme_id = fname
-                ns_id = ext = ""
-            else:
-                p = Path(fname)
-                ext = p.suffix or ".qcow2"
-                m = self.NVME_STEM_PATTERN.match(p.stem)
-                nvme_id = m.group("nvme")
-                ns_id = m.group("ns_id") or "" if p.suffix else "n1"
 
             params += [
                 f"-device xio3130-downstream,bus=upstream1.0,id=downstream1.{ctrl},chassis={ctrl},multifunction=on",
                 f"-device nvme-subsys,id=nvme-subsys-{ctrl},nqn=subsys{ctrl}",
-                f"-device nvme,serial=beefnvme{ctrl},id=nvme{ctrl},subsys=nvme-subsys-{ctrl},bus=downstream1.{ctrl},max_ioqpairs={max_ioqpairs}{sriov_params}{did}{mn}{ocp}",
+                f"-device nvme,serial=beefnvme{ctrl},id=nvme{ctrl},subsys=nvme-subsys-{ctrl},bus=downstream1.{ctrl},max_ioqpairs={nvme_opts.max_ioqpairs}{nvme_opts.controller}",
             ]
 
-            for ns in range(1, num_ns + 1):
-                if ns != 1 and not is_phys:
-                    ns_id = f"n{int(ns_id[1:]) + 1}" if ns_id else f"n{ns}"
-                backend = f"{nvme_id}{ns_id}{ext}"
-                if self.check_file(backend, self.args.nssize, ext == ".img"):
+            for ns in range(1, backend.namespace_count + 1):
+                filename = backend.backend_for_namespace(ns)
+                if self.check_file(filename, self.args.nssize, backend.extension == ".img"):
                     params += [
-                        f"-drive file={blkdbg}{backend},id=nvme{ctrl}n{ns},if=none{',format=raw' if ext != '.qcow2' else ''},cache=none",
-                        f"-device nvme-ns,drive=nvme{ctrl}n{ns},bus=nvme{ctrl},nsid={ns}{sriov_nsid if ns == 1 else ''}",
+                        f"-drive file={blkdbg}{filename},id=nvme{ctrl}n{ns},if=none{',format=raw' if backend.extension != '.qcow2' else ''},cache=none",
+                        f"-device nvme-ns,drive=nvme{ctrl}n{ns},bus=nvme{ctrl},nsid={ns}{nvme_opts.namespace if ns == 1 else ''}",
                     ]
             ctrl += 1
         if Path("./events").exists():
             params.append("--trace events=./events")
         self.params += params
+
+    def _parse_nvme_backend(self, token: str) -> NvmeBackend | None:
+        match = self.NVME_INPUT_PATTERN.match(token)
+        if not match:
+            logger.warning("ignore invalid nvme backend: %s", token)
+            return None
+
+        filename = match.group("nvme_id")
+        namespace_count = int(match.group("num_ns") or self.args.numns or 1)
+        if token.startswith("/dev/"):
+            return NvmeBackend(filename, "", "", namespace_count, True)
+
+        path = Path(filename)
+        extension = path.suffix or ".qcow2"
+        stem_match = self.NVME_STEM_PATTERN.match(path.stem)
+        if not stem_match:
+            logger.warning("ignore invalid nvme backend: %s", token)
+            return None
+
+        nvme_id = stem_match.group("nvme")
+        namespace_id = (stem_match.group("ns_id") or "") if path.suffix else "n1"
+        return NvmeBackend(nvme_id, namespace_id, extension, namespace_count, False)
+
+    def _nvme_options(self) -> NvmeOptions:
+        did = f",did={self.args.did}" if self.args.did else ""
+        mn = f",mn={self.args.mn}" if self.args.mn else ""
+        ocp = "" if self.args.qemu else ",ocp=on"
+        fdp = ",fdp=on" if self.args.fdp else ""
+
+        if not self.args.sriov:
+            return NvmeOptions(self.args.num_queues, f"{did}{mn}{ocp}{fdp}")
+
+        sriov_max_vfs = 64
+        sriov_vq = sriov_max_vfs * 2
+        sriov_vi = sriov_max_vfs
+        msix = sriov_vi + 1
+        controller = f",msix_qsize={msix},sriov_max_vfs={sriov_max_vfs}," f"sriov_vq_flexible={sriov_vq},sriov_vi_flexible={sriov_vi}{did}{mn}{ocp}{fdp}"
+        return NvmeOptions(sriov_vq + 2, controller, ",shared=false,detached=true")
+
+    def _blkdebug_prefix(self) -> str:
+        return "blkdebug:blkdebug.conf:" if self.args.blkdbg and Path("blkdebug.conf").exists() else ""
 
     def configure_virtiofs(self) -> None:
         if self.args.noshare:
@@ -440,12 +518,13 @@ class QEMU:
         sock = f"/tmp/virtiofs_{self.vmuid}.sock"
         cmd = [f"{virtiofsd} --socket-path={sock} -o source={self.home_folder}" if "libexec" in virtiofsd else f"--shared-dir={self.home_folder}"]
         if self.args.debug == "cmd":
-            print(" ".join(cmd))
+            print(command_text(cmd))
         else:
-            self.run_command(cmd, sudo=True, async_=True)
-            while not Path(sock).exists():
-                logger.debug("waiting for %s", sock)
-                sleep(1)
+            result = self.run_command(cmd, sudo=True, async_=True)
+            if isinstance(result, subprocess.CompletedProcess) and result.returncode != 0:
+                raise RuntimeError(f"virtiofsd failed: {result.stdout}")
+            if not self.wait_for_path(Path(sock), VIRTIOFSD_TIMEOUT):
+                raise RuntimeError(f"virtiofsd socket was not created: {sock}")
         self.params += [
             f"-chardev socket,id=char{self.vmuid},path={sock}",
             f"-device vhost-user-fs-pci,chardev=char{self.vmuid},tag=hostfs",
@@ -487,44 +566,66 @@ class QEMU:
     def configure_net(self, set_ports: bool = False) -> None:
         """Compute networking parameters and optionally reserve ports."""
         fh = Path(f"/tmp/{self.vmprocid}_SSH")
-        try:
-            self.ssh_port = int(fh.read_text())
-        except Exception:
-            self.ssh_port = 5900
+        self.ssh_port = self._read_ssh_port(fh)
         self.spiceport = self.ssh_port + 1
-        self.macaddr = f"52:54:00:{self.vmguid[:2]}:{self.vmguid[2:4]}:{self.vmguid[4:6]}"
-
-        out = self.run_command("ip r g 1.0.0.0")
-        text = out.stdout or ""
-        self.hostip = text.split()[6] if out.returncode == 0 and len(text.split()) > 6 else "localhost"  # pyright: ignore[reportAttributeAccessIssue]
-
-        # dhcp: virsh can return multiple lines; we pick the last
-        leases = self.run_command(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}").stdout or ""
-        lines = leases.strip().splitlines()  # pyright: ignore[reportAttributeAccessIssue]
-        match = next((ln for ln in lines if self.vmname in ln), None)
-        last = match if match else (sorted(lines)[-1] if lines else "")
-        self.localip = self.args.ip or (last.split()[4].split("/")[0] if last and len(last.split()) > 4 else None)
+        self.macaddr = self._macaddr()
+        self.hostip = self._host_ip()
+        self.localip = self.args.ip or self._dhcp_guest_ip()
 
         if not set_ports:
             return
 
-        # pick unused ports
-        while not self.run_command(f"lsof -w -i :{self.spiceport}", sudo=True).returncode or not self.run_command(f"lsof -w -i :{self.ssh_port}", sudo=True).returncode:
+        self._reserve_ports()
+        net_param = self._network_param()
+        if net_param:
+            self.params.append(net_param)
+        try:
+            fh.write_text(str(self.ssh_port))
+        except Exception as e:
+            logger.error("can't save ssh port: %s", e)
+
+    def _read_ssh_port(self, path: Path) -> int:
+        try:
+            return int(path.read_text())
+        except Exception:
+            return DEFAULT_SSH_PORT
+
+    def _macaddr(self) -> str:
+        return f"52:54:00:{self.vmguid[:2]}:{self.vmguid[2:4]}:{self.vmguid[4:6]}"
+
+    def _host_ip(self) -> str:
+        out = self.run_command("ip r g 1.0.0.0")
+        fields = (out.stdout or "").split()
+        return fields[6] if out.returncode == 0 and len(fields) > 6 else "localhost"
+
+    def _dhcp_guest_ip(self) -> str | None:
+        result = self.run_command(f"virsh --quiet net-dhcp-leases default --mac {self.macaddr}")
+        if result.returncode != 0:
+            return None
+
+        leases = result.stdout or ""
+        lines = leases.strip().splitlines()
+        match = next((ln for ln in lines if self.vmname in ln), None)
+        last = match if match else (sorted(lines)[-1] if lines else "")
+        fields = last.split()
+        return fields[4].split("/")[0] if len(fields) > 4 else None
+
+    def _reserve_ports(self) -> None:
+        while self._port_in_use(self.spiceport) or self._port_in_use(self.ssh_port):
             self.ssh_port += 2
             self.spiceport = self.ssh_port + 1
 
+    def _port_in_use(self, port: int) -> bool:
+        return self.run_command(f"lsof -w -i :{port}", sudo=True).returncode == 0
+
+    def _network_param(self) -> str:
         net_map = {
             "user": f"-nic user,model=virtio-net-pci,mac={self.macaddr},smb={self.home_folder},hostfwd=tcp::{self.ssh_port}-:22",
             "tap": f"-nic tap,model=virtio-net-pci,mac={self.macaddr},script={self.home_folder}/projects/scripts/qemu-ifup",
             "bridge": f"-nic bridge,br=virbr0,model=virtio-net-pci,mac={self.macaddr}",
             "none": "",
         }
-        if net_map[self.args.net]:
-            self.params.append(net_map[self.args.net])
-        try:
-            fh.write_text(str(self.ssh_port))
-        except Exception as e:
-            logger.error("can't save ssh port: %s", e)
+        return net_map[self.args.net]
 
     def configure_connect(self) -> None:
         modes = {"ssh": self._set_ssh_connect, "spice": self._set_spice_connect, "qemu": self._set_qemu_connect}
@@ -535,6 +636,7 @@ class QEMU:
     def _set_ssh_connect(self) -> None:
         self.opts += ["-nographic -serial mon:stdio"]
         host = self.hostip or "localhost"
+        self.ssh_host = host if self.args.net == "user" else self.localip
         self.ssh_connect = f"{host} -p {self.ssh_port}" if self.args.net == "user" else self.localip
         self.chkport, self.connect = self.ssh_port, ([] if self.args.consol else self.G_TERM) + [f"ssh {self.args.uname}@{self.ssh_connect}"]
 
@@ -561,14 +663,24 @@ class QEMU:
         return True
 
     def checkConn(self, timeout: int = 10) -> bool:
-        if not self.ssh_connect:
+        if not self.ssh_host:
             return False
-        while self.run_command(f"nc -z -w 1 {self.ssh_connect} 22").returncode:
+        port = self.ssh_port if self.args.net == "user" else 22
+        while self.run_command(["nc", "-z", "-w", "1", self.ssh_host, str(port)]).returncode:
             timeout -= 1
             if timeout < 0:
                 return False
             sleep(1)
         return True
+
+    def wait_for_path(self, path: Path, timeout: int) -> bool:
+        while timeout >= 0:
+            if path.exists():
+                return True
+            logger.debug("waiting for %s", path)
+            timeout -= 1
+            sleep(1)
+        return False
 
     def configure_kernel(self) -> None:
         if not self.args.vmkernel:
@@ -611,6 +723,14 @@ class QEMU:
     def set_qmp(self) -> None:
         self.params.append("-qmp unix:/tmp/qmp-sock,server=on,wait=off")
 
+    def configure_extra(self) -> None:
+        if self.args.ext:
+            self.params.append(self.args.ext)
+
+    def qemu_command(self) -> list[str]:
+        prefix = [] if self.args.debug == "debug" or self.args.consol else self.G_TERM
+        return [*prefix, *self.qemu_exe, *self.params, *self.opts, *self.kernel]
+
     # orchestration --------------------------------------------------------
 
     def setting(self) -> None:
@@ -634,25 +754,25 @@ class QEMU:
         self.configure_usb_storage()
         self.configure_ipmi()
         self.configure_usb_serial()
+        self.configure_extra()
         self.set_qmp()
         # self.set_pcipass()
         self.configure_connect()
 
     def run(self) -> None:
-        print(f"Boot: {self.vmboot:<15}, memsize: {self._memsize}, mac: {self.macaddr}, ip: {self.localip}")
+        print(f"Boot: {self.vmboot:<15}, memsize: {self.memsize}, mac: {self.macaddr}, ip: {self.localip}")
         completed: subprocess.CompletedProcess[str] | subprocess.Popen[str] = subprocess.CompletedProcess(args=[], returncode=0)
         if not self.findProc(self.vmprocid, 0):
-            qcmd = [] if self.args.debug == "debug" or self.args.consol else self.G_TERM
-            qcmd += self.qemu_exe + self.params + self.opts + self.kernel
+            qcmd = self.qemu_command()
             if self.args.debug == "cmd":
-                print(" ".join(qcmd))
+                print(command_text(qcmd))
             else:
-                if self.args.demon:
-                    print(" ".join(self.connect))
+                if self.args.demon and self.connect:
+                    print(command_text(self.connect))
                 completed = self.run_command(qcmd, sudo=bool(self.sudo), consol=self.args.consol or self.args.demon)
         if self.connect:
             if self.args.debug == "cmd":
-                print(" ".join(self.connect))
+                print(command_text(self.connect))
             elif completed.returncode == 0 and self.findProc(self.vmprocid):
                 if self.args.connect == "ssh":
                     self.checkConn(60)
