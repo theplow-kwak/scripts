@@ -513,12 +513,12 @@ class QEMU:
     def configure_virtiofs(self) -> None:
         if self.args.noshare:
             return
-        candidates = [Path(f"{self.home_folder}/qemu/libexec/virtiofsd"), Path("/usr/libexec/virtiofsd")]
+        candidates = [Path("/usr/libexec/virtiofsd"), Path(self.home_folder) / "qemu/libexec/virtiofsd"]
         virtiofsd = next((str(p) for p in candidates if p.exists()), None)
         if not virtiofsd:
             return
         sock = f"/tmp/virtiofs_{self.vmuid}.sock"
-        cmd = [f"{virtiofsd} --socket-path={sock}",  f"--shared-dir={self.home_folder}" if virtiofsd.startswith("/usr") else f"-o source={self.home_folder}"]
+        cmd = [f"{virtiofsd} --socket-path={sock}", f"--shared-dir={self.home_folder}" if virtiofsd.startswith("/usr") else f"-o source={self.home_folder}"]
         if self.args.debug == "cmd":
             print(command_text(cmd))
         else:
